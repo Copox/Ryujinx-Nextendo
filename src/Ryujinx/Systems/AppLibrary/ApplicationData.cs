@@ -366,7 +366,12 @@ namespace Ryujinx.Ava.Systems.AppLibrary
         public string NextendoCompatibleVersion => IdBaseString switch
         {
             "0100152000022000" => "3.0.5",  // Mario Kart 8 Deluxe
-            "01006a800016e000" => "13.0.4", // Super Smash Bros. Ultimate
+            // [Nextendo 2026-09-06] 13.0.5, publiee le 1er septembre. Elle corrige "un probleme
+            // quand des donnees invalides sont envoyees ou recues pendant les combats en ligne",
+            // donc elle DURCIT le client : c'etait le candidat evident a une casse. Verifiee le
+            // 2026-09-06 sur une vraie console contre nos serveurs — arenes et quickplay, zero
+            // methode non geree en quinze minutes avec 79 joueurs connectes. Elle passe.
+            "01006a800016e000" => "13.0.5", // Super Smash Bros. Ultimate
             "0100f8f0000a2000" => "5.5.2",  // Splatoon 2 (EU)
             "01003bc0000a0000" => "5.5.2",  // Splatoon 2 (US)
             "01003c700009c800" => "5.5.2",  // Splatoon 2 (JP)
@@ -383,7 +388,7 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             "0100bde00862a000" => "3.1.1",  // Mario Tennis Aces
             "0100277011f1a000" => "1.1.2",  // Super Mario Bros. 35
             "0100ad9012510000" => "1.0.0",  // Pac-Man 99
-            "01009b90006dc000" => "3.0.1",  // Super Mario Maker 2
+            "01009b90006dc000" => "3.0.3",  // Super Mario Maker 2
             _ => "",
         };
 
