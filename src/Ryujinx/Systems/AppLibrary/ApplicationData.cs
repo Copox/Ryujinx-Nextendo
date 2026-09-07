@@ -365,7 +365,14 @@ namespace Ryujinx.Ava.Systems.AppLibrary
         [JsonIgnore]
         public string NextendoCompatibleVersion => IdBaseString switch
         {
-            "0100152000022000" => "3.0.5",  // Mario Kart 8 Deluxe
+            // [Nextendo 2026-09-07] 4.0.0, publiee le 1er septembre avec le support Switch 2.
+            // Version MAJEURE, donc on ne l'a pas montee a l'aveugle : verifiee par une COURSE
+            // ENTIERE jouee contre nos serveurs, pas seulement par une connexion reussie — se
+            // connecter et finir une course sont deux choses differentes.
+            //
+            // CTGPDX n'est pas affecte : IsNextendoVersionOk accepte aussi IsCtgpdxVariant, qui
+            // reste sur la base 3.0.3 avec son mod verifie.
+            "0100152000022000" => "4.0.0",  // Mario Kart 8 Deluxe
             // [Nextendo 2026-09-06] 13.0.5, publiee le 1er septembre. Elle corrige "un probleme
             // quand des donnees invalides sont envoyees ou recues pendant les combats en ligne",
             // donc elle DURCIT le client : c'etait le candidat evident a une casse. Verifiee le
