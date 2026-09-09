@@ -870,6 +870,8 @@ namespace Ryujinx.HLE.HOS
                 return AppliquerCorrectifsIntegres(programs);
             }
 
+            bool correctifsIntegresAppliques = AppliquerCorrectifsIntegres(programs);
+
             IEnumerable<Mod<DirectoryInfo>> nsoMods = _patches.NsoPatches;
 
             if (_appMods.TryGetValue(applicationId, out ModCache mods))
@@ -879,7 +881,7 @@ namespace Ryujinx.HLE.HOS
 
             // NSO patches are created with offset 0 according to Atmosphere's patcher module
             // But `Program` doesn't contain the header which is 0x100 bytes. So, we adjust for that here
-            return ApplyProgramPatches(nsoMods, 0x100, programs);
+            return ApplyProgramPatches(nsoMods, 0x100, programs) || correctifsIntegresAppliques;
         }
 
         internal void LoadCheats(ulong applicationId, ProcessTamperInfo tamperInfo, TamperMachine tamperMachine)

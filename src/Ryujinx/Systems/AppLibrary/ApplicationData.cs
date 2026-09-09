@@ -390,10 +390,19 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             // salon, c'est le desynchronisation assuree. Une seule version supportee a la fois,
             // comme pour les autres titres.
             "0100c2500fc20000" => "11.3.0", // Splatoon 3
+            // [Nextendo 2026-09-08] Super Mario Bros. Wonder. Les correctifs integres (contournement
+            // du certificat epingle + deux rejets de nom de pair) sont lies a l'identifiant de build
+            // FF773E90972D544EB79406EAA65396D53C43EFB9, propre a cette version exacte : une autre
+            // mise a jour ne les recevrait pas et ne pourrait pas parler a nos serveurs.
+            "010015100b514000" => "1.2.1",  // Super Mario Bros. Wonder
             "01006bd001e06000" => "1.0.17", // Minecraft: Nintendo Switch Edition
             "01009b500007c000" => "5.5.1",  // ARMS
             "0100bde00862a000" => "3.1.1",  // Mario Tennis Aces
-            "0100277011f1a000" => "1.1.2",  // Super Mario Bros. 35
+            // [Nextendo 2026-09-08] 1.0.2, PAS 1.1.2. La 1.1.2 n existe pas : la derniere mise a
+            // jour de SMB35 est la 1.0.2 (12 novembre 2020), le jeu ayant ferme en mars 2021.
+            // La table exigeait donc une version impossible et bloquait tout joueur ayant mis a
+            // jour l emulateur en 1.8.2 — signale par ffsaga le 2026-09-08.
+            "0100277011f1a000" => "1.0.2",  // Super Mario Bros. 35
             "0100ad9012510000" => "1.0.0",  // Pac-Man 99
             "01009b90006dc000" => "3.0.3",  // Super Mario Maker 2
             _ => "",
