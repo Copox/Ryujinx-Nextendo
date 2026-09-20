@@ -398,6 +398,10 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             "01006bd001e06000" => "1.0.17", // Minecraft: Nintendo Switch Edition
             "01009b500007c000" => "5.5.1",  // ARMS
             "0100bde00862a000" => "3.1.1",  // Mario Tennis Aces
+            // [Nextendo 2026-09-20] Crash Team Racing Nitro-Fueled runs on Demonware, not NEX.
+            // The built-in patches are keyed to build 1C689518406930512C13DDF4217E7676, which is
+            // specific to this exact version; another update would not receive them.
+            "0100f9f00c696000" => "1.0.15", // Crash Team Racing Nitro-Fueled
             // [Nextendo 2026-09-08] 1.0.2, PAS 1.1.2. La 1.1.2 n existe pas : la derniere mise a
             // jour de SMB35 est la 1.0.2 (12 novembre 2020), le jeu ayant ferme en mars 2021.
             // La table exigeait donc une version impossible et bloquait tout joueur ayant mis a

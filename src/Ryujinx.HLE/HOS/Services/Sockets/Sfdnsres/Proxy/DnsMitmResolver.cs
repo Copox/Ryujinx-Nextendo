@@ -155,6 +155,11 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Sfdnsres.Proxy
             ("*.nintendo.com",     ResolveConfiguredIp("NEXTENDO_SERVER_IP")),
             ("*.nintendowifi.net", ResolveConfiguredIp("NEXTENDO_SERVER_IP")),
             ("*.nintendo.co.jp",   ResolveConfiguredIp("NEXTENDO_SERVER_IP")),
+            // Activision titles reach Demonware rather than Nintendo's own services: auth over
+            // TLS, lobby and NAT discovery on 3074, and the stun.<region> responders.
+            // MatchesSimpleExpression won't match the bare domain against the wildcard, hence both.
+            ("demonware.net",      ResolveConfiguredIp("NEXTENDO_SERVER_IP")),
+            ("*.demonware.net",    ResolveConfiguredIp("NEXTENDO_SERVER_IP")),
         };
 
         // Reads a server address from an environment variable; falls back to loopback so no
