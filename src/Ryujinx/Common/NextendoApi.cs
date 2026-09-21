@@ -1011,8 +1011,8 @@ namespace Ryujinx.Ava.Common
 
             string redirectUri = $"http://127.0.0.1:{port}/callback";
             string authorizeUrl =
-                $"{BaseUrl()}/api/oauth/authorize?response_type=code&client_id=nextendo-emulator" +
-                $"&redirect_uri={Uri.EscapeDataString(redirectUri)}&scope=identity+friends" +
+                $"{BaseUrl()}/api/oauth/authorize?response_type=code&client_id=nextendo-ryujinx" +
+                $"&redirect_uri={Uri.EscapeDataString(redirectUri)}&scope=identity+friends+sauvegardes+history+presence&app=ryujinx" +
                 $"&state={state}&code_challenge={challenge}&code_challenge_method=S256";
 
             try
@@ -1086,7 +1086,7 @@ namespace Ryujinx.Ava.Common
                 {
                     ["grant_type"] = "authorization_code",
                     ["code"] = code,
-                    ["client_id"] = "nextendo-emulator",
+                    ["client_id"] = "nextendo-ryujinx",
                     ["redirect_uri"] = redirectUri,
                     ["code_verifier"] = verifier,
                 });
