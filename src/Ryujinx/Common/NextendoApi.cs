@@ -1056,6 +1056,15 @@ namespace Ryujinx.Ava.Common
                 $"{BaseUrl()}/api/oauth/authorize?response_type=code&client_id={Uri.EscapeDataString(clientId)}" +
                 $"&redirect_uri={Uri.EscapeDataString(redirectUri)}&scope=identity+friends+sauvegardes+history+presence&app=ryujinx" +
                 $"&state={state}&code_challenge={challenge}&code_challenge_method=S256";
+            // [Nextendo] This URL opens in the OS's own browser (RFC 8252: the consent screen
+            // must be a real browser, never an embedded webview) - a plain top-level navigation
+            // can't carry a custom header, so the signed attestation rides as a query param
+            // instead of X-Nextendo-Client here. apiGuard checks both.
+            string signedAttest = NextendoAttestation.BuildHeaderValue();
+            if (!string.IsNullOrEmpty(signedAttest))
+            {
+                authorizeUrl += $"&client_attest={Uri.EscapeDataString(signedAttest)}";
+            }
 
             try
             {
