@@ -41,11 +41,21 @@ def patch(rel, old, new):
 def write_new(rel, content):
     _pending.append((rel, content))
 
+_pending_deletes = []
+
+def delete_existing(rel):
+    if not os.path.isfile(rel):
+        raise SystemExit(f"BAKE FAIL {rel}: expected to exist, not found")
+    _pending_deletes.append(rel)
+
 def commit():
     for rel, s in _pending:
         with io.open(rel, "w", encoding="utf-8", newline="") as f:
             f.write(s)
         print(f"  baked {rel}")
+    for rel in _pending_deletes:
+        os.remove(rel)
+        print(f"  removed {rel}")
 
 # 1) DnsMitmResolver: real server IPs instead of the loopback fallback
 patch("src/Ryujinx.HLE/HOS/Services/Sockets/Sfdnsres/Proxy/DnsMitmResolver.cs",
@@ -96,7 +106,10 @@ f'''        private const string BuildVersion = "{version}";
         private const string ConfigFileName = "Config.json";''')
 
 # 4) NextendoAppSecrets: gitignored, never checked out at all -- write it fresh rather than
-#    patching a placeholder (see .gitignore comment next to the real path).
+#    patching a placeholder (see .gitignore comment next to the real path). The dev-build
+#    template defines the SAME class for an unbaked checkout (empty AppToken) -- it has to go,
+#    or the two collide as a duplicate type definition the moment the real file exists.
+delete_existing("src/Ryujinx/Common/NextendoAppSecrets.template.cs")
 write_new("src/Ryujinx/Common/NextendoAppSecrets.cs", f'''namespace Ryujinx.Ava.Common
 {{
     /// <summary>
