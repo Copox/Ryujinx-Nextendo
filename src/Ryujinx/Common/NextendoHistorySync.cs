@@ -44,11 +44,27 @@ namespace Ryujinx.Ava.Common
         /// <summary>Titres dont le serveur possede deja l'icone : on ne la lui renvoie plus.</summary>
         private static readonly HashSet<string> _iconesChezLeServeur = new(StringComparer.OrdinalIgnoreCase);
 
-        /// <summary>Dernier etat pousse par titre, pour n'envoyer que ce qui a bouge.</summary>
+        /// <summary>
+        /// Dernier etat pousse par titre, pour n'envoyer que ce qui a bouge. PERSISTE sur disque
+        /// (voir <see cref="EtatPath"/>) -- sans ca, un simple redemarrage de l'emulateur vidait ce
+        /// cache en memoire et faisait repartir CHAQUE jeu de la bibliotheque comme "jamais
+        /// envoye", ce qui resynchronisait tout l'historique local -- y compris des jeux dont le
+        /// metadata.json local existait pour une tout autre raison (build partagee, test, dossier
+        /// portable recupere ailleurs) et que le joueur n'avait jamais reellement lances lui-meme
+        /// avec ce compte. Rapporte le 2026-09-23 (compte 1800000006).
+        /// </summary>
         private static readonly Dictionary<string, string> _dernierEtatPousse = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Vrai des que l'etat persiste a ete charge (ou etabli pour la premiere fois) une fois
+        /// pour ce lancement -- evite de re-churn le disque a chaque poussee.
+        /// </summary>
+        private static bool _etatCharge;
 
         private static readonly object _verrou = new();
         private static System.Threading.Timer _horloge;
+
+        private static string EtatPath => Path.Combine(AppDataManager.BaseDirPath, "nextendo_history_baseline.txt");
 
         /// <summary>
         /// Demarre la poussee periodique. Appelable plusieurs fois sans risque : la deuxieme ne fait
@@ -81,6 +97,87 @@ namespace Ryujinx.Ava.Common
             {
                 _horloge?.Dispose();
                 _horloge = null;
+            }
+        }
+
+        /// <summary>
+        /// Charge l'etat persiste depuis le disque, ou -- s'il n'existe pas encore -- l'ETABLIT a
+        /// partir de l'instantane ACTUEL de la bibliotheque locale, SANS RIEN ENVOYER. Ainsi le
+        /// premier lancement de cette fonctionnalite (ou la premiere fois qu'un compte deja lie
+        /// depuis longtemps voit cette version) ne pousse pas d'un coup tout ce que la bibliotheque
+        /// locale connait deja -- seule l'activite qui survient APRES cette base de reference part
+        /// vers le serveur. Un jeu deja pousse avant ce correctif reste marque comme envoye (le
+        /// fichier persiste couvre aussi cet historique-la).
+        /// </summary>
+        private static void S_assurerEtatCharge(List<NextendoApi.HistoryItem> instantaneActuel)
+        {
+            lock (_verrou)
+            {
+                if (_etatCharge)
+                {
+                    return;
+                }
+
+                _etatCharge = true;
+
+                try
+                {
+                    if (File.Exists(EtatPath))
+                    {
+                        // Format "titleId=seconds|lastPlayed" par ligne -- meme convention texte
+                        // simple (pas de JSON) que NextendoConfiguration/NextendoAccount, pour la
+                        // meme raison de securite AOT/trimming.
+                        foreach (string ligne in File.ReadAllLines(EtatPath))
+                        {
+                            int eq = ligne.IndexOf('=');
+                            if (eq <= 0)
+                            {
+                                continue;
+                            }
+                            _dernierEtatPousse[ligne[..eq]] = ligne[(eq + 1)..];
+                        }
+                        return;
+                    }
+                }
+                catch
+                {
+                    // Fichier illisible -> on retombe sur l'etablissement de la base ci-dessous,
+                    // plus sur que de tout renvoyer.
+                }
+
+                // Pas de fichier (premier lancement de la fonctionnalite) : la bibliotheque locale
+                // ACTUELLE devient la base de reference, marquee "deja connue" sans etre poussee.
+                foreach (NextendoApi.HistoryItem h in instantaneActuel)
+                {
+                    if (!string.IsNullOrEmpty(h.TitleId))
+                    {
+                        _dernierEtatPousse[h.TitleId] = h.Seconds + "|" + h.LastPlayed;
+                    }
+                }
+
+                EcrireEtatSurDisque();
+
+                Logger.Info?.Print(LogClass.Application,
+                    $"[Nextendo] history: base de reference etablie ({instantaneActuel.Count} titre(s) locaux), rien envoye pour ce premier passage");
+            }
+        }
+
+        /// <summary>Ecrit l'etat courant sur disque ("titleId=seconds|lastPlayed" par ligne).
+        /// L'appelant tient _verrou.</summary>
+        private static void EcrireEtatSurDisque()
+        {
+            try
+            {
+                List<string> lignes = [];
+                foreach (KeyValuePair<string, string> kv in _dernierEtatPousse)
+                {
+                    lignes.Add(kv.Key + "=" + kv.Value);
+                }
+                File.WriteAllText(EtatPath, string.Join('\n', lignes) + "\n");
+            }
+            catch
+            {
+                // Best effort ; l'etat en memoire reste correct pour cette session.
             }
         }
 
@@ -146,6 +243,8 @@ namespace Ryujinx.Ava.Common
                         _iconesChezLeServeur.Add(h.TitleId);
                     }
                 }
+
+                EcrireEtatSurDisque();
             }
         }
 
@@ -237,6 +336,12 @@ namespace Ryujinx.Ava.Common
                     Logger.Info?.Print(LogClass.Application, $"[Nextendo] history push skipped ({reason}): nothing played");
                     return;
                 }
+
+                // Etablit (ou charge) la base de reference AVANT tout filtrage : voir le
+                // commentaire de S_assurerEtatCharge -- c'est ce qui empeche un redemarrage de
+                // l'emulateur de faire repartir toute la bibliotheque locale comme "jamais
+                // envoyee".
+                S_assurerEtatCharge(local);
 
                 // N'envoyer que ce qui a bouge, et l'icone une seule fois. Voir le bloc en tete
                 // de classe : sans ce filtre, une poussee toutes les cinq minutes reexpedierait des
