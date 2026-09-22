@@ -16,6 +16,10 @@ nat = os.environ["NEXTENDO_NAT_IP"].strip()
 # independently, so the NAT check stays put when the account/game backend moves (e.g. onto nx1).
 nncs1 = os.environ.get("NEXTENDO_NNCS1_IP", server).strip()
 nncs2 = os.environ.get("NEXTENDO_NNCS2_IP", nat).strip()
+# The registered Nextendo Developers client_id for the official Ryujinx build (public PKCE
+# client, no secret possible by design — see NextendoAppSecrets.cs). Gitignored like the file
+# itself: a source checkout never carries the real value.
+client_id = os.environ["NEXTENDO_OFFICIAL_CLIENT_ID"].strip()
 version = sys.argv[1]
 git_hash = sys.argv[2][:7]
 
@@ -33,6 +37,9 @@ def patch(rel, old, new):
     if n != 1:
         raise SystemExit(f"BAKE FAIL {rel}: expected exactly 1 match, found {n}")
     _pending.append((rel, s.replace(old, new)))
+
+def write_new(rel, content):
+    _pending.append((rel, content))
 
 def commit():
     for rel, s in _pending:
@@ -87,6 +94,28 @@ f'''        private const string BuildVersion = "{version}";
         private const string BuildGitHash = "{git_hash}";
         private const string ReleaseChannelName = "release";
         private const string ConfigFileName = "Config.json";''')
+
+# 4) NextendoAppSecrets: gitignored, never checked out at all -- write it fresh rather than
+#    patching a placeholder (see .gitignore comment next to the real path).
+write_new("src/Ryujinx/Common/NextendoAppSecrets.cs", f'''namespace Ryujinx.Ava.Common
+{{
+    /// <summary>
+    /// [Nextendo] The application identity that proves to nextendo.network THIS BUILD is a
+    /// registered Ryujinx-Nextendo client, created via https://nextendo.network/developers,
+    /// as opposed to the player's own login token (NextendoAccount.NexToken), which only proves
+    /// WHO is playing, not WHICH client is asking. Ryujinx is a public PKCE client by design (no
+    /// secret it could keep), so the client_id itself is the credential here, exactly like any
+    /// third-party desktop app registered the same way -- no special bypass for being "official".
+    ///
+    /// Baked by bake_release.py from the NEXTENDO_OFFICIAL_CLIENT_ID CI secret. This file is
+    /// gitignored on purpose: a source checkout never carries the real value.
+    /// </summary>
+    public static class NextendoAppSecrets
+    {{
+        public const string AppToken = "{client_id}";
+    }}
+}}
+''')
 
 commit()
 print("BAKE OK")

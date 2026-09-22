@@ -39,13 +39,17 @@ jobs:
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "Building macOS $VERSION for tag $TAG"
 
-      - name: Bake server addresses + stamp version
+      - name: Bake server addresses + client identity + stamp version
         env:
           NEXTENDO_SERVER_IP: ${{ secrets.NEXTENDO_SERVER_IP }}
           NEXTENDO_NAT_IP: ${{ secrets.NEXTENDO_NAT_IP }}
+          NEXTENDO_OFFICIAL_CLIENT_ID: ${{ secrets.NEXTENDO_OFFICIAL_CLIENT_ID }}
         run: |
           if [ -z "$NEXTENDO_SERVER_IP" ] || [ -z "$NEXTENDO_NAT_IP" ]; then
             echo "::error::NEXTENDO_SERVER_IP / NEXTENDO_NAT_IP secrets are not set"; exit 1
+          fi
+          if [ -z "$NEXTENDO_OFFICIAL_CLIENT_ID" ]; then
+            echo "::error::NEXTENDO_OFFICIAL_CLIENT_ID secret is not set — the app would fail to compile (NextendoAppSecrets is gitignored, never checked out) or connect (closed-API gate rejects an unregistered client_id)"; exit 1
           fi
           python3 distribution/nextendo/bake_release.py "${{ steps.ver.outputs.version }}" "${{ github.sha }}"
 
