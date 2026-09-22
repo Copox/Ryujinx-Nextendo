@@ -192,3 +192,8 @@ distribution/macos/output/
 # Sorties de publication locales : un build de release y bake l'adresse du serveur.
 # Sans cette regle, un « git add -A » la commiterait.
 publish-*/
+
+# [Nextendo] Le jeton d'application (preuve que CE build est un client Ryujinx-Nextendo
+# approuve) est baké ici par le pipeline de release, jamais commité en clair.
+src/Ryujinx/Common/NextendoAppSecrets.cs
+*.zip

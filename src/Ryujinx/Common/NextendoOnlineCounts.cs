@@ -60,6 +60,7 @@ namespace Ryujinx.Ava.Common
             try
             {
                 using HttpClient http = new() { Timeout = TimeSpan.FromSeconds(8) };
+                NextendoApi.AddAppHeader(http);
                 HttpResponseMessage resp = await http.GetAsync($"{NextendoApi.BaseUrl()}/api/online-counts");
                 if (!resp.IsSuccessStatusCode)
                 {
