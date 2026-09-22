@@ -84,6 +84,7 @@ namespace Ryujinx.Ava.Common
             try
             {
                 using HttpClient http = new() { Timeout = TimeSpan.FromSeconds(30) };
+                NextendoApi.AddAppHeader(http);
                 http.DefaultRequestHeaders.Add("Authorization", "Bearer " + NextendoAccount.NexToken);
 
                 HttpResponseMessage resp = await http.GetAsync($"{BaseUrl()}/api/save/{app.IdString}");
@@ -123,6 +124,7 @@ namespace Ryujinx.Ava.Common
             try
             {
                 using HttpClient http = new() { Timeout = TimeSpan.FromSeconds(30) };
+                NextendoApi.AddAppHeader(http);
                 http.DefaultRequestHeaders.Add("Authorization", "Bearer " + NextendoAccount.NexToken);
 
                 HttpResponseMessage resp = await http.GetAsync($"{BaseUrl()}/api/save/{app.IdString}");
@@ -170,6 +172,7 @@ namespace Ryujinx.Ava.Common
                 }
 
                 using HttpClient http = new() { Timeout = TimeSpan.FromSeconds(60) };
+                NextendoApi.AddAppHeader(http);
                 http.DefaultRequestHeaders.Add("Authorization", "Bearer " + NextendoAccount.NexToken);
 
                 using ByteArrayContent content = new(zip);

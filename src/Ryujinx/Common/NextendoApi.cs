@@ -148,7 +148,7 @@ namespace Ryujinx.Ava.Common
             // en mode « serveur personnalisé » aucune requête ne doit partir vers nos
             // services, même celles qui ne regardent pas si un compte est lié (les compteurs
             // publics, par exemple). Le jeton, lui, est déjà tu à la source ; ceci ferme le
-            // reste — l'existence même du trafic.
+            // reste, jusqu'à l'existence même du trafic.
             if (NextendoServerOverride.HorsNextendo)
             {
                 throw new NextendoDesactiveException();
@@ -159,8 +159,34 @@ namespace Ryujinx.Ava.Common
             {
                 http.DefaultRequestHeaders.Add("Authorization", "Bearer " + NextendoAccount.NexToken);
             }
+            AddAppHeader(http);
 
             return http;
+        }
+
+        /// <summary>
+        /// [Nextendo] For the handful of calls that build their own short-lived HttpClient
+        /// instead of going through Client() above (pre-login endpoints: guest creation,
+        /// nickname check, beta config) - same headers, no player token possible yet since
+        /// none of these calls happen after a login.
+        ///
+        /// Two headers, not one: X-Nextendo-Client-Id (plain client_id) identifies the app to
+        /// server-side logic that doesn't need attestation; X-Nextendo-Client (Ed25519-signed,
+        /// see NextendoAttestation) proves THIS specific request truly comes from this build,
+        /// not from someone replaying a client_id copied out of a packet capture. apiGuard
+        /// requires the signed one wherever the app has a public key registered.
+        /// </summary>
+        public static void AddAppHeader(HttpClient http)
+        {
+            if (!string.IsNullOrEmpty(NextendoAppSecrets.AppToken))
+            {
+                http.DefaultRequestHeaders.Add("X-Nextendo-Client-Id", NextendoAppSecrets.AppToken);
+            }
+            string signed = NextendoAttestation.BuildHeaderValue();
+            if (!string.IsNullOrEmpty(signed))
+            {
+                http.DefaultRequestHeaders.Add("X-Nextendo-Client", signed);
+            }
         }
 
         /// <summary>
@@ -449,6 +475,7 @@ namespace Ryujinx.Ava.Common
             try
             {
                 using HttpClient http = new() { Timeout = TimeSpan.FromSeconds(15) };
+                AddAppHeader(http);
                 string payload = $"{{\"username\":{JsonSerializer.Serialize(nickname)}}}";
                 using StringContent body = new(payload, Encoding.UTF8, "application/json");
                 HttpResponseMessage resp = await http.PostAsync($"{BaseUrl()}/api/guest", body);
@@ -498,6 +525,7 @@ namespace Ryujinx.Ava.Common
             try
             {
                 using HttpClient http = new() { Timeout = TimeSpan.FromSeconds(8) };
+                AddAppHeader(http);
                 HttpResponseMessage resp = await http.GetAsync($"{BaseUrl()}/api/username-available?username={Uri.EscapeDataString(nickname)}");
                 if (!resp.IsSuccessStatusCode)
                 {
@@ -522,6 +550,7 @@ namespace Ryujinx.Ava.Common
             try
             {
                 using HttpClient http = new() { Timeout = TimeSpan.FromSeconds(8) };
+                AddAppHeader(http);
                 HttpResponseMessage resp = await http.GetAsync($"{BaseUrl()}/api/beta-config?channel={ReleaseChannel}");
                 if (!resp.IsSuccessStatusCode)
                 {
@@ -901,7 +930,19 @@ namespace Ryujinx.Ava.Common
         /// JSON décidait où partait le jeton. C'est exactement le trou que NextendoEndpoint avait
         /// été écrit pour fermer sur la variable NEXTENDO_API.
         /// </summary>
-        private static readonly HttpClient _avatarHttp = new() { Timeout = TimeSpan.FromSeconds(10) };
+        private static readonly HttpClient _avatarHttp = CreateAvatarHttp();
+
+        /// <summary>
+        /// Toujours sans jeton joueur (voir la note ci-dessus), mais porte quand même le
+        /// client_id : ce n'est pas un secret, juste l'identité de l'application, et sans lui
+        /// apiGuard refuse la requête au même titre que n'importe quel appel non enregistré.
+        /// </summary>
+        private static HttpClient CreateAvatarHttp()
+        {
+            HttpClient c = new() { Timeout = TimeSpan.FromSeconds(10) };
+            AddAppHeader(c);
+            return c;
+        }
 
         /// <summary>Télécharge (et mémorise) la photo de profil d'un joueur. Null si indisponible.</summary>
         public static async Task<byte[]> GetAvatarAsync(ulong pid, string url)
@@ -1010,10 +1051,20 @@ namespace Ryujinx.Ava.Common
             }
 
             string redirectUri = $"http://127.0.0.1:{port}/callback";
+            string clientId = string.IsNullOrEmpty(NextendoAppSecrets.AppToken) ? "unregistered" : NextendoAppSecrets.AppToken;
             string authorizeUrl =
-                $"{BaseUrl()}/api/oauth/authorize?response_type=code&client_id=nextendo-ryujinx" +
+                $"{BaseUrl()}/api/oauth/authorize?response_type=code&client_id={Uri.EscapeDataString(clientId)}" +
                 $"&redirect_uri={Uri.EscapeDataString(redirectUri)}&scope=identity+friends+sauvegardes+history+presence&app=ryujinx" +
                 $"&state={state}&code_challenge={challenge}&code_challenge_method=S256";
+            // [Nextendo] This URL opens in the OS's own browser (RFC 8252: the consent screen
+            // must be a real browser, never an embedded webview) - a plain top-level navigation
+            // can't carry a custom header, so the signed attestation rides as a query param
+            // instead of X-Nextendo-Client here. apiGuard checks both.
+            string signedAttest = NextendoAttestation.BuildHeaderValue();
+            if (!string.IsNullOrEmpty(signedAttest))
+            {
+                authorizeUrl += $"&client_attest={Uri.EscapeDataString(signedAttest)}";
+            }
 
             try
             {
@@ -1078,15 +1129,16 @@ namespace Ryujinx.Ava.Common
                 return (false, "Vérification anti-CSRF échouée."); // never trust a mismatched state
             }
 
-            // Exchange the code for the online token — public client, PKCE, no client secret.
+            // Exchange the code for the online token, public client, PKCE, no client secret.
             try
             {
                 using HttpClient http = new() { Timeout = TimeSpan.FromSeconds(15) };
+                AddAppHeader(http);
                 using FormUrlEncodedContent form = new(new Dictionary<string, string>
                 {
                     ["grant_type"] = "authorization_code",
                     ["code"] = code,
-                    ["client_id"] = "nextendo-ryujinx",
+                    ["client_id"] = clientId,
                     ["redirect_uri"] = redirectUri,
                     ["code_verifier"] = verifier,
                 });

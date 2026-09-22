@@ -16,6 +16,14 @@ nat = os.environ["NEXTENDO_NAT_IP"].strip()
 # independently, so the NAT check stays put when the account/game backend moves (e.g. onto nx1).
 nncs1 = os.environ.get("NEXTENDO_NNCS1_IP", server).strip()
 nncs2 = os.environ.get("NEXTENDO_NNCS2_IP", nat).strip()
+# The registered Nextendo Developers client_id for the official Ryujinx build (public PKCE
+# client, no secret possible by design — see NextendoAppSecrets.cs). Gitignored like the file
+# itself: a source checkout never carries the real value.
+client_id = os.environ["NEXTENDO_OFFICIAL_CLIENT_ID"].strip()
+# Ed25519 private key (base64, 32-byte seed) matching the public key registered server-side for
+# client_id. Signs every request (NextendoAttestation.cs) so a client_id copied out of a packet
+# capture can't be replayed as this build -- only forging a NEW signature needs this key.
+official_private_key = os.environ["NEXTENDO_OFFICIAL_PRIVATE_KEY"].strip()
 version = sys.argv[1]
 git_hash = sys.argv[2][:7]
 
@@ -34,11 +42,24 @@ def patch(rel, old, new):
         raise SystemExit(f"BAKE FAIL {rel}: expected exactly 1 match, found {n}")
     _pending.append((rel, s.replace(old, new)))
 
+def write_new(rel, content):
+    _pending.append((rel, content))
+
+_pending_deletes = []
+
+def delete_existing(rel):
+    if not os.path.isfile(rel):
+        raise SystemExit(f"BAKE FAIL {rel}: expected to exist, not found")
+    _pending_deletes.append(rel)
+
 def commit():
     for rel, s in _pending:
         with io.open(rel, "w", encoding="utf-8", newline="") as f:
             f.write(s)
         print(f"  baked {rel}")
+    for rel in _pending_deletes:
+        os.remove(rel)
+        print(f"  removed {rel}")
 
 # 1) DnsMitmResolver: real server IPs instead of the loopback fallback
 patch("src/Ryujinx.HLE/HOS/Services/Sockets/Sfdnsres/Proxy/DnsMitmResolver.cs",
@@ -87,6 +108,33 @@ f'''        private const string BuildVersion = "{version}";
         private const string BuildGitHash = "{git_hash}";
         private const string ReleaseChannelName = "release";
         private const string ConfigFileName = "Config.json";''')
+
+# 4) NextendoAppSecrets: gitignored, never checked out at all -- write it fresh rather than
+#    patching a placeholder (see .gitignore comment next to the real path). The dev-build
+#    template defines the SAME class for an unbaked checkout (empty AppToken) -- it has to go,
+#    or the two collide as a duplicate type definition the moment the real file exists.
+delete_existing("src/Ryujinx/Common/NextendoAppSecrets.template.cs")
+write_new("src/Ryujinx/Common/NextendoAppSecrets.cs", f'''namespace Ryujinx.Ava.Common
+{{
+    /// <summary>
+    /// [Nextendo] The application identity that proves to nextendo.network THIS BUILD is a
+    /// registered Ryujinx-Nextendo client, created via https://nextendo.network/developers,
+    /// as opposed to the player's own login token (NextendoAccount.NexToken), which only proves
+    /// WHO is playing, not WHICH client is asking. Ryujinx is a public PKCE client by design (no
+    /// secret it could keep), so the client_id itself is the credential here, exactly like any
+    /// third-party desktop app registered the same way -- no special bypass for being "official".
+    ///
+    /// Baked by bake_release.py from the NEXTENDO_OFFICIAL_CLIENT_ID / NEXTENDO_OFFICIAL_PRIVATE_KEY
+    /// CI secrets. This file is gitignored on purpose: a source checkout never carries the real
+    /// values.
+    /// </summary>
+    public static class NextendoAppSecrets
+    {{
+        public const string AppToken = "{client_id}";
+        public const string AppPrivateKeyB64 = "{official_private_key}";
+    }}
+}}
+''')
 
 commit()
 print("BAKE OK")

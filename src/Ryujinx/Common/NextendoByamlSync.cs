@@ -125,6 +125,7 @@ namespace Ryujinx.Ava.Common
             try
             {
                 using HttpClient http = new() { Timeout = TimeSpan.FromSeconds(15) };
+                NextendoApi.AddAppHeader(http);
                 if (!string.IsNullOrEmpty(NextendoAccount.NexToken))
                 {
                     http.DefaultRequestHeaders.Add("Authorization", "Bearer " + NextendoAccount.NexToken);
@@ -279,6 +280,7 @@ namespace Ryujinx.Ava.Common
                     try
                     {
                         using HttpClient http = new() { Timeout = TimeSpan.FromMinutes(5) };
+                        NextendoApi.AddAppHeader(http);
                         if (!string.IsNullOrEmpty(NextendoAccount.NexToken))
                         {
                             http.DefaultRequestHeaders.Add("Authorization", "Bearer " + NextendoAccount.NexToken);

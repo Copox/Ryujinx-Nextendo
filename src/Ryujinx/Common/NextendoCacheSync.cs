@@ -82,6 +82,7 @@ namespace Ryujinx.Ava.Common
             try
             {
                 using HttpClient http = new() { Timeout = TimeSpan.FromSeconds(15) };
+                NextendoApi.AddAppHeader(http);
                 http.DefaultRequestHeaders.Add("Authorization", "Bearer " + NextendoAccount.NexToken);
 
                 HttpResponseMessage resp = await http.GetAsync($"{BaseUrl()}/api/cache/{app.IdString}/manifest");
@@ -134,6 +135,7 @@ namespace Ryujinx.Ava.Common
                     try
                     {
                         using HttpClient http = new() { Timeout = TimeSpan.FromMinutes(10) };
+                        NextendoApi.AddAppHeader(http);
                         http.DefaultRequestHeaders.Add("Authorization", "Bearer " + NextendoAccount.NexToken);
 
                         using HttpResponseMessage resp = await http.GetAsync(

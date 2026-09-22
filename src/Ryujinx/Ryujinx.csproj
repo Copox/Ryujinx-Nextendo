@@ -18,6 +18,10 @@
     </MSBuild>
   </Target>
 
+  <Target Name="EnsureNextendoAppSecrets" BeforeTargets="BeforeBuild" Condition="!Exists('$(MSBuildProjectDirectory)\Common\NextendoAppSecrets.cs')">
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\Common\NextendoAppSecrets.template.cs" DestinationFiles="$(MSBuildProjectDirectory)\Common\NextendoAppSecrets.cs" />
+  </Target>
+
   <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="$([MSBuild]::IsOSPlatform('OSX'))">
     <Exec Command="codesign --entitlements '$(ProjectDir)..\..\distribution\macos\entitlements.xml' -f -s $(SigningCertificate) '$(TargetDir)$(TargetName)'" />
   </Target>
@@ -54,6 +58,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="BouncyCastle.Cryptography" />
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Avalonia.Diagnostics" Condition="'$(Configuration)'=='Debug'" />
