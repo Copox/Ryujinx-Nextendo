@@ -20,6 +20,10 @@ nncs2 = os.environ.get("NEXTENDO_NNCS2_IP", nat).strip()
 # client, no secret possible by design — see NextendoAppSecrets.cs). Gitignored like the file
 # itself: a source checkout never carries the real value.
 client_id = os.environ["NEXTENDO_OFFICIAL_CLIENT_ID"].strip()
+# Ed25519 private key (base64, 32-byte seed) matching the public key registered server-side for
+# client_id. Signs every request (NextendoAttestation.cs) so a client_id copied out of a packet
+# capture can't be replayed as this build -- only forging a NEW signature needs this key.
+official_private_key = os.environ["NEXTENDO_OFFICIAL_PRIVATE_KEY"].strip()
 version = sys.argv[1]
 git_hash = sys.argv[2][:7]
 
@@ -120,12 +124,14 @@ write_new("src/Ryujinx/Common/NextendoAppSecrets.cs", f'''namespace Ryujinx.Ava.
     /// secret it could keep), so the client_id itself is the credential here, exactly like any
     /// third-party desktop app registered the same way -- no special bypass for being "official".
     ///
-    /// Baked by bake_release.py from the NEXTENDO_OFFICIAL_CLIENT_ID CI secret. This file is
-    /// gitignored on purpose: a source checkout never carries the real value.
+    /// Baked by bake_release.py from the NEXTENDO_OFFICIAL_CLIENT_ID / NEXTENDO_OFFICIAL_PRIVATE_KEY
+    /// CI secrets. This file is gitignored on purpose: a source checkout never carries the real
+    /// values.
     /// </summary>
     public static class NextendoAppSecrets
     {{
         public const string AppToken = "{client_id}";
+        public const string AppPrivateKeyB64 = "{official_private_key}";
     }}
 }}
 ''')

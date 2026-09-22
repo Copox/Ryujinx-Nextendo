@@ -44,12 +44,13 @@ jobs:
           NEXTENDO_SERVER_IP: ${{ secrets.NEXTENDO_SERVER_IP }}
           NEXTENDO_NAT_IP: ${{ secrets.NEXTENDO_NAT_IP }}
           NEXTENDO_OFFICIAL_CLIENT_ID: ${{ secrets.NEXTENDO_OFFICIAL_CLIENT_ID }}
+          NEXTENDO_OFFICIAL_PRIVATE_KEY: ${{ secrets.NEXTENDO_OFFICIAL_PRIVATE_KEY }}
         run: |
           if [ -z "$NEXTENDO_SERVER_IP" ] || [ -z "$NEXTENDO_NAT_IP" ]; then
             echo "::error::NEXTENDO_SERVER_IP / NEXTENDO_NAT_IP secrets are not set"; exit 1
           fi
-          if [ -z "$NEXTENDO_OFFICIAL_CLIENT_ID" ]; then
-            echo "::error::NEXTENDO_OFFICIAL_CLIENT_ID secret is not set — the app would fail to compile (NextendoAppSecrets is gitignored, never checked out) or connect (closed-API gate rejects an unregistered client_id)"; exit 1
+          if [ -z "$NEXTENDO_OFFICIAL_CLIENT_ID" ] || [ -z "$NEXTENDO_OFFICIAL_PRIVATE_KEY" ]; then
+            echo "::error::NEXTENDO_OFFICIAL_CLIENT_ID / NEXTENDO_OFFICIAL_PRIVATE_KEY secrets are not set — the app would fail to compile (NextendoAppSecrets is gitignored, never checked out) or fail client attestation (apiGuard requires a valid signature for this client_id)"; exit 1
           fi
           python3 distribution/nextendo/bake_release.py "${{ steps.ver.outputs.version }}" "${{ github.sha }}"
 

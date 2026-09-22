@@ -148,7 +148,7 @@ namespace Ryujinx.Ava.Common
             // en mode « serveur personnalisé » aucune requête ne doit partir vers nos
             // services, même celles qui ne regardent pas si un compte est lié (les compteurs
             // publics, par exemple). Le jeton, lui, est déjà tu à la source ; ceci ferme le
-            // reste — l'existence même du trafic.
+            // reste, jusqu'à l'existence même du trafic.
             if (NextendoServerOverride.HorsNextendo)
             {
                 throw new NextendoDesactiveException();
@@ -159,13 +159,7 @@ namespace Ryujinx.Ava.Common
             {
                 http.DefaultRequestHeaders.Add("Authorization", "Bearer " + NextendoAccount.NexToken);
             }
-            // [Nextendo] Preuve d'application (client_id enregistré), distincte du jeton joueur
-            // ci-dessus : voir NextendoAppSecrets pour pourquoi les deux ne peuvent pas partager
-            // un en-tête. Nom d'en-tête à garder synchronisé avec apiGuard côté serveur.
-            if (!string.IsNullOrEmpty(NextendoAppSecrets.AppToken))
-            {
-                http.DefaultRequestHeaders.Add("X-Nextendo-Client-Id", NextendoAppSecrets.AppToken);
-            }
+            AddAppHeader(http);
 
             return http;
         }
@@ -173,14 +167,25 @@ namespace Ryujinx.Ava.Common
         /// <summary>
         /// [Nextendo] For the handful of calls that build their own short-lived HttpClient
         /// instead of going through Client() above (pre-login endpoints: guest creation,
-        /// nickname check, beta config) - same client_id header, no player token possible yet
-        /// since none of these calls happen after a login.
+        /// nickname check, beta config) - same headers, no player token possible yet since
+        /// none of these calls happen after a login.
+        ///
+        /// Two headers, not one: X-Nextendo-Client-Id (plain client_id) identifies the app to
+        /// server-side logic that doesn't need attestation; X-Nextendo-Client (Ed25519-signed,
+        /// see NextendoAttestation) proves THIS specific request truly comes from this build,
+        /// not from someone replaying a client_id copied out of a packet capture. apiGuard
+        /// requires the signed one wherever the app has a public key registered.
         /// </summary>
         public static void AddAppHeader(HttpClient http)
         {
             if (!string.IsNullOrEmpty(NextendoAppSecrets.AppToken))
             {
                 http.DefaultRequestHeaders.Add("X-Nextendo-Client-Id", NextendoAppSecrets.AppToken);
+            }
+            string signed = NextendoAttestation.BuildHeaderValue();
+            if (!string.IsNullOrEmpty(signed))
+            {
+                http.DefaultRequestHeaders.Add("X-Nextendo-Client", signed);
             }
         }
 
@@ -935,10 +940,7 @@ namespace Ryujinx.Ava.Common
         private static HttpClient CreateAvatarHttp()
         {
             HttpClient c = new() { Timeout = TimeSpan.FromSeconds(10) };
-            if (!string.IsNullOrEmpty(NextendoAppSecrets.AppToken))
-            {
-                c.DefaultRequestHeaders.Add("X-Nextendo-Client-Id", NextendoAppSecrets.AppToken);
-            }
+            AddAppHeader(c);
             return c;
         }
 
