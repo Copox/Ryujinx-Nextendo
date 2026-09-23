@@ -157,6 +157,9 @@ namespace Ryujinx.HLE.HOS
         /// fin retires. Deux builds de Splatoon 3 sont couverts ; un identifiant inconnu ne recoit
         /// rien, exactement comme un .ips dont le nom ne correspondait a aucun programme.
         /// </summary>
+        // Overcooked! 2 v1.0.19, certificate and peer hostname patches.
+        private static readonly byte[] _overcooked2 = [0x49, 0x50, 0x53, 0x33, 0x32, 0x00, 0x62, 0xF9, 0x70, 0x00, 0x04, 0x2A, 0x00, 0x80, 0x52, 0x00, 0x71, 0xA7, 0x10, 0x00, 0x04, 0x1F, 0x20, 0x03, 0xD5, 0x00, 0x71, 0xA2, 0xE0, 0x00, 0x04, 0xF4, 0x03, 0x1F, 0x2A, 0x45, 0x45, 0x4F, 0x46];
+
         private static readonly Dictionary<string, byte[][]> _parIdentifiantDeBuild = new()
         {
             ["6830B3A12406CB4716FEC5ADDC35D3E2DC92D212"] = [_contournementCertificat, _nomDePair],
@@ -177,6 +180,7 @@ namespace Ryujinx.HLE.HOS
             ["44EFA84EE9C32B466EA27215D3D91DFD0EBAE625"] = [_certificatN64v420, _nomDePairN64v420],
             ["BCA1A793E41A4836EF3C03286B18E816EEC62338"] = [_certificatPeaceWalker, _nomDePairPeaceWalker],
             ["1C689518406930512C13DDF4217E7676"] = [_ctrConfianceServeur, _ctrRechercheAmis],
+            ["616640F27B9362502D1CE10BF01EB9A6"] = [_overcooked2],
         };
 
         /// <summary>

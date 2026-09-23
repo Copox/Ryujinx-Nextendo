@@ -58,10 +58,6 @@
     <PackageVersion Include="NUnit" Version="3.14.0" />
     <PackageVersion Include="NUnit3TestAdapter" Version="4.6.0" />
 
-    <!-- [Nextendo] Ed25519 client attestation (NextendoAttestation.cs) : pure-managed, no
-         native libsodium binaries to bundle per RID, matches the existing single-file
-         self-contained publish pipeline for Windows/Linux/macOS. -->
-    <PackageVersion Include="BouncyCastle.Cryptography" Version="2.7.0" />
     <PackageVersion Include="securifybv.ShellLink" Version="0.1.0" />
     <PackageVersion Include="Sep" Version="0.15.0" />
     
