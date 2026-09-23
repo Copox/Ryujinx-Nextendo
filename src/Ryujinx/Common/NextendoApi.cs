@@ -1129,11 +1129,10 @@ namespace Ryujinx.Ava.Common
                 return (false, "Vérification anti-CSRF échouée."); // never trust a mismatched state
             }
 
-            // Exchange the code for the online token, public client, PKCE, no client secret.
+            // Exchange the code for the online token — public client, PKCE, no client secret.
             try
             {
                 using HttpClient http = new() { Timeout = TimeSpan.FromSeconds(15) };
-                AddAppHeader(http);
                 using FormUrlEncodedContent form = new(new Dictionary<string, string>
                 {
                     ["grant_type"] = "authorization_code",
