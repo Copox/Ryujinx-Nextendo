@@ -35,9 +35,11 @@ namespace Ryujinx.Ava.Common
         // .app bundle (AppContext.BaseDirectory) is read-only, so extracting the schedule there
         // failed with "download failed" — likewise under Program Files on Windows. AppDataManager's
         // base dir is always writable (and portable-mode aware).
+        private const string VioletTitleId = "01008f6008c5e000";
+        private const string ScarletTitleId = "0100a3d008c5c000";
         private static string SeedRoot => Path.Combine(AppDataManager.BaseDirPath, "bcat-seed");
         private static bool IsPokemon(ApplicationData app) => app?.IdBaseString is
-            "01008f6008c5e000" or "0100a3d008c5c000";
+            VioletTitleId or ScarletTitleId;
         private static string PokemonSeedRoot(ApplicationData app) => Path.Combine(SeedRoot, app.IdBaseString);
 
         // [Nextendo] Legacy next-to-exe seed location REMOVED: it let a stale copy shadow the live
@@ -360,6 +362,21 @@ namespace Ryujinx.Ava.Common
             return ok;
         }
 
+        private static async Task<HttpResponseMessage> GetPokemonBcatResponseAsync(HttpClient http, string titleId)
+        {
+            HttpResponseMessage response = await http.GetAsync($"{BaseUrl()}/api/bcat/{titleId}", HttpCompletionOption.ResponseHeadersRead);
+            if (titleId == ScarletTitleId &&
+                (response.StatusCode is System.Net.HttpStatusCode.NoContent or System.Net.HttpStatusCode.NotFound))
+            {
+                // The current Meowscarada event is shared by both games, but the account API
+                // serves its ZIP under Violet's title ID. Keep Scarlet's local cache separate.
+                response.Dispose();
+                Logger.Info?.Print(LogClass.Application, "[Nextendo] Scarlet BCAT has no separate package; using the shared Violet event.");
+                return await http.GetAsync($"{BaseUrl()}/api/bcat/{VioletTitleId}", HttpCompletionOption.ResponseHeadersRead);
+            }
+            return response;
+        }
+
         private static async Task<bool> EnsurePokemonBcatAsync(ApplicationData app, bool force = false)
         {
             string titleId = app.IdBaseString;
@@ -373,7 +390,7 @@ namespace Ryujinx.Ava.Common
                 {
                     http.DefaultRequestHeaders.Add("Authorization", "Bearer " + NextendoAccount.NexToken);
                 }
-                using HttpResponseMessage response = await http.GetAsync($"{BaseUrl()}/api/bcat/{titleId}", HttpCompletionOption.ResponseHeadersRead);
+                using HttpResponseMessage response = await GetPokemonBcatResponseAsync(http, titleId);
                 // An event is optional: an empty event store must not prevent launching either game.
                 if (response.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.NoContent) return false;
                 response.EnsureSuccessStatusCode();
