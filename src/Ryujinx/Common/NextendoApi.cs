@@ -721,6 +721,91 @@ namespace Ryujinx.Ava.Common
             }
         }
 
+        /// <summary>A friend's offer to join their game session; expires after 5 minutes server-side.</summary>
+        public sealed class GameInvitation
+        {
+            public string Id = "";
+            public ulong SenderPid;
+            public string SenderName = "";
+            public ulong TitleId;
+            public byte[] UserData = [];
+            public long ExpiresAt; // Unix seconds
+
+            public bool IsExpired => ExpiresAt != 0 && ExpiresAt <= DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        }
+
+        // The server accepts 1-15 recipients, at most 1 KiB of session data and a 3 KiB description.
+        public static async Task<(bool ok, string message)> SendGameInvitationAsync(ulong titleId, IReadOnlyList<ulong> recipients, byte[] userData, byte[] description)
+        {
+            try
+            {
+                using HttpClient http = Client();
+                string payload = $"{{\"action\":\"send\",\"title_id\":\"{titleId:X16}\",\"recipients\":[{string.Join(",", recipients)}]," +
+                                 $"\"user_data\":\"{Convert.ToBase64String(userData)}\",\"description\":\"{Convert.ToBase64String(description)}\"}}";
+                using StringContent body = new(payload, Encoding.UTF8, "application/json");
+                HttpResponseMessage resp = await http.PostAsync($"{BaseUrl()}/api/game-invitations", body);
+
+                return resp.IsSuccessStatusCode ? (true, "") : (false, await ReadErrorMessage(resp));
+            }
+            catch (Exception ex)
+            {
+                return (false, ex.Message);
+            }
+        }
+
+        // Null when the inbox couldn't be read, so callers keep what they already show.
+        public static async Task<List<GameInvitation>> GetGameInvitationsAsync()
+        {
+            try
+            {
+                using HttpClient http = Client();
+                HttpResponseMessage resp = await http.GetAsync($"{BaseUrl()}/api/game-invitations");
+                HealIfRejected(resp);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    return null;
+                }
+
+                using JsonDocument doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
+                List<GameInvitation> invitations = [];
+                foreach (JsonElement i in doc.RootElement.GetProperty("invitations").EnumerateArray())
+                {
+                    invitations.Add(new GameInvitation
+                    {
+                        Id = i.GetProperty("id").GetString() ?? "",
+                        SenderPid = i.GetProperty("sender_pid").GetUInt64(),
+                        SenderName = i.GetProperty("sender_name").GetString() ?? "",
+                        TitleId = ulong.Parse(i.GetProperty("title_id").GetString() ?? "0", NumberStyles.HexNumber, CultureInfo.InvariantCulture),
+                        UserData = i.TryGetProperty("user_data", out JsonElement data) && data.ValueKind == JsonValueKind.String
+                            ? Convert.FromBase64String(data.GetString())
+                            : [],
+                        ExpiresAt = i.TryGetProperty("expires_at", out JsonElement expires) ? expires.GetInt64() : 0,
+                    });
+                }
+
+                return invitations;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning?.Print(LogClass.Application, $"[Nextendo] GetGameInvitations failed: {ex.Message}");
+                return null;
+            }
+        }
+
+        public static async Task DismissGameInvitationAsync(string id)
+        {
+            try
+            {
+                using HttpClient http = Client();
+                using StringContent body = new($"{{\"action\":\"dismiss\",\"id\":{JsonSerializer.Serialize(id)}}}", Encoding.UTF8, "application/json");
+                await http.PostAsync($"{BaseUrl()}/api/game-invitations", body);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning?.Print(LogClass.Application, $"[Nextendo] DismissGameInvitation failed: {ex.Message}");
+            }
+        }
+
         // -------------------------------------------------------------------
         // [Nextendo] Mon salon en direct, mes dernières rencontres, et le
         // signalement d'un joueur.

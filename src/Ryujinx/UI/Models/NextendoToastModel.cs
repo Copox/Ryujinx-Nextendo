@@ -12,5 +12,10 @@ namespace Ryujinx.Ava.UI.Models
 
         public string Title { get; init; } = "";
         public string Text { get; init; } = "";
+
+        /// <summary>Game invitation this toast answers with its Accept/Decline buttons; null otherwise.</summary>
+        public string InviteId { get; init; }
+
+        public bool IsInvite => InviteId != null;
     }
 }

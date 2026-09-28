@@ -50,7 +50,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletOE.ApplicationProxyService.Applicati
         {
             // TODO: Find where they are signaled.
             _gpuErrorDetectedSystemEvent = new KEvent(system.KernelContext);
-            _friendInvitationStorageChannelEvent = new KEvent(system.KernelContext);
+            _friendInvitationStorageChannelEvent = system.AppletState.FriendInvitationEvent;
             _notificationStorageChannelEvent = new KEvent(system.KernelContext);
             _healthWarningDisappearedSystemEvent = new KEvent(system.KernelContext);
             _unknownEvent = new KEvent(system.KernelContext);
@@ -633,12 +633,15 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletOE.ApplicationProxyService.Applicati
         // TryPopFromFriendInvitationStorageChannel() -> object<nn::am::service::IStorage>
         public ResultCode TryPopFromFriendInvitationStorageChannel(ServiceCtx context)
         {
-            // NOTE: IStorage are pushed in the channel with IApplicationAccessor PushToFriendInvitationStorageChannel
-            //       If _friendInvitationStorageChannelEvent is signaled, the event is cleared.
-            //       If an IStorage is available, returns it with ResultCode.Success.
-            //       If not, just returns ResultCode.NotAvailable. Since we don't support friend feature for now, it's fine to do the same.
+            // Filled by Horizon.PushFriendInvitation when the user accepts a Nextendo game invitation.
+            if (context.Device.System.AppletState.FriendInvitations.TryDequeue(out byte[] storage))
+            {
+                MakeObject(context, new AppletAE.IStorage(storage));
 
-            Logger.Stub?.PrintStub(LogClass.ServiceAm);
+                return ResultCode.Success;
+            }
+
+            _friendInvitationStorageChannelEvent.ReadableEvent.Clear();
 
             return ResultCode.NotAvailable;
         }

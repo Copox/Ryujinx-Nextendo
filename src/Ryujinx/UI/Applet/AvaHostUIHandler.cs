@@ -11,6 +11,7 @@ using Ryujinx.Ava.UI.Windows;
 using Ryujinx.Common;
 using Ryujinx.HLE;
 using Ryujinx.HLE.HOS.Applets;
+using Ryujinx.HLE.HOS.Applets.MyPage;
 using Ryujinx.HLE.HOS.Applets.SoftwareKeyboard;
 using Ryujinx.HLE.HOS.Services.Account.Acc;
 using Ryujinx.HLE.HOS.Services.Am.AppletOE.ApplicationProxyService.ApplicationProxy.Types;
@@ -344,6 +345,31 @@ namespace Ryujinx.Ava.UI.Applet
         }
 
         public IDynamicTextInputHandler CreateDynamicTextInputHandler() => new AvaloniaDynamicTextInputHandler(_parent);
+
+        public bool DisplayFriendInvitationDialog(FriendInvitationRequest request)
+        {
+            ManualResetEvent dialogCloseEvent = new(false);
+
+            bool sent = false;
+
+            Dispatcher.UIThread.InvokeAsync(async () =>
+            {
+                try
+                {
+                    NextendoInvitePickerWindow picker = new(request);
+                    await picker.ShowDialog(_parent);
+                    sent = picker.Sent;
+                }
+                finally
+                {
+                    dialogCloseEvent.Set();
+                }
+            });
+
+            dialogCloseEvent.WaitOne();
+
+            return sent;
+        }
 
         public UserProfile ShowPlayerSelectDialog()
         {

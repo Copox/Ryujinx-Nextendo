@@ -16,10 +16,17 @@ namespace Ryujinx.HLE.HOS.SystemState
 
         public IdDictionary IndirectLayerHandles { get; }
 
+        // Accepted game invitations, popped by the application through TryPopFromFriendInvitationStorageChannel.
+        public ConcurrentQueue<byte[]> FriendInvitations { get; }
+
+        public KEvent FriendInvitationEvent { get; }
+
         public AppletStateMgr(Horizon system)
         {
             Messages = new ConcurrentQueue<AppletMessage>();
             MessageEvent = new KEvent(system.KernelContext);
+            FriendInvitations = new ConcurrentQueue<byte[]>();
+            FriendInvitationEvent = new KEvent(system.KernelContext);
 
             AppletResourceUserIds = new IdDictionary();
             IndirectLayerHandles = new IdDictionary();

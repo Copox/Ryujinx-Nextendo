@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:helpers="clr-namespace:Ryujinx.Ava.UI.Helpers"
+        xmlns:ext="using:Ryujinx.Ava.Common.Markup"
         xmlns:models="clr-namespace:Ryujinx.Ava.UI.Models"
         x:Class="Ryujinx.Ava.UI.Windows.NextendoNotificationOverlayWindow"
         Title="NextendoNotifications">
@@ -15,8 +16,7 @@
     <Border Name="ToastPanel" Background="#FF15161A" CornerRadius="8" Padding="6">
         <ItemsControl Name="ToastHost"
                       HorizontalAlignment="Left"
-                      VerticalAlignment="Top"
-                      IsHitTestVisible="False">
+                      VerticalAlignment="Top">
             <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
                     <StackPanel Orientation="Vertical" Spacing="6" />
@@ -40,6 +40,15 @@
                                            Foreground="White" TextWrapping="Wrap" />
                                 <TextBlock Text="{Binding Text}" FontSize="12"
                                            Foreground="#E5E5E5" TextWrapping="Wrap" />
+                                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,6,0,0"
+                                            IsVisible="{Binding IsInvite}">
+                                    <Button Classes="accept" Tag="{Binding}" MinWidth="88"
+                                            Background="#FF2E9E4E" Foreground="White"
+                                            Content="{ext:Locale Dialog_Nextendo_GameInviteAccept}" />
+                                    <Button Classes="decline" Tag="{Binding}" MinWidth="88"
+                                            Background="#FF4A4D55" Foreground="White"
+                                            Content="{ext:Locale Dialog_Nextendo_GameInviteDecline}" />
+                                </StackPanel>
                             </StackPanel>
                         </Grid>
                     </Border>

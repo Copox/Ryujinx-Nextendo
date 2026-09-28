@@ -1,11 +1,13 @@
 using Avalonia;
 using Avalonia.Animation;
 using Avalonia.Controls;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Ryujinx.Ava.Common;
 using Ryujinx.Ava.UI.Helpers;
+using Ryujinx.Ava.UI.Models;
 using System;
 using System.Runtime.Versioning;
 
@@ -60,6 +62,7 @@ namespace Ryujinx.Ava.UI.Windows
             };
 
             ToastHost.ItemsSource = NextendoInGameNotifications.Toasts;
+            ToastHost.AddHandler(Button.ClickEvent, OnToastButtonClick);
 
             // Round the window's corners via DWM (the compositor cuts the window so the corners show the
             // game, not black), and make it non-activating so showing it doesn't steal focus from the
@@ -80,6 +83,7 @@ namespace Ryujinx.Ava.UI.Windows
 
             // The service captures its baseline and polls only while a game runs.
             NextendoInGameNotifications.Initialize();
+            NextendoGameInvites.Initialize();
 
             // Show only while there are toasts; hide as soon as they clear (and on game exit, when the
             // service clears the collection). Showing AFTER a toast exists also means the window always
@@ -109,6 +113,28 @@ namespace Ryujinx.Ava.UI.Windows
                     Sync();
                 }
             };
+        }
+
+        // Accept/Decline on a game invitation toast.
+        private static void OnToastButtonClick(object sender, RoutedEventArgs e)
+        {
+            if (e.Source is not Button { Tag: NextendoToastModel { IsInvite: true } toast } button)
+            {
+                return;
+            }
+
+            NextendoInGameNotifications.Dismiss(toast.Id);
+            if (!button.Classes.Contains("accept"))
+            {
+                NextendoGameInvites.Decline(toast.InviteId);
+                return;
+            }
+
+            string error = NextendoGameInvites.Accept(toast.InviteId);
+            if (error != null)
+            {
+                NextendoInGameNotifications.PushNotice(toast.Title, error);
+            }
         }
 
         private static void ShowOverlay()
