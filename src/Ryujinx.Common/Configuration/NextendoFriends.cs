@@ -211,6 +211,81 @@ namespace Ryujinx.Common.Configuration
             return null;
         }
 
+        private static readonly object _nameLock = new();
+        private static readonly Dictionary<ulong, string> _names = new();
+        private static readonly HashSet<ulong> _nameFetching = new();
+
+        /// <summary>
+        /// Public display name of any player, friend or not (/api/names), cached like ProfileImage;
+        /// waits at most timeoutMs for a first lookup. Null when unknown.
+        /// </summary>
+        public static string PublicName(ulong pid, int timeoutMs)
+        {
+            if (pid == 0)
+            {
+                return null;
+            }
+
+            lock (_nameLock)
+            {
+                if (_names.TryGetValue(pid, out string cached))
+                {
+                    return cached.Length > 0 ? cached : null;
+                }
+
+                if (_nameFetching.Add(pid))
+                {
+                    System.Threading.Tasks.Task.Run(() => FetchName(pid));
+                }
+            }
+
+            long deadline = Environment.TickCount64 + timeoutMs;
+            while (Environment.TickCount64 < deadline)
+            {
+                System.Threading.Thread.Sleep(50);
+                lock (_nameLock)
+                {
+                    if (_names.TryGetValue(pid, out string name))
+                    {
+                        return name.Length > 0 ? name : null;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private static void FetchName(ulong pid)
+        {
+            string name = "";
+            try
+            {
+                string baseUrl = NextendoEndpoint.BaseUrl().TrimEnd('/');
+                using HttpRequestMessage req = new(HttpMethod.Get, baseUrl + "/api/names?pids=" + pid);
+                using HttpResponseMessage resp = _http.SendAsync(req).GetAwaiter().GetResult();
+                if (resp.IsSuccessStatusCode)
+                {
+                    using JsonDocument doc = JsonDocument.Parse(resp.Content.ReadAsStringAsync().GetAwaiter().GetResult());
+                    if (doc.RootElement.TryGetProperty("names", out JsonElement names)
+                        && names.TryGetProperty(pid.ToString(), out JsonElement entry)
+                        && entry.TryGetProperty("name", out JsonElement n))
+                    {
+                        name = n.GetString() ?? "";
+                    }
+                }
+            }
+            catch
+            {
+                // network unavailable: remember the miss rather than retry on the game's thread
+            }
+
+            lock (_nameLock)
+            {
+                _names[pid] = name;
+                _nameFetching.Remove(pid);
+            }
+        }
+
         private static void Refresh()
         {
             try
