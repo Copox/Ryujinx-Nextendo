@@ -411,6 +411,7 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             "0100277011f1a000" => "1.0.2",  // Super Mario Bros. 35
             "0100ad9012510000" => "1.0.0",  // Pac-Man 99
             "01009b90006dc000" => "3.0.3",  // Super Mario Maker 2
+            "0100000000010000" => "1.4.1",  // Super Mario Odyssey
             _ => "",
         };
 
