@@ -14,10 +14,12 @@ namespace Ryujinx.Horizon.Bcat.Ipc
         private SharedRef<LibHac.Bcat.Impl.Ipc.IDeliveryCacheFileService> _libHacService;
         private int _disposalState;
         private string _seedPath;
+        private readonly string _seedRoot;
 
-        public DeliveryCacheFileService(ref SharedRef<LibHac.Bcat.Impl.Ipc.IDeliveryCacheFileService> libHacService)
+        public DeliveryCacheFileService(ref SharedRef<LibHac.Bcat.Impl.Ipc.IDeliveryCacheFileService> libHacService, string seedRoot = null)
         {
             _libHacService = SharedRef<LibHac.Bcat.Impl.Ipc.IDeliveryCacheFileService>.CreateMove(ref libHacService);
+            _seedRoot = seedRoot ?? BcatSeed.Root;
         }
 
         [CmifCommand(0)]
@@ -26,9 +28,9 @@ namespace Ryujinx.Horizon.Bcat.Ipc
             string dn = BcatSeed.ToName(ref directoryName);
             string fn = BcatSeed.ToName(ref fileName);
             Result res = _libHacService.Get.Open(ref directoryName, ref fileName).Horizon;
-            if (res.IsFailure && System.IO.File.Exists(BcatSeed.FilePath(dn, fn)))
+            if (res.IsFailure && System.IO.File.Exists(System.IO.Path.Combine(_seedRoot, dn, fn)))
             {
-                _seedPath = BcatSeed.FilePath(dn, fn);
+                _seedPath = System.IO.Path.Combine(_seedRoot, dn, fn);
                 res = Result.Success;
             }
             Ryujinx.Common.Logging.Logger.Info?.Print(Ryujinx.Common.Logging.LogClass.ServiceBcat, $"[SEED] FileService.Open dir='{dn}' file='{fn}' -> {res} (seed={_seedPath != null})");

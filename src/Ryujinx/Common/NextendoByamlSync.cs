@@ -36,6 +36,8 @@ namespace Ryujinx.Ava.Common
         // failed with "download failed" — likewise under Program Files on Windows. AppDataManager's
         // base dir is always writable (and portable-mode aware).
         private static string SeedRoot => Path.Combine(AppDataManager.BaseDirPath, "bcat-seed");
+        private static bool IsViolet(ApplicationData app) => app?.IdBaseString == "01008f6008c5e000";
+        private static string VioletSeedRoot => Path.Combine(SeedRoot, "01008f6008c5e000");
 
         // [Nextendo] Legacy next-to-exe seed location REMOVED: it let a stale copy shadow the live
         // writable one (wrong Splatoon 2 rotation) and was copied to other emulators. Only SeedRoot
@@ -50,6 +52,11 @@ namespace Ryujinx.Ava.Common
             if (app == null)
             {
                 return false;
+            }
+
+            if (IsViolet(app))
+            {
+                return Directory.Exists(VioletSeedRoot) && Directory.EnumerateFiles(VioletSeedRoot, "*", SearchOption.AllDirectories).Any();
             }
 
             // vsdata/VSSetting_0.byaml is the load-bearing schedule file (writable, server-synced).
@@ -120,6 +127,11 @@ namespace Ryujinx.Ava.Common
             if (app == null || !RequiresByaml(app))
             {
                 return false;
+            }
+
+            if (IsViolet(app))
+            {
+                return await EnsureVioletBcatAsync();
             }
 
             try
@@ -261,6 +273,11 @@ namespace Ryujinx.Ava.Common
                 return false;
             }
 
+            if (IsViolet(app))
+            {
+                return await EnsureVioletBcatAsync(force: true);
+            }
+
             string tmpZip = Path.Combine(Path.GetTempPath(), $"nextendo_byaml_{app.IdString}.zip");
             bool ok = false;
 
@@ -339,6 +356,46 @@ namespace Ryujinx.Ava.Common
 
             await dialog.ShowAsync(true);
             return ok;
+        }
+
+        private static async Task<bool> EnsureVioletBcatAsync(bool force = false)
+        {
+            string versionPath = Path.Combine(AppDataManager.BaseDirPath, "nextendo_bcat_version_01008f6008c5e000.txt");
+            try
+            {
+                using HttpClient http = new() { Timeout = TimeSpan.FromSeconds(15) };
+                NextendoApi.AddAppHeader(http);
+                if (!string.IsNullOrEmpty(NextendoAccount.NexToken))
+                {
+                    http.DefaultRequestHeaders.Add("Authorization", "Bearer " + NextendoAccount.NexToken);
+                }
+                using HttpResponseMessage response = await http.GetAsync($"{BaseUrl()}/api/bcat/01008f6008c5e000", HttpCompletionOption.ResponseHeadersRead);
+                // An event is optional: an empty event store must not prevent launching Violet.
+                if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return false;
+                response.EnsureSuccessStatusCode();
+                using Stream remote = await response.Content.ReadAsStreamAsync();
+                using MemoryStream bytes = new();
+                byte[] buffer = new byte[65536];
+                int read;
+                while ((read = await remote.ReadAsync(buffer)) != 0)
+                {
+                    if (bytes.Length + read > 16 * 1024 * 1024) throw new InvalidDataException("Violet BCAT package exceeds 16 MiB.");
+                    bytes.Write(buffer, 0, read);
+                }
+                byte[] zip = bytes.ToArray();
+                string hash = Convert.ToHexString(SHA256.HashData(zip));
+                if (!force && File.Exists(versionPath) && File.ReadAllText(versionPath).Trim() == hash &&
+                    Directory.Exists(VioletSeedRoot) && Directory.EnumerateFiles(VioletSeedRoot, "*", SearchOption.AllDirectories).Any()) return false;
+                Ryujinx.Common.NextendoVioletBcat.Install(zip, VioletSeedRoot);
+                File.WriteAllText(versionPath, hash);
+                Logger.Info?.Print(LogClass.Application, $"[Nextendo] Violet BCAT updated ({zip.Length} B, hash {hash[..8]}).");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning?.Print(LogClass.Application, $"[Nextendo] Violet BCAT update failed; using local event: {ex.Message}");
+                return false;
+            }
         }
     }
 }

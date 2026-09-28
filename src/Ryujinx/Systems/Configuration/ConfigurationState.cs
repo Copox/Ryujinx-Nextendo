@@ -179,12 +179,12 @@ namespace Ryujinx.Ava.Systems.Configuration
             Graphics.PreferredGpu.Value = string.Empty;
             Graphics.ShadersDumpPath.Value = string.Empty;
             Logger.EnableDebug.Value = false;
-            Logger.EnableStub.Value = true;
+            Logger.EnableStub.Value = false;
             Logger.EnableInfo.Value = true;
             Logger.EnableWarn.Value = true;
             Logger.EnableError.Value = true;
             Logger.EnableTrace.Value = false;
-            Logger.EnableGuest.Value = true;
+            Logger.EnableGuest.Value = false;
             Logger.EnableFsAccessLog.Value = false;
             Logger.EnableNetLog.Value = false;
             Logger.EnableAvaloniaLog.Value = false;

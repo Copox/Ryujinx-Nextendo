@@ -14,10 +14,12 @@ namespace Ryujinx.Horizon.Bcat.Ipc
         private SharedRef<LibHac.Bcat.Impl.Ipc.IDeliveryCacheDirectoryService> _libHacService;
         private int _disposalState;
         private string _seedDir;
+        private readonly string _seedRoot;
 
-        public DeliveryCacheDirectoryService(ref SharedRef<LibHac.Bcat.Impl.Ipc.IDeliveryCacheDirectoryService> libHacService)
+        public DeliveryCacheDirectoryService(ref SharedRef<LibHac.Bcat.Impl.Ipc.IDeliveryCacheDirectoryService> libHacService, string seedRoot = null)
         {
             _libHacService = SharedRef<LibHac.Bcat.Impl.Ipc.IDeliveryCacheDirectoryService>.CreateMove(ref libHacService);
+            _seedRoot = seedRoot ?? BcatSeed.Root;
         }
 
         [CmifCommand(0)]
@@ -25,7 +27,7 @@ namespace Ryujinx.Horizon.Bcat.Ipc
         {
             string name = BcatSeed.ToName(ref directoryName);
             Result res = _libHacService.Get.Open(ref directoryName).Horizon;
-            if (res.IsFailure && System.IO.Directory.Exists(BcatSeed.DirPath(name)))
+            if (res.IsFailure && System.IO.Directory.Exists(System.IO.Path.Combine(_seedRoot, name)))
             {
                 _seedDir = name;
                 res = Result.Success;
@@ -39,7 +41,7 @@ namespace Ryujinx.Horizon.Bcat.Ipc
         {
             if (_seedDir != null)
             {
-                string[] files = System.IO.Directory.GetFiles(BcatSeed.DirPath(_seedDir));
+                string[] files = System.IO.Directory.GetFiles(System.IO.Path.Combine(_seedRoot, _seedDir));
                 int n = Math.Min(files.Length, entriesBuffer.Length);
                 for (int i = 0; i < n; i++)
                 {
@@ -61,7 +63,7 @@ namespace Ryujinx.Horizon.Bcat.Ipc
         {
             if (_seedDir != null)
             {
-                count = System.IO.Directory.GetFiles(BcatSeed.DirPath(_seedDir)).Length;
+                count = System.IO.Directory.GetFiles(System.IO.Path.Combine(_seedRoot, _seedDir)).Length;
                 Ryujinx.Common.Logging.Logger.Info?.Print(Ryujinx.Common.Logging.LogClass.ServiceBcat, $"[SEED] DirectoryService.GetCount(seed) count={count}");
                 return Result.Success;
             }

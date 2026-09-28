@@ -48,6 +48,18 @@ namespace Ryujinx.HLE.HOS
             0x45, 0x45, 0x4F, 0x46,
         ];
 
+        // Pokémon Violet 3.0.1 and 4.0.0 share main build 709BFD66115298640155FCC4979DBA151C7CC79A.
+        // Same IPS32 bytes validated in the local client; bypasses the pinned
+        // certificate and the two peer-name rejection branches.
+        private static readonly byte[] _violetTls301 =
+        [
+            0x49, 0x50, 0x53, 0x33, 0x32,
+            0x00, 0x1F, 0xEF, 0xA0, 0x00, 0x04, 0x2A, 0x00, 0x80, 0x52,
+            0x00, 0x1F, 0xE5, 0xB4, 0x00, 0x04, 0x1F, 0x20, 0x03, 0xD5,
+            0x00, 0x1F, 0xE6, 0x58, 0x00, 0x04, 0x1F, 0x20, 0x03, 0xD5,
+            0x45, 0x45, 0x4F, 0x46,
+        ];
+
         // Flat 0xB02BBC: CBNZ W0,0xB02C3C; flat 0xB02AA4: B.NE 0xB02C5C.
         // Both branches lead to the peer-name rejection path.
         private static readonly byte[] _peerNameWonder121 =
@@ -177,6 +189,10 @@ namespace Ryujinx.HLE.HOS
             ["28C4287AEE36F7499DA60F3E68B54C70DA382D75"] = [_contournementCertificat, _nomDePair],
             ["726D2B882DD9EF10F4A9D73EED088740630FB6C8"] = [_contournementCertificat],
             ["FF773E90972D544EB79406EAA65396D53C43EFB9"] = [_certificateWonder121, _peerNameWonder121],
+            ["709BFD66115298640155FCC4979DBA151C7CC79A"] = [_violetTls301],
+            // Scarlet 4.0.0: the three original four-byte instructions at the
+            // same offsets match Violet 4.0.0 in the decrypted main image.
+            ["421C5411B487EB4D049DD065FEC9547773E8E598"] = [_violetTls301],
             ["44EFA84EE9C32B466EA27215D3D91DFD0EBAE625"] = [_certificatN64v420, _nomDePairN64v420],
             ["BCA1A793E41A4836EF3C03286B18E816EEC62338"] = [_certificatPeaceWalker, _nomDePairPeaceWalker],
             ["1C689518406930512C13DDF4217E7676"] = [_ctrConfianceServeur, _ctrRechercheAmis],

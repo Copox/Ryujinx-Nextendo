@@ -70,6 +70,11 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Sfdnsres.Proxy
             return RedirectionParPort.TryGetValue(port, out IPAddress ip) ? ip : null;
         }
 
+        // The Violet Gamesync socket may use a literal session IP, with no
+        // preceding DNS lookup for port 7575. Reuse the configured Nextendo
+        // address for that title-scoped socket route.
+        public static IPAddress NextendoServerAddress => ResolveConfiguredIp("NEXTENDO_SERVER_IP");
+
         // [Nextendo] Retenue de la PREMIERE resolution d'un hote npln, contre un blocage au demarrage.
         //
         // Le jeu se connecte tout seul a son lobby en ligne ~1 min 30 apres le lancement, c'est-a-dire en

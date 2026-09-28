@@ -390,6 +390,8 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             // salon, c'est le desynchronisation assuree. Une seule version supportee a la fois,
             // comme pour les autres titres.
             "0100c2500fc20000" => "11.3.0", // Splatoon 3
+            "01008f6008c5e000" => "4.0.0",  // Pokémon Violet
+            "0100a3d008c5c000" => "4.0.0",  // Pokémon Scarlet
             // [Nextendo 2026-09-08] Super Mario Bros. Wonder. Les correctifs integres (contournement
             // du certificat epingle + deux rejets de nom de pair) sont lies a l'identifiant de build
             // FF773E90972D544EB79406EAA65396D53C43EFB9, propre a cette version exacte : une autre
@@ -501,7 +503,7 @@ namespace Ryujinx.Ava.Systems.AppLibrary
         [JsonIgnore]
         public bool RequiresNextendoByaml => IdBaseString switch
         {
-            "0100f8f0000a2000" or "01003bc0000a0000" or "01003c700009c800" => true,
+            "0100f8f0000a2000" or "01003bc0000a0000" or "01003c700009c800" or "01008f6008c5e000" => true,
             _ => false,
         };
 

@@ -48,6 +48,12 @@ namespace Ryujinx.Horizon.Bcat.Ipc
         [CmifCommand(1)]
         public Result CreateDeliveryCacheStorageService(out IDeliveryCacheStorageService service, [ClientProcessId] ulong pid)
         {
+            string seedRoot = BcatSeed.Root;
+            if (_arp != null && _arp.GetApplicationInstanceId(out ulong seedInstance, pid).IsSuccess &&
+                _arp.GetApplicationLaunchProperty(out ApplicationLaunchProperty seedProperty, seedInstance).IsSuccess)
+            {
+                seedRoot = BcatSeed.RootForTitle(seedProperty.ApplicationId.Id);
+            }
             using SharedRef<LibHac.Bcat.Impl.Ipc.IDeliveryCacheStorageService> libHacService = new();
 
             LibHac.Result resultCode = _libHacService.Get.CreateDeliveryCacheStorageService(ref libHacService.Ref, pid);
@@ -87,7 +93,7 @@ namespace Ryujinx.Horizon.Bcat.Ipc
 
             if (resultCode.IsSuccess())
             {
-                service = new DeliveryCacheStorageService(ref libHacService.Ref);
+                service = new DeliveryCacheStorageService(ref libHacService.Ref, seedRoot);
             }
             else
             {
@@ -111,7 +117,7 @@ namespace Ryujinx.Horizon.Bcat.Ipc
 
             if (resultCode.IsSuccess())
             {
-                service = new DeliveryCacheStorageService(ref libHacService.Ref);
+                service = new DeliveryCacheStorageService(ref libHacService.Ref, BcatSeed.RootForTitle(applicationId.Id));
             }
             else
             {

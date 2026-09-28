@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Text;
 
 namespace Ryujinx.HLE.HOS.Applets.Browser
 {
@@ -43,7 +44,23 @@ namespace Ryujinx.HLE.HOS.Applets.Browser
 
             foreach (BrowserArgument argument in _arguments)
             {
-                Logger.Stub?.PrintStub(LogClass.ServiceAm, $"{argument.Type}: {argument.GetValue()}");
+                Logger.Stub?.PrintStub(LogClass.ServiceAm, $"{argument.Type}: {argument.GetValue()?.ToString()?.TrimEnd('\0')}");
+            }
+
+            string initialUrl = _arguments.Find(a => a.Type == WebArgTLVType.InitialURL)?.GetValue() as string;
+            string callbackUrl = _arguments.Find(a => a.Type == WebArgTLVType.CallbackUrl)?.GetValue() as string;
+            initialUrl = initialUrl?.Split('\0')[0];
+            callbackUrl = callbackUrl?.Split('\0')[0];
+            if (_shimKind == ShimKind.Web && _commonArguments.AppletVersion >= 0x80000 &&
+                IsScarletVioletTitle(_system.Device.Processes.ActiveApplication?.ProgramId) &&
+                IsVioletTermsCallback(initialUrl, callbackUrl))
+            {
+                // Complete Violet's terms applet with its requested callback so entry
+                // to Battle Stadium works without an unavailable browser page.
+                _normalSession.Push(BuildVioletTermsResponse(callbackUrl));
+                Logger.Info?.Print(LogClass.ServiceAm, "[Scarlet/Violet] Battle Stadium/competition web callback applied (terms acceptance=/agree).");
+                AppletStateChanged?.Invoke(this, null);
+                return ResultCode.Success;
             }
 
             // Lobby web page (ShimKind.Lobby) — Splatoon 2 opens this from a PRIVATE BATTLE lobby
@@ -153,14 +170,60 @@ namespace Ryujinx.HLE.HOS.Applets.Browser
 
             return stream.ToArray();
         }
-        private byte[] BuildResponseNew(List<BrowserOutput> outputArguments)
+        internal static bool IsScarletVioletTitle(ulong? programId) =>
+            programId is 0x01008F6008C5E000 or 0x0100A3D008C5C000;
+
+        internal static bool IsVioletTermsCallback(string initialUrl, string callbackUrl)
+        {
+            if (initialUrl == null || callbackUrl == null ||
+                !initialUrl.StartsWith("https://battle-", StringComparison.Ordinal))
+            {
+                return false;
+            }
+            int pathStart = initialUrl.IndexOf('/', "https://".Length);
+            if (pathStart < 0 ||
+                !initialUrl[..pathStart].EndsWith(".pokemon-home.com", StringComparison.Ordinal) ||
+                !initialUrl[pathStart..].StartsWith("/scvi/", StringComparison.Ordinal))
+            {
+                return false;
+            }
+            // Violet uses separate paths for Stadium and competition enrollment.
+            // Honor only a callback on the same origin and in the same page directory.
+            string page = initialUrl.Split('?')[0];
+            return callbackUrl == page[..page.LastIndexOf('/')] + "/callback";
+        }
+
+        internal static byte[] BuildVioletTermsResponse(string callbackUrl)
+        {
+            // The callback argument is a URL prefix; accepting the real terms page navigates to /agree.
+            if (callbackUrl.EndsWith("/terms/callback", StringComparison.Ordinal) ||
+                callbackUrl.EndsWith("/scvi/battle-terms/callback", StringComparison.Ordinal) ||
+                callbackUrl.EndsWith("/scvi/competition/callback", StringComparison.Ordinal))
+            {
+                callbackUrl += "/agree";
+            }
+            byte[] url = Encoding.UTF8.GetBytes(callbackUrl);
+            // The web applet reports the URL length including its NUL terminator.
+            byte[] terminatedUrl = new byte[url.Length + 1];
+            url.CopyTo(terminatedUrl, 0);
+            return BuildResponseNew(ShimKind.Web,
+            [
+                new(BrowserOutputType.ExitReason, (uint)WebExitReason.LastUrl),
+                new(BrowserOutputType.LastUrl, terminatedUrl),
+                new(BrowserOutputType.LastUrlSize, (ulong)terminatedUrl.Length),
+            ]);
+        }
+
+        private byte[] BuildResponseNew(List<BrowserOutput> outputArguments) => BuildResponseNew(_shimKind, outputArguments);
+
+        private static byte[] BuildResponseNew(ShimKind shimKind, List<BrowserOutput> outputArguments)
         {
             using RecyclableMemoryStream stream = MemoryStreamManager.Shared.GetStream();
             using BinaryWriter writer = new(stream);
             writer.WriteStruct(new WebArgHeader
             {
                 Count = (ushort)outputArguments.Count,
-                ShimKind = _shimKind,
+                ShimKind = shimKind,
             });
 
             foreach (BrowserOutput output in outputArguments)
