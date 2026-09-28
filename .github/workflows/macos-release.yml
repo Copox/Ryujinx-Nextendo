@@ -30,6 +30,22 @@ jobs:
         with:
           global-json-file: global.json
 
+      - name: LibHac feed fallback
+        # Ryujinx.LibHac pre-releases only exist on git.ryujinx.app. When that feed is down the
+        # restore times out and the whole build fails (1.8.8 shipped without macOS for that
+        # reason). Fall back to the copy mirrored on the build-deps release.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if curl -sf -m 20 -o /dev/null https://git.ryujinx.app/api/packages/projects/nuget/index.json; then
+            echo "git.ryujinx.app reachable, using it"; exit 0
+          fi
+          echo "::warning::git.ryujinx.app unreachable, using the LibHac package mirrored on the build-deps release"
+          mkdir -p "$RUNNER_TEMP/libhac"
+          gh release download build-deps -R "$GITHUB_REPOSITORY" -p "ryujinx.libhac.*.nupkg" -D "$RUNNER_TEMP/libhac"
+          ls -la "$RUNNER_TEMP/libhac"
+          dotnet nuget update source LibHacAlpha --source "$RUNNER_TEMP/libhac" --configfile nuget.config
+
       - name: Resolve tag and version
         id: ver
         run: |
