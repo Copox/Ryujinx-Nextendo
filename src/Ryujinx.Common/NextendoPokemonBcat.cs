@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace Ryujinx.Common
 {
-    public static class NextendoVioletBcat
+    public static class NextendoPokemonBcat
     {
         public static void Install(byte[] zip, string target)
         {
@@ -24,7 +24,7 @@ namespace Ryujinx.Common
                     parts.Any(p => p.Length == 0 || p.Length > 31 || p == "." || p == ".." ||
                         p.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '_' && c != '-' && c != '.')) ||
                     !names.Add(name) || ((entry.ExternalAttributes >> 16) & 0xF000) == 0xA000)
-                    throw new InvalidDataException("Invalid Violet BCAT path.");
+                    throw new InvalidDataException("Invalid Pokémon BCAT path.");
                 total += entry.Length;
                 if (total > 32 * 1024 * 1024) throw new InvalidDataException("Expanded BCAT exceeds 32 MiB.");
             }

@@ -73,7 +73,7 @@ namespace Ryujinx.Horizon.Bcat.Ipc
             if (count == 0 && System.IO.Directory.Exists(_seedRoot))
             {
                 string[] dirs = System.IO.Directory.GetDirectories(_seedRoot)
-                    .Where(dir => _seedRoot != BcatSeed.Root || System.IO.Path.GetFileName(dir) != "01008f6008c5e000").ToArray();
+                    .Where(dir => _seedRoot != BcatSeed.Root || !BcatSeed.IsPokemonTitleRoot(System.IO.Path.GetFileName(dir))).ToArray();
                 int n = System.Math.Min(dirs.Length, directoryNames.Length);
                 for (int i = 0; i < n; i++)
                 {

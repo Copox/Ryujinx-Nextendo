@@ -498,13 +498,13 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             IsNextendoCompatible && (Version == NextendoCompatibleVersion || IsCtgpdxVariant
                 || !Ryujinx.Common.ReleaseInformation.IsValid);
 
-        // Only Splatoon 2 needs the BCAT schedule byaml (VS/Coop/Fest schedule). The "download the
-        // online schedule" prompt + context-menu button must appear ONLY for these titles — never
-        // for the other online titles, which don't use it.
+        // Splatoon 2 uses schedule byaml, while Scarlet and Violet use event BCAT.
+        // Only these titles should show the BCAT download action.
         [JsonIgnore]
         public bool RequiresNextendoByaml => IdBaseString switch
         {
-            "0100f8f0000a2000" or "01003bc0000a0000" or "01003c700009c800" or "01008f6008c5e000" => true,
+            "0100f8f0000a2000" or "01003bc0000a0000" or "01003c700009c800" or
+            "01008f6008c5e000" or "0100a3d008c5c000" => true,
             _ => false,
         };
 
