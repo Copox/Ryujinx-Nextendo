@@ -36,15 +36,16 @@ namespace Ryujinx.Ava.Common
         // failed with "download failed" — likewise under Program Files on Windows. AppDataManager's
         // base dir is always writable (and portable-mode aware).
         private static string SeedRoot => Path.Combine(AppDataManager.BaseDirPath, "bcat-seed");
-        private static bool IsViolet(ApplicationData app) => app?.IdBaseString == "01008f6008c5e000";
-        private static string VioletSeedRoot => Path.Combine(SeedRoot, "01008f6008c5e000");
+        private static bool IsPokemon(ApplicationData app) => app?.IdBaseString is
+            "01008f6008c5e000" or "0100a3d008c5c000";
+        private static string PokemonSeedRoot(ApplicationData app) => Path.Combine(SeedRoot, app.IdBaseString);
 
         // [Nextendo] Legacy next-to-exe seed location REMOVED: it let a stale copy shadow the live
         // writable one (wrong Splatoon 2 rotation) and was copied to other emulators. Only SeedRoot
         // (writable, server-synced) is honoured now.
 
-        // The marker that tells us the schedule is already installed for this title.
-        // One source of truth: ApplicationData.RequiresNextendoByaml (Splatoon 2 only).
+        // The marker that tells us BCAT content is already installed for this title.
+        // One source of truth: ApplicationData.RequiresNextendoByaml.
         public static bool RequiresByaml(ApplicationData app) => app != null && app.RequiresNextendoByaml;
 
         public static bool IsInstalled(ApplicationData app)
@@ -54,9 +55,10 @@ namespace Ryujinx.Ava.Common
                 return false;
             }
 
-            if (IsViolet(app))
+            if (IsPokemon(app))
             {
-                return Directory.Exists(VioletSeedRoot) && Directory.EnumerateFiles(VioletSeedRoot, "*", SearchOption.AllDirectories).Any();
+                string titleRoot = PokemonSeedRoot(app);
+                return Directory.Exists(titleRoot) && Directory.EnumerateFiles(titleRoot, "*", SearchOption.AllDirectories).Any();
             }
 
             // vsdata/VSSetting_0.byaml is the load-bearing schedule file (writable, server-synced).
@@ -129,9 +131,9 @@ namespace Ryujinx.Ava.Common
                 return false;
             }
 
-            if (IsViolet(app))
+            if (IsPokemon(app))
             {
-                return await EnsureVioletBcatAsync();
+                return await EnsurePokemonBcatAsync(app);
             }
 
             try
@@ -273,9 +275,9 @@ namespace Ryujinx.Ava.Common
                 return false;
             }
 
-            if (IsViolet(app))
+            if (IsPokemon(app))
             {
-                return await EnsureVioletBcatAsync(force: true);
+                return await EnsurePokemonBcatAsync(app, force: true);
             }
 
             string tmpZip = Path.Combine(Path.GetTempPath(), $"nextendo_byaml_{app.IdString}.zip");
@@ -358,9 +360,11 @@ namespace Ryujinx.Ava.Common
             return ok;
         }
 
-        private static async Task<bool> EnsureVioletBcatAsync(bool force = false)
+        private static async Task<bool> EnsurePokemonBcatAsync(ApplicationData app, bool force = false)
         {
-            string versionPath = Path.Combine(AppDataManager.BaseDirPath, "nextendo_bcat_version_01008f6008c5e000.txt");
+            string titleId = app.IdBaseString;
+            string titleRoot = PokemonSeedRoot(app);
+            string versionPath = Path.Combine(AppDataManager.BaseDirPath, $"nextendo_bcat_version_{titleId}.txt");
             try
             {
                 using HttpClient http = new() { Timeout = TimeSpan.FromSeconds(15) };
@@ -369,9 +373,9 @@ namespace Ryujinx.Ava.Common
                 {
                     http.DefaultRequestHeaders.Add("Authorization", "Bearer " + NextendoAccount.NexToken);
                 }
-                using HttpResponseMessage response = await http.GetAsync($"{BaseUrl()}/api/bcat/01008f6008c5e000", HttpCompletionOption.ResponseHeadersRead);
-                // An event is optional: an empty event store must not prevent launching Violet.
-                if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return false;
+                using HttpResponseMessage response = await http.GetAsync($"{BaseUrl()}/api/bcat/{titleId}", HttpCompletionOption.ResponseHeadersRead);
+                // An event is optional: an empty event store must not prevent launching either game.
+                if (response.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.NoContent) return false;
                 response.EnsureSuccessStatusCode();
                 using Stream remote = await response.Content.ReadAsStreamAsync();
                 using MemoryStream bytes = new();
@@ -379,21 +383,21 @@ namespace Ryujinx.Ava.Common
                 int read;
                 while ((read = await remote.ReadAsync(buffer)) != 0)
                 {
-                    if (bytes.Length + read > 16 * 1024 * 1024) throw new InvalidDataException("Violet BCAT package exceeds 16 MiB.");
+                    if (bytes.Length + read > 16 * 1024 * 1024) throw new InvalidDataException("Pokémon BCAT package exceeds 16 MiB.");
                     bytes.Write(buffer, 0, read);
                 }
                 byte[] zip = bytes.ToArray();
                 string hash = Convert.ToHexString(SHA256.HashData(zip));
                 if (!force && File.Exists(versionPath) && File.ReadAllText(versionPath).Trim() == hash &&
-                    Directory.Exists(VioletSeedRoot) && Directory.EnumerateFiles(VioletSeedRoot, "*", SearchOption.AllDirectories).Any()) return false;
-                Ryujinx.Common.NextendoVioletBcat.Install(zip, VioletSeedRoot);
+                    Directory.Exists(titleRoot) && Directory.EnumerateFiles(titleRoot, "*", SearchOption.AllDirectories).Any()) return false;
+                Ryujinx.Common.NextendoPokemonBcat.Install(zip, titleRoot);
                 File.WriteAllText(versionPath, hash);
-                Logger.Info?.Print(LogClass.Application, $"[Nextendo] Violet BCAT updated ({zip.Length} B, hash {hash[..8]}).");
+                Logger.Info?.Print(LogClass.Application, $"[Nextendo] Pokémon BCAT {titleId} updated ({zip.Length} B, hash {hash[..8]}).");
                 return true;
             }
             catch (Exception ex)
             {
-                Logger.Warning?.Print(LogClass.Application, $"[Nextendo] Violet BCAT update failed; using local event: {ex.Message}");
+                Logger.Warning?.Print(LogClass.Application, $"[Nextendo] Pokémon BCAT {titleId} update failed; using local event: {ex.Message}");
                 return false;
             }
         }
