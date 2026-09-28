@@ -18,6 +18,8 @@ permissions:
 
 jobs:
   build-macos:
+    # Only real versions (v1.2.3). Utility releases such as build-deps must not start a build.
+    if: startsWith(github.event.release.tag_name || github.event.inputs.tag, 'v')
     runs-on: macos-14
     steps:
       - name: Checkout the tagged commit
