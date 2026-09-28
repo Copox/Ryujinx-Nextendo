@@ -22,6 +22,12 @@
     <Copy SourceFiles="$(MSBuildProjectDirectory)\Common\NextendoAppSecrets.template.cs" DestinationFiles="$(MSBuildProjectDirectory)\Common\NextendoAppSecrets.cs" />
   </Target>
 
+  <ItemGroup>
+    <Compile Remove="Common\NextendoAppSecrets.template.cs" />
+    <Compile Remove="Common\NextendoAppSecrets.cs" />
+    <Compile Include="Common\NextendoAppSecrets.cs" />
+  </ItemGroup>
+
   <Target Name="PostBuild" AfterTargets="PostBuildEvent" Condition="$([MSBuild]::IsOSPlatform('OSX'))">
     <Exec Command="codesign --entitlements '$(ProjectDir)..\..\distribution\macos\entitlements.xml' -f -s $(SigningCertificate) '$(TargetDir)$(TargetName)'" />
   </Target>

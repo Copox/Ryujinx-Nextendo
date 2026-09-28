@@ -114,7 +114,8 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd
 
             try
             {
-                newBsdSocket = new ManagedSocket(netDomain, (SocketType)type, protocol, context.Device.Configuration.MultiplayerLanInterfaceId)
+                ulong programId = context.Device.Processes.GetProcess(context.ClientProcessId).ProgramId;
+                newBsdSocket = new ManagedSocket(netDomain, (SocketType)type, protocol, context.Device.Configuration.MultiplayerLanInterfaceId, programId)
                 {
                     Blocking = !creationFlags.HasFlag(BsdSocketCreationFlags.NonBlocking),
                 };
@@ -480,20 +481,14 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd
                 }
             }
 
-            // [DIAG] Detect a poller that polls its WakeupFd (eventfd) alongside sockets.
-            bool diagHasEventFd = false;
+            bool hasEventFd = false;
             foreach (PollEvent e in events)
             {
-                if (e.FileDescriptor is EventFileDescriptor) { diagHasEventFd = true; break; }
-            }
-            // [Nextendo] Ne tracer que les poll() REELS de l'invite. Les re-verifications d'un sondage differe
-            // (PollForceNonBlocking) sont une boucle interne de l'emulateur : a la periode de re-verification
-            // d'une milliseconde elles produiraient des centaines de milliers de lignes. Le journaliseur est
-            // une file bornee qui BLOQUE son producteur quand elle deborde, et ce producteur est justement le
-            // fil serveur Bsd : les tracer etranglerait le transport qu'on cherche a accelerer.
-            if (diagHasEventFd && !context.PollForceNonBlocking)
-            {
-                Logger.Info?.Print(LogClass.ServiceBsd, $"[DIAG] Poll with eventfd: {fdsCount} fds, timeout={timeout}");
+                if (e.FileDescriptor is EventFileDescriptor)
+                {
+                    hasEventFd = true;
+                    break;
+                }
             }
 
             int updateCount = 0;
@@ -507,7 +502,7 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd
                     return error is not LinuxError.SUCCESS and not LinuxError.ETIMEDOUT;
                 }
 
-                if (diagHasEventFd)
+                if (hasEventFd)
                 {
                     // [Nextendo] Deferred Bsd Poll — ONLY when an eventfd is polled alongside
                     // its sockets. Do exactly ONE non-blocking pass; never block the
@@ -595,8 +590,6 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd
                             System.Runtime.InteropServices.MemoryMarshal.Write(snap.AsSpan(j * Unsafe.SizeOf<PollEventData>()), events[j].Data);
                         }
                         context.PollInputSnapshot = snap;
-
-                        Logger.Info?.Print(LogClass.ServiceBsd, $"[DIAG] Poll DEFERRED (timeout={timeout}) - freeing Bsd thread for eventfd Write IPC");
 
                         // Return WITHOUT writing a response. ServerBase.Process sees PollDeferRequested
                         // and registers a DeferredPoll instead of replying.
@@ -1169,9 +1162,6 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd
             LinuxError errno = LinuxError.EBADF;
             IFileDescriptor file = _context.RetrieveFileDescriptor(fd);
             int result = -1;
-
-            // [DIAG] Capture every Write IPC — especially a resolver's kick of its eventfd WakeupFd.
-            Logger.Info?.Print(LogClass.ServiceBsd, $"[DIAG] Write IPC fd={fd} size={sendSize} type={file?.GetType().Name}");
 
             if (file != null)
             {

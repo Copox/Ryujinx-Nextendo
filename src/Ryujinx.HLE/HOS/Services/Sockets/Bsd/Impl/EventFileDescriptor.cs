@@ -1,4 +1,3 @@
-using Ryujinx.Common.Logging;
 using Ryujinx.HLE.HOS.Services.Sockets.Bsd.Types;
 using System;
 using System.Runtime.InteropServices;
@@ -38,7 +37,6 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd.Impl
             WriteEvent = new ManualResetEvent(false);
             ReadEvent = new ManualResetEvent(false);
             UpdateEventStates();
-            Logger.Info?.Print(LogClass.ServiceBsd, $"[DIAG] eventfd CREATED value={value} flags={flags}");
         }
 
         public int Refcount { get; set; }
@@ -155,7 +153,6 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd.Impl
                 Monitor.Pulse(_lock);
 
                 UpdateEventStates();
-                Logger.Info?.Print(LogClass.ServiceBsd, $"[DIAG] eventfd WRITE +{count} -> value={_value} (ReadEvent set, should wake poller)");
             }
 
             // [Nextendo] deferred Bsd Poll (single-thread eventfd deadlock fix)

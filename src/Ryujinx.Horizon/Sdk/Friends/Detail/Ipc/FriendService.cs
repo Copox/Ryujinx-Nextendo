@@ -18,6 +18,7 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
     {
         private readonly IEmulatorAccountManager _accountManager;
         private SystemEventType _completionEvent;
+        private bool _isAsyncSession;
 
         public FriendService(IEmulatorAccountManager accountManager, FriendsServicePermissionLevel permissionLevel)
         {
@@ -72,6 +73,14 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
         [CmifCommand(0)]
         public Result GetCompletionEvent([CopyHandle] out int completionEventHandle)
         {
+            // nnSdk asks for this only on a fresh AsyncContext session, which runs one command on a
+            // worker thread and then closes; signalled now, the waiter reads the result before it exists.
+            if (!_isAsyncSession)
+            {
+                _isAsyncSession = true;
+                Os.ClearSystemEvent(ref _completionEvent);
+            }
+
             completionEventHandle = Os.GetReadableHandleOfSystemEvent(ref _completionEvent);
 
             return Result.Success;
@@ -387,11 +396,60 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             Uid userId,
             [Buffer(HipcBufferFlags.In | HipcBufferFlags.Pointer)] ReadOnlySpan<NetworkServiceAccountId> friendIds)
         {
-            string friendIdList = string.Join(", ", friendIds.ToArray());
-
-            Logger.Stub?.PrintStub(LogClass.ServiceFriend, new { userId, friendIdList });
+            int count = Math.Min(profileList.Length, friendIds.Length);
+            for (int i = 0; i < count; i++)
+            {
+                profileList[i] = MakeProfile(friendIds[i].Id);
+            }
 
             return Result.Success;
+        }
+
+        // Local account, then friends, then any player's public name (a balloon card may show a stranger).
+        private static ProfileImpl MakeProfile(ulong id)
+        {
+            ulong pid = id;
+            string name = null;
+            if (NextendoAccount.IsLinked && NextendoAccount.Pid == id)
+            {
+                name = NextendoAccount.Username;
+            }
+            else
+            {
+                foreach (NextendoFriends.Entry friend in NextendoFriends.Get())
+                {
+                    if (friend.Pid == id || (friend.Nsa != 0 && friend.Nsa == id))
+                    {
+                        pid = friend.Pid;
+                        name = friend.Name;
+                        break;
+                    }
+                }
+
+                name ??= NextendoFriends.PublicName(id, 1500);
+            }
+
+            if (string.IsNullOrEmpty(name))
+            {
+                return default;
+            }
+
+            ProfileImpl profile = default;
+            profile.NetworkUserId = new NetworkServiceAccountId(id);
+
+            Array33<byte> nameArr = default;
+            byte[] nameBytes = Encoding.UTF8.GetBytes(name);
+            nameBytes.AsSpan(0, Math.Min(nameBytes.Length, 32)).CopyTo(nameArr.AsSpan());
+            profile.Nickname = new Nickname(nameArr);
+
+            // The pid query lets Nextendo's CDN find the picture for any player.
+            byte[] url = Encoding.ASCII.GetBytes(
+                $"https://cdn-image-e0d67c509fb203858ebcb2fe3f88c2aa.baas.nintendo.com/1/pid_{pid}?pid={pid}");
+            url.AsSpan(0, Math.Min(url.Length, 0x9F)).CopyTo(profile.ImageUrl.Path);
+
+            profile.IsValid = 1;
+
+            return profile;
         }
 
         [CmifCommand(10600)]
@@ -530,11 +588,22 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
         }
 
         [CmifCommand(11000)]
-        public Result GetProfileImageUrl(out Url imageUrl, Url url, int arg2)
+        public Result GetProfileImageUrl(out Url imageUrl, Url url, int imageSize)
         {
-            imageUrl = default;
+            // Titles decode the picture into a buffer sized for imageSize, so the CDN must serve that size.
+            imageUrl = url;
+            string sized = url.ToString();
+            if (!sized.Contains("size="))
+            {
+                sized += (sized.Contains('?') ? "&" : "?") + "size=" + imageSize;
+            }
 
-            Logger.Stub?.PrintStub(LogClass.ServiceFriend, new { url, arg2 });
+            byte[] bytes = Encoding.ASCII.GetBytes(sized);
+            if (bytes.Length < 0xA0)
+            {
+                imageUrl = default;
+                bytes.CopyTo(imageUrl.Path);
+            }
 
             return Result.Success;
         }
@@ -1205,6 +1274,12 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
         {
             if (disposing)
             {
+                // nnSdk closes an async session only after storing its result.
+                if (_isAsyncSession)
+                {
+                    Os.SignalSystemEvent(ref _completionEvent);
+                }
+
                 Os.DestroySystemEvent(ref _completionEvent);
             }
         }

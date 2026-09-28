@@ -1,3 +1,4 @@
+using Ryujinx.Common.Configuration;
 using Ryujinx.Common.Logging;
 using Ryujinx.HLE.HOS.Services.Sockets.Bsd.Proxy;
 using Ryujinx.HLE.HOS.Services.Sockets.Bsd.Types;
@@ -30,6 +31,14 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd.Impl
 
         public ISocketImpl Socket { get; private set; }
 
+        private readonly ulong _programId;
+        private const ulong VioletTitleId = 0x01008F6008C5E000;
+        private const ulong VioletUpdateTitleId = 0x01008F6008C5E800;
+        private const ulong ScarletTitleId = 0x0100A3D008C5C000;
+        private const ulong ScarletUpdateTitleId = 0x0100A3D008C5C800;
+        private const int VioletOriginalGamesyncPort = 7575;
+        private const int VioletDedicatedGamesyncPort = 8463;
+
         // [Nextendo] Le raccrochage du pair a-t-il deja ete signale a l'invite par un POLLHUP synthetise ?
         // Voir ManagedSocketPollManager.Poll : la notification est volontairement A FRONT et non a niveau.
         // POSIX rapporte POLLHUP a chaque appel, mais l'invite peut garder longtemps un descripteur mort dans
@@ -45,9 +54,10 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd.Impl
         // (the socket died before the NPLN handshake even started).
         private readonly Dictionary<(BsdSocketOption Option, SocketOptionLevel Level), byte[]> _feignedSockOpts = new();
 
-        public ManagedSocket(AddressFamily addressFamily, SocketType socketType, ProtocolType protocolType, string lanInterfaceId)
+        public ManagedSocket(AddressFamily addressFamily, SocketType socketType, ProtocolType protocolType, string lanInterfaceId, ulong programId = 0)
         {
             Socket = SocketHelpers.CreateSocket(addressFamily, socketType, protocolType, lanInterfaceId);
+            _programId = programId;
             Refcount = 1;
         }
 
@@ -55,6 +65,49 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd.Impl
         {
             Socket = socket;
             Refcount = 1;
+        }
+
+        private bool IsVioletGamesyncSocket(IPEndPoint endpoint)
+        {
+            return IsVioletGamesyncSocket(_programId, SocketType, ProtocolType, endpoint.Port,
+                false) && !NextendoServerOverride.HorsNextendo;
+        }
+
+        internal static bool IsVioletGamesyncSocket(ulong programId, SocketType socketType,
+            ProtocolType protocolType, int port, bool customServer)
+        {
+            return (programId == VioletTitleId || programId == VioletUpdateTitleId ||
+                    programId == ScarletTitleId || programId == ScarletUpdateTitleId)
+                && socketType == SocketType.Stream
+                && protocolType == ProtocolType.Tcp
+                && port == VioletOriginalGamesyncPort
+                && !customServer;
+        }
+
+        private static int VioletGamesyncDestinationPort()
+        {
+            string configured = Environment.GetEnvironmentVariable("NEXTENDO_VIOLET_GAMESYNC_PORT");
+            if (configured == "0")
+            {
+                return 0;
+            }
+            return int.TryParse(configured, out int port) && port > 1023 && port <= 65535
+                ? port
+                : VioletDedicatedGamesyncPort;
+        }
+
+        internal static IPEndPoint RouteVioletGamesync(IPEndPoint endpoint, ulong programId,
+            SocketType socketType, ProtocolType protocolType, bool customServer,
+            IPAddress nextendoAddress, int dedicatedPort)
+        {
+            IPAddress actual = endpoint.Address.IsIPv4MappedToIPv6
+                ? endpoint.Address.MapToIPv4() : endpoint.Address;
+            if (dedicatedPort > 0 && IsVioletGamesyncSocket(programId, socketType, protocolType,
+                    endpoint.Port, customServer) && actual.Equals(nextendoAddress))
+            {
+                return new IPEndPoint(endpoint.Address, dedicatedPort);
+            }
+            return endpoint;
         }
 
         private static SocketFlags ConvertBsdSocketFlags(BsdSocketFlags bsdSocketFlags)
@@ -184,6 +237,10 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd.Impl
                 // partir vers le serveur d'un autre jeu — mesure du 2026-08-15, douze fois sur
                 // vingt-deux chez un testeur, ce qui rendait la jonction en partie privee aleatoire.
                 IPAddress sub = Ryujinx.HLE.HOS.Services.Sockets.Sfdnsres.Proxy.DnsMitmResolver.RedirectionPour(remoteEndPoint.Port);
+                if (isAny && sub == null && IsVioletGamesyncSocket(remoteEndPoint))
+                {
+                    sub = Ryujinx.HLE.HOS.Services.Sockets.Sfdnsres.Proxy.DnsMitmResolver.NextendoServerAddress;
+                }
                 if (isAny && sub != null)
                 {
                     if (Socket.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6
@@ -204,6 +261,17 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd.Impl
                     Logger.Warning?.Print(LogClass.ServiceBsd,
                         $"[Nextendo] Connect target was {a}:{remoteEndPoint.Port} (lost address) — AUCUNE redirection pour ce port, on ne substitue pas (pair ?)");
                 }
+            }
+
+            // Scarlet/Violet use the same Gamesync SNI and original port as
+            // Splatoon 3. Route only these titles' TCP sockets to their shared listener;
+            // the guest still sends gamesync.npln.nintendo.net as its TLS SNI.
+            if (IsVioletGamesyncSocket(remoteEndPoint))
+            {
+                remoteEndPoint = RouteVioletGamesync(remoteEndPoint, _programId, SocketType, ProtocolType,
+                    NextendoServerOverride.HorsNextendo,
+                    Ryujinx.HLE.HOS.Services.Sockets.Sfdnsres.Proxy.DnsMitmResolver.NextendoServerAddress,
+                    VioletGamesyncDestinationPort());
             }
 
             // [Nextendo] La boucle locale est traitee comme le reseau local : une redirection
@@ -462,15 +530,6 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd.Impl
 
         public LinuxError Send(out int sendSize, ReadOnlySpan<byte> buffer, BsdSocketFlags flags)
         {
-            // [DIAG] Log any TLS handshake record we're asked to send, so we can see whether the
-            // game's ClientHello actually flows through this Bsd send path (vs nn::ssl / another method).
-            if (buffer.Length > 5 && buffer[0] == 0x16)
-            {
-                IPEndPoint dr = RemoteEndPoint;
-                Ryujinx.HLE.HOS.Services.Sockets.Sfdnsres.Proxy.DnsMitmResolver.LastHostForIp.TryGetValue(dr?.Address?.ToString() ?? "", out string dh);
-                Logger.Info?.Print(LogClass.ServiceBsd, $"[DIAG] Bsd.Send TLS hs=0x{buffer[5]:x2} len={buffer.Length} remote={dr} dnsHost={dh}");
-            }
-
             // If this is a TLS ClientHello with no SNI heading to a host we DNS-redirected, splice
             // the original hostname in as the SNI so our SNI-routing reverse-proxy can reach the
             // right backend (some games' bundled TLS client sends no SNI under emulation).
@@ -525,6 +584,8 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd.Impl
 
         public LinuxError SendTo(out int sendSize, ReadOnlySpan<byte> buffer, int size, BsdSocketFlags flags, IPEndPoint remoteEndPoint)
         {
+            remoteEndPoint = RecoverLostRedirectedDatagramEndpoint(remoteEndPoint);
+
             try
             {
                 sendSize = Socket.SendTo(buffer[..size], ConvertBsdSocketFlags(flags), remoteEndPoint);
@@ -542,6 +603,35 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd.Impl
 
                 return WinSockHelper.ConvertError((WsaError)exception.ErrorCode);
             }
+        }
+
+        internal static IPEndPoint RecoverLostRedirectedDatagramEndpoint(IPEndPoint remoteEndPoint)
+        {
+            IPAddress address = remoteEndPoint.Address;
+            bool isAny = address.Equals(IPAddress.Any) || address.Equals(IPAddress.IPv6Any)
+                         || (address.IsIPv4MappedToIPv6 && address.MapToIPv4().Equals(IPAddress.Any));
+
+            if (!isAny)
+            {
+                return remoteEndPoint;
+            }
+
+            // getaddrinfo results are known to lose their address while retaining the port in
+            // this client path. Recover only an endpoint whose exact port was recorded by the
+            // resolver. An arbitrary peer port has no entry and is deliberately left unchanged.
+            IPAddress recovered = Ryujinx.HLE.HOS.Services.Sockets.Sfdnsres.Proxy.DnsMitmResolver.RedirectionPour(remoteEndPoint.Port);
+
+            if (recovered == null)
+            {
+                return remoteEndPoint;
+            }
+
+            if (address.AddressFamily == AddressFamily.InterNetworkV6 && recovered.AddressFamily == AddressFamily.InterNetwork)
+            {
+                recovered = recovered.MapToIPv6();
+            }
+
+            return new IPEndPoint(recovered, remoteEndPoint.Port);
         }
 
         // [Nextendo] Fill optionValue with the value a prior setsockopt feigned success on (or zeros), so
@@ -904,10 +994,6 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd.Impl
             try
             {
                 ArraySegment<byte>[] mmsgBuf = ConvertMessagesToBuffer(message);
-                if (mmsgBuf.Length > 0 && mmsgBuf[0].Count > 5 && mmsgBuf[0].Array[mmsgBuf[0].Offset] == 0x16)
-                {
-                    Logger.Info?.Print(LogClass.ServiceBsd, $"[DIAG] Bsd.SendMMsg TLS hs=0x{mmsgBuf[0].Array[mmsgBuf[0].Offset + 5]:x2} len={mmsgBuf[0].Count} remote={RemoteEndPoint}");
-                }
                 SocketError socketError;
                 int sendSize;
 

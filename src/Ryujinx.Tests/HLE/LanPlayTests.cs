@@ -13,6 +13,7 @@ using Ryujinx.HLE.HOS.Services.Sockets.Bsd;
 using Ryujinx.HLE.HOS.Services.Sockets.Bsd.Impl;
 using Ryujinx.HLE.HOS.Services.Sockets.Bsd.Proxy;
 using Ryujinx.HLE.HOS.Services.Sockets.Bsd.Types;
+using Ryujinx.HLE.HOS.Services.Sockets.Sfdnsres.Proxy;
 using System;
 using System.Buffers.Binary;
 using System.Collections.Generic;
@@ -304,6 +305,25 @@ namespace Ryujinx.Tests.HLE
 
             sender.Close();
             receiver.Close();
+        }
+
+        [Test]
+        public void LostUdpAddressUsesOnlyTheDnsResultForTheExactPort()
+        {
+            const int ResolvedPort = 3478;
+            const int UnrelatedPort = 3479;
+
+            DnsMitmResolver.NoterRedirection(ResolvedPort, IPAddress.Loopback);
+
+            IPEndPoint recovered = ManagedSocket.RecoverLostRedirectedDatagramEndpoint(
+                new IPEndPoint(IPAddress.Any, ResolvedPort));
+            IPEndPoint untouched = ManagedSocket.RecoverLostRedirectedDatagramEndpoint(
+                new IPEndPoint(IPAddress.Any, UnrelatedPort));
+
+            Assert.That(recovered.Address, Is.EqualTo(IPAddress.Loopback));
+            Assert.That(recovered.Port, Is.EqualTo(ResolvedPort));
+            Assert.That(untouched.Address, Is.EqualTo(IPAddress.Any),
+                "an unknown peer port must never inherit another service's address");
         }
 
         [Test]

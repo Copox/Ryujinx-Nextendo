@@ -22,6 +22,17 @@ namespace Ryujinx.Horizon.Bcat.Ipc
         // keeps this single writable location current from the server, so it is the only source read.
         public static string Root => System.IO.Path.Combine(AppDataManager.BaseDirPath, "bcat-seed");
 
+        public static string RootForTitle(ulong titleId) => titleId switch
+        {
+            0x01008F6008C5E000 => System.IO.Path.Combine(Root, "01008f6008c5e000"),
+            0x0100A3D008C5C000 => System.IO.Path.Combine(Root, "0100a3d008c5c000"),
+            _ => Root,
+        };
+
+        public static bool IsPokemonTitleRoot(string name) =>
+            name.Equals("01008f6008c5e000", StringComparison.OrdinalIgnoreCase) ||
+            name.Equals("0100a3d008c5c000", StringComparison.OrdinalIgnoreCase);
+
         public static string DirPath(string dir) => System.IO.Path.Combine(Root, dir);
 
         public static string FilePath(string dir, string file) => System.IO.Path.Combine(Root, dir, file);

@@ -53,6 +53,7 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
         private byte[] _cachedTokenData;
         private DateTime _cachedTokenExpiry;
         private string _cachedTokenVersion;
+        private ulong _cachedTokenProgramId;
 
         public ManagerServer(UserId userId)
         {
@@ -101,7 +102,7 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
             return rsa;
         }
 
-        private static string GenerateIdToken(string installedVersion)
+        private static string GenerateIdToken(string installedVersion, ulong programId)
         {
             RSAParameters parameters = _nextendoIdTokenRsa.ExportParameters(true);
 
@@ -130,6 +131,14 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
                 // NSO membership flag — Splatoon 2 reads this LOCALLY to gate online entry.
                 { "hm", true },
             };
+
+            // Scarlet shares Violet's NPLN tenant but needs its own app_id.
+            // Violet and every other game's BAAS token remain byte-compatible
+            // with the existing claim shape.
+            if (programId == 0x0100A3D008C5C000)
+            {
+                claims["app_id"] = programId.ToString("X16");
+            }
 
             // [Nextendo] Cryptographic account binding for the NEX login. The game forwards
             // this id_token inside its NEX login extraData, but the auth server can't trust
@@ -241,13 +250,15 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
             */
 
             string installedVersion = context.Device.Processes.ActiveApplication?.DisplayVersion;
+            ulong programId = context.Device.Processes.ActiveApplication?.ProgramId ?? 0;
 
             if (_cachedTokenData == null || DateTime.UtcNow > _cachedTokenExpiry ||
-                installedVersion != _cachedTokenVersion)
+                installedVersion != _cachedTokenVersion || programId != _cachedTokenProgramId)
             {
                 _cachedTokenExpiry = DateTime.UtcNow + TimeSpan.FromHours(3);
                 _cachedTokenVersion = installedVersion;
-                _cachedTokenData = Encoding.ASCII.GetBytes(GenerateIdToken(installedVersion));
+                _cachedTokenProgramId = programId;
+                _cachedTokenData = Encoding.ASCII.GetBytes(GenerateIdToken(installedVersion, programId));
             }
 
             byte[] tokenData = _cachedTokenData;

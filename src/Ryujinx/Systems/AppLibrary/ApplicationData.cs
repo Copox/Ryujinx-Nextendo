@@ -390,6 +390,8 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             // salon, c'est le desynchronisation assuree. Une seule version supportee a la fois,
             // comme pour les autres titres.
             "0100c2500fc20000" => "11.3.0", // Splatoon 3
+            "01008f6008c5e000" => "4.0.0",  // Pokémon Violet
+            "0100a3d008c5c000" => "4.0.0",  // Pokémon Scarlet
             // [Nextendo 2026-09-08] Super Mario Bros. Wonder. Les correctifs integres (contournement
             // du certificat epingle + deux rejets de nom de pair) sont lies a l'identifiant de build
             // FF773E90972D544EB79406EAA65396D53C43EFB9, propre a cette version exacte : une autre
@@ -409,6 +411,7 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             "0100277011f1a000" => "1.0.2",  // Super Mario Bros. 35
             "0100ad9012510000" => "1.0.0",  // Pac-Man 99
             "01009b90006dc000" => "3.0.3",  // Super Mario Maker 2
+            "0100000000010000" => "1.4.1",  // Super Mario Odyssey
             _ => "",
         };
 
@@ -495,13 +498,13 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             IsNextendoCompatible && (Version == NextendoCompatibleVersion || IsCtgpdxVariant
                 || !Ryujinx.Common.ReleaseInformation.IsValid);
 
-        // Only Splatoon 2 needs the BCAT schedule byaml (VS/Coop/Fest schedule). The "download the
-        // online schedule" prompt + context-menu button must appear ONLY for these titles — never
-        // for the other online titles, which don't use it.
+        // Splatoon 2 uses schedule byaml, while Scarlet and Violet use event BCAT.
+        // Only these titles should show the BCAT download action.
         [JsonIgnore]
         public bool RequiresNextendoByaml => IdBaseString switch
         {
-            "0100f8f0000a2000" or "01003bc0000a0000" or "01003c700009c800" => true,
+            "0100f8f0000a2000" or "01003bc0000a0000" or "01003c700009c800" or
+            "01008f6008c5e000" or "0100a3d008c5c000" => true,
             _ => false,
         };
 
