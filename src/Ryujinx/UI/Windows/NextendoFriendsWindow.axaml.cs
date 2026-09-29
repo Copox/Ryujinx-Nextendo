@@ -33,6 +33,7 @@ namespace Ryujinx.Ava.UI.Windows
     {
         private readonly ObservableCollection<NextendoFriendModel> _friends = [];
         private readonly ObservableCollection<NextendoFriendModel> _requests = [];
+        private readonly ObservableCollection<NextendoGameInviteModel> _invites = [];
 
         private readonly DispatcherTimer _refreshTimer;
         private CancellationTokenSource _checkCancel;
@@ -67,6 +68,7 @@ namespace Ryujinx.Ava.UI.Windows
 
             FriendsList.ItemsSource = _friends;
             RequestsList.ItemsSource = _requests;
+            InvitesList.ItemsSource = _invites;
 
             CopyCodeButton.Click += CopyCode_Click;
             AddFriendButton.Click += async (_, _) => await AddFriend();
@@ -90,7 +92,7 @@ namespace Ryujinx.Ava.UI.Windows
                 // donc l'abonnement a CurrentApplication seul laisserait ma ligne perimee.
                 RefreshOwnStatus();
 
-                await LoadSocial();
+                await LoadSocialAndInvites();
             };
         }
 
@@ -107,16 +109,18 @@ namespace Ryujinx.Ava.UI.Windows
             // Launching or closing a game changes what friends see of you; reflect it live rather
             // than showing a status that is only true until you start playing.
             TitleIDs.CurrentApplication.Event += OnCurrentApplicationChanged;
+            NextendoGameInvites.Changed += RefreshInvites;
 
             _refreshTimer.Start();
 
-            _ = LoadSocial();
+            _ = LoadSocialAndInvites();
             _ = RunCheck();
         }
 
         protected override void OnClosed(EventArgs e)
         {
             TitleIDs.CurrentApplication.Event -= OnCurrentApplicationChanged;
+            NextendoGameInvites.Changed -= RefreshInvites;
 
             _refreshTimer.Stop();
             _checkCancel?.Cancel();
@@ -434,6 +438,58 @@ namespace Ryujinx.Ava.UI.Windows
                 bool newState = _friends.FirstOrDefault(f => f.Pid == pid) is not { Favorite: true };
                 await NextendoApi.SetFavoriteAsync(pid, newState);
                 await LoadSocial();
+            }
+        }
+
+        // Friends first: invite rows borrow the sender's picture from the friends list.
+        private async Task LoadSocialAndInvites()
+        {
+            await LoadSocial();
+            await NextendoGameInvites.RefreshAsync();
+            RefreshInvites();
+        }
+
+        private void RefreshInvites()
+        {
+            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            _invites.Clear();
+            foreach (NextendoApi.GameInvitation invite in NextendoGameInvites.Pending())
+            {
+                long minutes = Math.Max(1, (invite.ExpiresAt - now + 59) / 60);
+                _invites.Add(new NextendoGameInviteModel
+                {
+                    Id = invite.Id,
+                    Name = invite.SenderName,
+                    Detail = LocaleManager.Instance.UpdateAndGetDynamicValue(LocaleKeys.Dialog_Nextendo_GameInviteLeftFormat,
+                        NextendoGameInvites.GameName(invite.TitleId), minutes),
+                    Image = _friends.FirstOrDefault(f => f.Pid == invite.SenderPid)?.Image,
+                });
+            }
+
+            InvitesPanel.IsVisible = _invites.Count > 0;
+        }
+
+        private void AcceptInvite_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button { Tag: string id })
+            {
+                string error = NextendoGameInvites.Accept(id);
+                if (error != null)
+                {
+                    ShowStatus(error, false);
+                }
+                else
+                {
+                    Close(); // Get out of the game's way while it joins.
+                }
+            }
+        }
+
+        private void DeclineInvite_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button { Tag: string id })
+            {
+                NextendoGameInvites.Decline(id);
             }
         }
 

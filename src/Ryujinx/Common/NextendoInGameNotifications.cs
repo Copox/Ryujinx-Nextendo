@@ -25,6 +25,7 @@ namespace Ryujinx.Ava.Common
     {
         private const int MaxToasts = 3;
         private static readonly TimeSpan _toastDuration = TimeSpan.FromSeconds(6);
+        private static readonly TimeSpan _inviteToastDuration = TimeSpan.FromSeconds(20); // still listed in Friends afterwards
         private static readonly TimeSpan _pollInterval = TimeSpan.FromSeconds(15);
 
         /// <summary>The toasts on screen, bound by the overlay. Newest first (index 0 = top).</summary>
@@ -279,11 +280,32 @@ namespace Ryujinx.Ava.Common
                 try { img = Convert.FromBase64String(f.ImageBase64); } catch { /* ignore */ }
             }
 
-            return new NextendoToastModel { Id = ++_nextId, Image = img, Title = title, Text = text };
+            return new NextendoToastModel { Id = NextId(), Image = img, Title = title, Text = text };
         }
 
+        /// <summary>UI thread: a plain message toast with no avatar.</summary>
+        public static void PushNotice(string title, string text) =>
+            Push(new NextendoToastModel { Id = NextId(), Title = title, Text = text });
+
+        /// <summary>UI thread: a game invitation toast, kept longer than the others.</summary>
+        public static void PushInvite(NextendoToastModel toast) => Push(toast, _inviteToastDuration);
+
+        /// <summary>UI thread: removes a toast before it expires (an answered invitation).</summary>
+        public static void Dismiss(long id)
+        {
+            NextendoToastModel present = Toasts.FirstOrDefault(t => t.Id == id);
+            if (present != null)
+            {
+                Toasts.Remove(present);
+            }
+        }
+
+        public static long NextId() => Interlocked.Increment(ref _nextId);
+
         // UI thread: newest on top, cap at 3 (drop the oldest), auto-expire after a few seconds.
-        private static void Push(NextendoToastModel toast)
+        private static void Push(NextendoToastModel toast) => Push(toast, _toastDuration);
+
+        private static void Push(NextendoToastModel toast, TimeSpan duration)
         {
             Toasts.Insert(0, toast);
 
@@ -292,14 +314,7 @@ namespace Ryujinx.Ava.Common
                 Toasts.RemoveAt(Toasts.Count - 1);
             }
 
-            DispatcherTimer.RunOnce(() =>
-            {
-                NextendoToastModel present = Toasts.FirstOrDefault(t => t.Id == toast.Id);
-                if (present != null)
-                {
-                    Toasts.Remove(present);
-                }
-            }, _toastDuration);
+            DispatcherTimer.RunOnce(() => Dismiss(toast.Id), duration);
         }
     }
 }

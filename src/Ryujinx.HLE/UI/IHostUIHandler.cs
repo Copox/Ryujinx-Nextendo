@@ -1,4 +1,5 @@
 using Ryujinx.HLE.HOS.Applets;
+using Ryujinx.HLE.HOS.Applets.MyPage;
 using Ryujinx.HLE.HOS.Services.Account.Acc;
 using Ryujinx.HLE.HOS.Services.Am.AppletOE.ApplicationProxyService.ApplicationProxy.Types;
 
@@ -68,7 +69,13 @@ namespace Ryujinx.HLE.UI
         /// Displays the player select dialog and returns the selected profile.
         /// </summary>
         UserProfile ShowPlayerSelectDialog();
-        
+
+        /// <summary>
+        /// Lets the user pick friends for a game invitation and sends it; blocks until closed.
+        /// </summary>
+        /// <returns>True when the invitation was sent.</returns>
+        bool DisplayFriendInvitationDialog(FriendInvitationRequest request) => false;
+
         /// <summary>
         /// Takes a screenshot from the current renderer and saves it in the screenshots folder.
         /// </summary>

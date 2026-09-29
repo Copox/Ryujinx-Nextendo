@@ -107,6 +107,34 @@
                     </ItemsControl>
                 </StackPanel>
 
+                <!-- Pending game invitations, only when there are any; each expires after 5 minutes. -->
+                <StackPanel Name="InvitesPanel" Spacing="6" IsVisible="False">
+                    <TextBlock Classes="h1" Text="{ext:Locale Dialog_Nextendo_GameInvitesHeader}" />
+                    <ItemsControl Name="InvitesList">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate DataType="models:NextendoGameInviteModel">
+                                <Border Background="#14808080" CornerRadius="6" Padding="8" Margin="0,0,0,4">
+                                    <Grid ColumnDefinitions="Auto,*,Auto,Auto">
+                                        <Border Grid.Column="0" Width="34" Height="34" CornerRadius="4"
+                                                ClipToBounds="True" Background="#33000000">
+                                            <Image Source="{Binding Image, Converter={x:Static helpers:BitmapArrayValueConverter.Instance}}"
+                                                   Stretch="UniformToFill" />
+                                        </Border>
+                                        <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                                            <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                                            <TextBlock Text="{Binding Detail}" FontSize="11" Opacity="0.6" />
+                                        </StackPanel>
+                                        <Button Grid.Column="2" Click="AcceptInvite_Click" Tag="{Binding Id}"
+                                                Content="{ext:Locale Dialog_Nextendo_GameInviteAccept}" />
+                                        <Button Grid.Column="3" Margin="6,0,0,0" Click="DeclineInvite_Click" Tag="{Binding Id}"
+                                                Content="{ext:Locale Dialog_Nextendo_GameInviteDecline}" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+
                 <!-- The list itself. Online friends sort to the top: that is who you can play with now. -->
                 <Grid ColumnDefinitions="*,Auto">
                     <TextBlock Grid.Column="0" Classes="h1" VerticalAlignment="Center"

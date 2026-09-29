@@ -341,6 +341,28 @@ namespace Ryujinx.HLE.HOS
             AppletState.SetFocus(true);
         }
 
+        /// <summary>
+        /// Hands an accepted game invitation to the running application. False if a different title
+        /// (or none) is running, or the application isn't draining its invitation channel.
+        /// </summary>
+        public bool PushFriendInvitation(ulong titleId, byte[] userData)
+        {
+            if (Device.Processes.ActiveApplication?.ProgramId != titleId || AppletState.FriendInvitations.Count >= 32)
+            {
+                return false;
+            }
+
+            using MemoryStream stream = new();
+            using BinaryWriter writer = new(stream);
+            AccountManager.LastOpenedUser.UserId.Write(writer);
+            writer.Write(userData);
+
+            AppletState.FriendInvitations.Enqueue(stream.ToArray());
+            AppletState.FriendInvitationEvent.ReadableEvent.Signal();
+
+            return true;
+        }
+
         public void SimulateWakeUpMessage()
         {
             AppletState.Messages.Enqueue(AppletMessage.Resume);
