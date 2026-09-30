@@ -401,6 +401,7 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             "01006bd001e06000" => "1.0.17", // Minecraft: Nintendo Switch Edition
             "01009b500007c000" => "5.5.1",  // ARMS
             "0100bde00862a000" => "3.1.1",  // Mario Tennis Aces
+            "0100c9c00e25c000" => "4.0.0",  // Mario Golf: Super Rush
             // [Nextendo 2026-09-20] Crash Team Racing Nitro-Fueled runs on Demonware, not NEX.
             // The built-in patches are keyed to build 1C689518406930512C13DDF4217E7676, which is
             // specific to this exact version; another update would not receive them.
