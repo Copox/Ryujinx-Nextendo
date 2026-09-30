@@ -151,6 +151,8 @@ namespace Ryujinx.Ava.Systems.Configuration
             UI.WindowStartup.WindowPositionX.Value = shouldLoadFromFile ? cff.WindowStartup.WindowPositionX : UI.WindowStartup.WindowPositionX.Value;
             UI.WindowStartup.WindowPositionY.Value = shouldLoadFromFile ? cff.WindowStartup.WindowPositionY : UI.WindowStartup.WindowPositionY.Value;
             UI.WindowStartup.WindowMaximized.Value = shouldLoadFromFile ? cff.WindowStartup.WindowMaximized : UI.WindowStartup.WindowMaximized.Value;
+            UI.WindowStartup.NextendoDashboardWidth.Value = shouldLoadFromFile ? cff.WindowStartup.NextendoDashboardWidth : UI.WindowStartup.NextendoDashboardWidth.Value;
+            UI.WindowStartup.NextendoDashboardHeight.Value = shouldLoadFromFile ? cff.WindowStartup.NextendoDashboardHeight : UI.WindowStartup.NextendoDashboardHeight.Value;
             UI.PauseEmulationWhileScanningAmiibo.Value = cff.PauseEmulationWhileScanningAmiibo;
             UI.WallpaperPath.Value = shouldLoadFromFile ? (cff.WallpaperPath ?? string.Empty) : UI.WallpaperPath.Value;
 
@@ -553,7 +555,20 @@ namespace Ryujinx.Ava.Systems.Configuration
                     cff.MultiplayerLanPlayServer = string.Empty;
                     cff.MultiplayerLanPlayVirtualIp = string.Empty;
                 }),
-                (75, static cff => cff.WallpaperPath = string.Empty)
+                (75, static cff => cff.WallpaperPath = string.Empty),
+                (76, static cff =>
+                {
+                    cff.WindowStartup = new WindowStartup
+                    {
+                        WindowSizeWidth = cff.WindowStartup.WindowSizeWidth,
+                        WindowSizeHeight = cff.WindowStartup.WindowSizeHeight,
+                        WindowPositionX = cff.WindowStartup.WindowPositionX,
+                        WindowPositionY = cff.WindowStartup.WindowPositionY,
+                        WindowMaximized = cff.WindowStartup.WindowMaximized,
+                        NextendoDashboardWidth = 0,
+                        NextendoDashboardHeight = 0,
+                    };
+                })
             );
     }
 }

@@ -9,6 +9,8 @@ using Ryujinx.Common.Configuration;
 using Ryujinx.Common.Logging;
 using System;
 using System.IO;
+using System.Net.Http;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace Ryujinx.Ava.Common
@@ -24,6 +26,7 @@ namespace Ryujinx.Ava.Common
     public static class NextendoPatchNotes
     {
         private const string FlagFileName = "nextendo_patchnote_version";
+        private const string LatestReleaseUrl = "https://api.github.com/repos/NextendoNetwork/Ryujinx-Nextendo/releases/latest";
 
         private static string FlagPath => Path.Combine(AppDataManager.BaseDirPath, FlagFileName);
 
@@ -83,10 +86,11 @@ namespace Ryujinx.Ava.Common
         {
             try
             {
+                (string title, string body, string url)? release = await FetchLatestReleaseAsync();
                 ContentDialog dialog = new()
                 {
-                    Title = LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_PatchNoteTitle],
-                    Content = BuildBody(),
+                    Title = release?.title ?? LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_PatchNoteTitle],
+                    Content = release is { } latest ? BuildReleaseBody(latest.body, latest.url) : BuildBody(),
                     CloseButtonText = LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_PatchNoteButton],
                 };
 
@@ -101,6 +105,86 @@ namespace Ryujinx.Ava.Common
                 MarkShown();
             }
         }
+
+        private static async Task<(string title, string body, string url)?> FetchLatestReleaseAsync()
+        {
+            try
+            {
+                using HttpClient http = new() { Timeout = TimeSpan.FromSeconds(8) };
+                http.DefaultRequestHeaders.UserAgent.ParseAdd("Ryujinx-Nextendo");
+                http.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
+                using HttpResponseMessage response = await http.GetAsync(LatestReleaseUrl);
+                response.EnsureSuccessStatusCode();
+                using JsonDocument document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+                JsonElement root = document.RootElement;
+                string tag = root.TryGetProperty("tag_name", out JsonElement tagElement) ? tagElement.GetString() ?? "" : "";
+                string name = root.TryGetProperty("name", out JsonElement nameElement) ? nameElement.GetString() ?? "" : "";
+                string body = root.TryGetProperty("body", out JsonElement bodyElement) ? bodyElement.GetString() ?? "" : "";
+                string url = root.TryGetProperty("html_url", out JsonElement urlElement) ? urlElement.GetString() ?? "" : "";
+                string title = string.IsNullOrWhiteSpace(name) ? $"What's New — {tag}" : $"What's New — {name}";
+
+                return string.IsNullOrWhiteSpace(body) ? null : (title, body, url);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning?.Print(LogClass.UI, $"[Nextendo] could not load GitHub release notes: {ex.Message}");
+                return null;
+            }
+        }
+
+        private static Control BuildReleaseBody(string markdown, string releaseUrl)
+        {
+            SolidColorBrush accent = new(Accent);
+            SolidColorBrush divider = new(Divider);
+            StackPanel root = new() { Margin = new Thickness(2, 0, 2, 0), Spacing = 4 };
+            bool firstSection = true;
+
+            foreach (string line in markdown.Replace("\r", "").Split('\n'))
+            {
+                string text = line.Trim();
+                if (text.Length == 0)
+                {
+                    continue;
+                }
+
+                if (text.StartsWith("## ", StringComparison.Ordinal) || text.StartsWith("### ", StringComparison.Ordinal))
+                {
+                    string heading = text.TrimStart('#', ' ').Trim();
+                    root.Children.Add(BuildVersionHeader(heading, firstSection, accent, divider));
+                    firstSection = false;
+                }
+                else
+                {
+                    if (text.StartsWith("- ", StringComparison.Ordinal) || text.StartsWith("* ", StringComparison.Ordinal))
+                    {
+                        text = text[2..].Trim();
+                    }
+                    root.Children.Add(BuildBullet(text, accent));
+                }
+            }
+
+            if (Uri.TryCreate(releaseUrl, UriKind.Absolute, out Uri uri) && uri.Host.Equals("github.com", StringComparison.OrdinalIgnoreCase))
+            {
+                Button link = new()
+                {
+                    Content = "View release on GitHub",
+                    HorizontalAlignment = HorizontalAlignment.Left,
+                    Margin = new Thickness(0, 8, 0, 0),
+                };
+                link.Click += (_, _) => Ryujinx.Common.Helper.OpenHelper.OpenUrl(uri.ToString());
+                root.Children.Add(link);
+            }
+
+            return new ScrollViewer
+            {
+                Content = root,
+                MaxHeight = 560,
+                HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+            };
+        }
+
+        /// <summary>Creates the localized release notes for embedding in the Nextendo dashboard.</summary>
+        public static Control CreateContent() => BuildBody();
 
         /// <summary>
         /// Builds the notes panel. The localized body uses one line per feature; a line starting with

@@ -348,19 +348,20 @@ namespace Ryujinx.Ava.UI.Applet
 
         public bool DisplayFriendInvitationDialog(FriendInvitationRequest request)
         {
-            ManualResetEvent dialogCloseEvent = new(false);
-
+            using ManualResetEvent dialogCloseEvent = new(false);
             bool sent = false;
 
-            Dispatcher.UIThread.InvokeAsync(async () =>
+            Dispatcher.UIThread.Post(() =>
             {
                 try
                 {
-                    NextendoInvitePickerWindow picker = new(request);
-                    await picker.ShowDialog(_parent);
-                    sent = picker.Sent;
+                    _parent.OpenGameInvitationDashboard(request, result =>
+                    {
+                        sent = result;
+                        dialogCloseEvent.Set();
+                    });
                 }
-                finally
+                catch
                 {
                     dialogCloseEvent.Set();
                 }

@@ -206,5 +206,41 @@
                 Name="StatusBarView"
                 Grid.Row="2" />
         </Grid>
+        <!-- [Nextendo] In-window overlay: keeping it in the main top-level avoids focus-loss
+             actions and lets the emulation continue behind the dashboard. -->
+        <Border
+            Name="NextendoDashboardOverlay"
+            Grid.Row="0"
+            IsVisible="False"
+            SizeChanged="NextendoDashboardOverlay_SizeChanged"
+            Background="#B8000000"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch"
+            ZIndex="2000">
+            <Border
+                Name="NextendoDashboardFrame"
+                Margin="24"
+                MinWidth="700"
+                MinHeight="400"
+                MaxWidth="2000"
+                MaxHeight="1400"
+                HorizontalAlignment="Stretch"
+                VerticalAlignment="Stretch"
+                Background="#FF1E2025"
+                BorderBrush="#447F8C9B"
+                BorderThickness="1"
+                CornerRadius="14"
+                BoxShadow="0 12 40 0 #80000000">
+                <Grid ClipToBounds="True">
+                    <ContentControl Name="NextendoDashboardContent" />
+                    <Border Width="24" Height="24" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                            Background="#FF202329" BorderBrush="#887F8C9B" BorderThickness="1,1,0,0"
+                            PointerPressed="NextendoDashboardResize_PointerPressed"
+                            PointerMoved="NextendoDashboardResize_PointerMoved" PointerReleased="NextendoDashboardResize_PointerReleased">
+                        <TextBlock Text="◢" FontSize="15" Foreground="#FF3EE8C8" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    </Border>
+                </Grid>
+            </Border>
+        </Border>
     </Grid>
 </window:StyleableAppWindow>

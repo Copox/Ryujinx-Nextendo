@@ -19,6 +19,7 @@ using Ryujinx.Ava.UI.Applet;
 using Ryujinx.Ava.UI.Helpers;
 using Ryujinx.Ava.UI.Models;
 using Ryujinx.Ava.UI.ViewModels;
+using Ryujinx.Ava.UI.Views.Misc;
 using Ryujinx.Ava.Utilities;
 using Ryujinx.Common;
 using Ryujinx.Common.Helper;
@@ -27,6 +28,7 @@ using Ryujinx.Common.UI;
 using Ryujinx.Graphics.Gpu;
 using Ryujinx.HLE.FileSystem;
 using Ryujinx.HLE.HOS;
+using Ryujinx.HLE.HOS.Applets.MyPage;
 using Ryujinx.HLE.HOS.Services.Account.Acc;
 using Ryujinx.Input.HLE;
 using Ryujinx.Input.SDL3;
@@ -68,6 +70,395 @@ namespace Ryujinx.Ava.UI.Windows
         public InputManager InputManager { get; private set; }
 
         public SettingsWindow SettingsWindow { get; set; }
+
+        public bool IsNextendoDashboardOpen => NextendoDashboardOverlay.IsVisible || _nextendoGameDashboardWindow?.IsVisible == true;
+
+        private Point _nextendoDashboardResizeStart;
+        private double _nextendoDashboardResizeWidth;
+        private double _nextendoDashboardResizeHeight;
+        private bool _isResizingNextendoDashboard;
+        private bool _dashboardBlockedGameInput;
+        private bool _nextendoDashboardTakesFocus;
+        private NextendoProfileView _activeNextendoDashboard;
+        private Avalonia.Controls.Window _nextendoGameDashboardWindow;
+        private Border _nextendoGameDashboardFrame;
+        private Point _gameDashboardResizeStart;
+        private double _gameDashboardResizeWidth;
+        private double _gameDashboardResizeHeight;
+        private bool _isResizingGameDashboard;
+
+        /// <summary>Shows or hides the Nextendo dashboard in the main window over the renderer.</summary>
+        public void ToggleNextendoDashboard()
+        {
+            if (IsNextendoDashboardOpen)
+            {
+                CloseNextendoDashboard();
+
+                return;
+            }
+
+            NextendoProfileView dashboard = new(ViewModel.IsGameRunning);
+            _activeNextendoDashboard = dashboard;
+            dashboard.CloseRequested += (_, _) => CloseNextendoDashboard();
+            SuspendGameControllerInputForDashboard();
+
+            int savedWidth = ConfigurationState.Instance.UI.WindowStartup.NextendoDashboardWidth.Value;
+            int savedHeight = ConfigurationState.Instance.UI.WindowStartup.NextendoDashboardHeight.Value;
+
+            if (ViewModel.IsGameRunning)
+            {
+                OpenGameDashboardWindow(dashboard, savedWidth, savedHeight);
+                return;
+            }
+
+            NextendoDashboardContent.Content = dashboard;
+            if (savedWidth >= 700 && savedHeight >= 400)
+            {
+                NextendoDashboardFrame.Width = savedWidth;
+                NextendoDashboardFrame.Height = savedHeight;
+                NextendoDashboardFrame.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
+                NextendoDashboardFrame.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
+            }
+            else
+            {
+                // Fit the default dashboard to the requested 3-column by 2-row
+                // friend layout, including the navigation rail and outer margins.
+                NextendoDashboardFrame.Width = 1100;
+                NextendoDashboardFrame.Height = 780;
+                NextendoDashboardFrame.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
+                NextendoDashboardFrame.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
+            }
+
+            NextendoDashboardOverlay.IsVisible = true;
+
+            // Persist the initial friend-grid size on first use.
+            if (savedWidth < 700 || savedHeight < 400)
+            {
+                Dispatcher.UIThread.Post(SaveInitialNextendoDashboardSize, DispatcherPriority.Loaded);
+            }
+        }
+
+        /// <summary>Routes the firmware's MyPage invite picker into the in-game dashboard.</summary>
+        public void OpenGameInvitationDashboard(FriendInvitationRequest request, Action<bool> completed)
+        {
+            if (request == null || !ViewModel.IsGameRunning)
+            {
+                completed?.Invoke(false);
+                return;
+            }
+
+            NextendoProfileView dashboard = _activeNextendoDashboard;
+            if (dashboard == null)
+            {
+                dashboard = new NextendoProfileView(isGameRunning: true);
+                _activeNextendoDashboard = dashboard;
+                dashboard.CloseRequested += (_, _) => CloseNextendoDashboard();
+                SuspendGameControllerInputForDashboard();
+                OpenGameDashboardWindow(dashboard,
+                    ConfigurationState.Instance.UI.WindowStartup.NextendoDashboardWidth.Value,
+                    ConfigurationState.Instance.UI.WindowStartup.NextendoDashboardHeight.Value);
+            }
+
+            dashboard.BeginGameInvitation(request, sent =>
+            {
+                completed?.Invoke(sent);
+                // Let the synchronous applet caller resume and return focus to the game.
+                Dispatcher.UIThread.Post(CloseNextendoDashboard);
+            });
+        }
+
+        private void OpenGameDashboardWindow(NextendoProfileView dashboard, int savedWidth, int savedHeight)
+        {
+            double overlayWidth = Math.Max(700, ClientSize.Width);
+            double overlayHeight = Math.Max(400, ClientSize.Height);
+            double maxWidth = Math.Max(700, overlayWidth - 48);
+            double maxHeight = Math.Max(400, overlayHeight - 48);
+            double width = savedWidth >= 700 ? Math.Min(savedWidth, maxWidth) : Math.Min(1100, maxWidth);
+            double height = savedHeight >= 400 ? Math.Min(savedHeight, maxHeight) : Math.Min(780, maxHeight);
+
+            Grid overlay = new()
+            {
+                Background = new Avalonia.Media.SolidColorBrush(Avalonia.Media.Color.Parse("#B8000000")),
+            };
+            Border frame = new()
+            {
+                Width = width,
+                Height = height,
+                MinWidth = 700,
+                MinHeight = 400,
+                MaxWidth = Math.Max(700, overlayWidth - 24),
+                MaxHeight = Math.Max(400, overlayHeight - 24),
+                Margin = new Thickness(24),
+                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                Background = Avalonia.Media.Brush.Parse("#FF1E2025"),
+                BorderBrush = Avalonia.Media.Brush.Parse("#447F8C9B"),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(14),
+                BoxShadow = Avalonia.Media.BoxShadows.Parse("0 12 40 0 #80000000"),
+            };
+
+            Grid frameContent = new() { ClipToBounds = true };
+            frameContent.Children.Add(dashboard);
+            Border grip = new()
+            {
+                Width = 24,
+                Height = 24,
+                HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right,
+                VerticalAlignment = Avalonia.Layout.VerticalAlignment.Bottom,
+                Background = Avalonia.Media.Brush.Parse("#FF202329"),
+                BorderBrush = Avalonia.Media.Brush.Parse("#887F8C9B"),
+                BorderThickness = new Thickness(1, 1, 0, 0),
+                Child = new TextBlock
+                {
+                    Text = "◢",
+                    FontSize = 15,
+                    Foreground = Avalonia.Media.Brush.Parse("#FF3EE8C8"),
+                    HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+                    VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+                },
+            };
+            grip.PointerPressed += GameDashboardResize_PointerPressed;
+            grip.PointerMoved += GameDashboardResize_PointerMoved;
+            grip.PointerReleased += GameDashboardResize_PointerReleased;
+            frameContent.Children.Add(grip);
+            frame.Child = frameContent;
+            overlay.Children.Add(frame);
+
+            Avalonia.Controls.Window window = new()
+            {
+                Width = overlayWidth,
+                Height = overlayHeight,
+                MinWidth = 700,
+                MinHeight = 400,
+                CanResize = false,
+                SystemDecorations = SystemDecorations.None,
+                ShowInTaskbar = false,
+                WindowStartupLocation = WindowStartupLocation.CenterOwner,
+                Background = Avalonia.Media.Brushes.Transparent,
+                TransparencyLevelHint = [WindowTransparencyLevel.Transparent],
+                Content = overlay,
+            };
+
+            _nextendoGameDashboardWindow = window;
+            _nextendoGameDashboardFrame = frame;
+            _nextendoDashboardTakesFocus = true;
+            window.Deactivated += (_, _) => _nextendoDashboardTakesFocus = false;
+            window.Closed += (_, _) =>
+            {
+                if (ReferenceEquals(_nextendoGameDashboardWindow, window))
+                {
+                    _nextendoGameDashboardWindow = null;
+                    _nextendoGameDashboardFrame = null;
+                    _nextendoDashboardTakesFocus = false;
+                    RestoreGameControllerInputAfterDashboard();
+                }
+            };
+
+            try
+            {
+                window.Show(this);
+                window.Activate();
+                if (savedWidth < 700 || savedHeight < 400)
+                {
+                    Dispatcher.UIThread.Post(SaveInitialGameDashboardSize, DispatcherPriority.Loaded);
+                }
+            }
+            catch
+            {
+                _nextendoGameDashboardWindow = null;
+                _nextendoGameDashboardFrame = null;
+                _nextendoDashboardTakesFocus = false;
+                RestoreGameControllerInputAfterDashboard();
+                throw;
+            }
+        }
+
+        private void SaveInitialGameDashboardSize()
+        {
+            if (_nextendoGameDashboardWindow?.IsVisible != true || _nextendoGameDashboardFrame is null)
+            {
+                return;
+            }
+
+            SaveGameDashboardSize();
+        }
+
+        private void SaveGameDashboardSize()
+        {
+            if (_nextendoGameDashboardFrame is null || _nextendoGameDashboardFrame.Bounds.Width < 700 || _nextendoGameDashboardFrame.Bounds.Height < 400)
+            {
+                return;
+            }
+
+            ConfigurationState.Instance.UI.WindowStartup.NextendoDashboardWidth.Value = (int)Math.Round(_nextendoGameDashboardFrame.Bounds.Width);
+            ConfigurationState.Instance.UI.WindowStartup.NextendoDashboardHeight.Value = (int)Math.Round(_nextendoGameDashboardFrame.Bounds.Height);
+            MainWindowViewModel.SaveConfig();
+        }
+
+        private void GameDashboardResize_PointerPressed(object sender, PointerPressedEventArgs e)
+        {
+            if (_nextendoGameDashboardFrame is null || sender is not Control grip || !e.GetCurrentPoint(grip).Properties.IsLeftButtonPressed)
+            {
+                return;
+            }
+
+            _gameDashboardResizeStart = e.GetPosition(_nextendoGameDashboardWindow);
+            _gameDashboardResizeWidth = _nextendoGameDashboardFrame.Bounds.Width;
+            _gameDashboardResizeHeight = _nextendoGameDashboardFrame.Bounds.Height;
+            _isResizingGameDashboard = true;
+            e.Pointer.Capture(grip);
+            e.Handled = true;
+        }
+
+        private void GameDashboardResize_PointerMoved(object sender, PointerEventArgs e)
+        {
+            if (!_isResizingGameDashboard || _nextendoGameDashboardFrame is null || _nextendoGameDashboardWindow is null)
+            {
+                return;
+            }
+
+            Point current = e.GetPosition(_nextendoGameDashboardWindow);
+            double maxWidth = Math.Clamp(_nextendoGameDashboardWindow.ClientSize.Width - 48, 700, 2000);
+            double maxHeight = Math.Clamp(_nextendoGameDashboardWindow.ClientSize.Height - 48, 400, 1400);
+            _nextendoGameDashboardFrame.Width = Math.Clamp(_gameDashboardResizeWidth + current.X - _gameDashboardResizeStart.X, 700, maxWidth);
+            _nextendoGameDashboardFrame.Height = Math.Clamp(_gameDashboardResizeHeight + current.Y - _gameDashboardResizeStart.Y, 400, maxHeight);
+            e.Handled = true;
+        }
+
+        private void GameDashboardResize_PointerReleased(object sender, PointerReleasedEventArgs e)
+        {
+            if (_isResizingGameDashboard)
+            {
+                _isResizingGameDashboard = false;
+                SaveGameDashboardSize();
+                e.Pointer.Capture(null);
+                e.Handled = true;
+            }
+        }
+
+        private void SaveInitialNextendoDashboardSize()
+        {
+            if (!NextendoDashboardOverlay.IsVisible ||
+                NextendoDashboardFrame.Bounds.Width < 700 ||
+                NextendoDashboardFrame.Bounds.Height < 400)
+            {
+                return;
+            }
+
+            ConfigurationState.Instance.UI.WindowStartup.NextendoDashboardWidth.Value = (int)Math.Round(NextendoDashboardFrame.Bounds.Width);
+            ConfigurationState.Instance.UI.WindowStartup.NextendoDashboardHeight.Value = (int)Math.Round(NextendoDashboardFrame.Bounds.Height);
+            MainWindowViewModel.SaveConfig();
+        }
+
+        private void NextendoDashboardResize_PointerPressed(object sender, PointerPressedEventArgs e)
+        {
+            if (sender is not Control grip || !e.GetCurrentPoint(grip).Properties.IsLeftButtonPressed)
+            {
+                return;
+            }
+
+            _nextendoDashboardResizeStart = e.GetPosition(this);
+            _nextendoDashboardResizeWidth = NextendoDashboardFrame.Bounds.Width;
+            _nextendoDashboardResizeHeight = NextendoDashboardFrame.Bounds.Height;
+            _isResizingNextendoDashboard = true;
+            NextendoDashboardFrame.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
+            NextendoDashboardFrame.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center;
+            NextendoDashboardFrame.Width = _nextendoDashboardResizeWidth;
+            NextendoDashboardFrame.Height = _nextendoDashboardResizeHeight;
+            e.Pointer.Capture(grip);
+            e.Handled = true;
+        }
+
+        private void NextendoDashboardResize_PointerMoved(object sender, PointerEventArgs e)
+        {
+            if (!_isResizingNextendoDashboard)
+            {
+                return;
+            }
+
+            Point current = e.GetPosition(this);
+            double maxWidth = Math.Clamp(NextendoDashboardOverlay.Bounds.Width - 48, 700, 2000);
+            double maxHeight = Math.Clamp(NextendoDashboardOverlay.Bounds.Height - 48, 400, 1400);
+            NextendoDashboardFrame.Width = Math.Clamp(_nextendoDashboardResizeWidth + current.X - _nextendoDashboardResizeStart.X, 700, maxWidth);
+            NextendoDashboardFrame.Height = Math.Clamp(_nextendoDashboardResizeHeight + current.Y - _nextendoDashboardResizeStart.Y, 400, maxHeight);
+            e.Handled = true;
+        }
+
+        private void NextendoDashboardOverlay_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            if (double.IsNaN(NextendoDashboardFrame.Width) || double.IsNaN(NextendoDashboardFrame.Height))
+            {
+                return;
+            }
+
+            double maxWidth = Math.Clamp(e.NewSize.Width - 48, 700, 2000);
+            double maxHeight = Math.Clamp(e.NewSize.Height - 48, 400, 1400);
+            NextendoDashboardFrame.Width = Math.Min(NextendoDashboardFrame.Width, maxWidth);
+            NextendoDashboardFrame.Height = Math.Min(NextendoDashboardFrame.Height, maxHeight);
+        }
+
+        private void NextendoDashboardResize_PointerReleased(object sender, PointerReleasedEventArgs e)
+        {
+            if (_isResizingNextendoDashboard)
+            {
+                _isResizingNextendoDashboard = false;
+                ConfigurationState.Instance.UI.WindowStartup.NextendoDashboardWidth.Value = (int)Math.Round(NextendoDashboardFrame.Bounds.Width);
+                ConfigurationState.Instance.UI.WindowStartup.NextendoDashboardHeight.Value = (int)Math.Round(NextendoDashboardFrame.Bounds.Height);
+                MainWindowViewModel.SaveConfig();
+                e.Pointer.Capture(null);
+                e.Handled = true;
+            }
+        }
+
+        private void CloseNextendoDashboard()
+        {
+            _activeNextendoDashboard?.CancelPendingGameInvitation();
+            _activeNextendoDashboard = null;
+            Avalonia.Controls.Window gameDashboard = _nextendoGameDashboardWindow;
+            _nextendoGameDashboardWindow = null;
+            _nextendoGameDashboardFrame = null;
+            _nextendoDashboardTakesFocus = false;
+            gameDashboard?.Close();
+            NextendoDashboardOverlay.IsVisible = false;
+            NextendoDashboardContent.Content = null;
+            RestoreGameControllerInputAfterDashboard();
+        }
+
+        private void SuspendGameControllerInputForDashboard()
+        {
+            if (!ViewModel.IsGameRunning || ViewModel.AppHost is not { } host || host.NpadManager.InputUpdatesBlocked)
+            {
+                return;
+            }
+
+            host.NpadManager.BlockInputUpdates();
+            _dashboardBlockedGameInput = true;
+        }
+
+        private void RestoreGameControllerInputAfterDashboard()
+        {
+            if (!_dashboardBlockedGameInput)
+            {
+                return;
+            }
+
+            try
+            {
+                if (ViewModel.AppHost is { } host && host.NpadManager.InputUpdatesBlocked)
+                {
+                    host.NpadManager.UnblockInputUpdates();
+                }
+            }
+            catch (ObjectDisposedException)
+            {
+                // The game may have ended while the dashboard was open.
+            }
+            finally
+            {
+                _dashboardBlockedGameInput = false;
+            }
+        }
 
         public static bool ShowKeyErrorOnLoad { get; set; }
         public ApplicationLibrary ApplicationLibrary { get; set; }
@@ -953,6 +1344,13 @@ namespace Ryujinx.Ava.UI.Windows
 
         private void AppWindow_OnLostFocus(object sender, RoutedEventArgs e)
         {
+            // Showing the owned dashboard window moves keyboard focus away from this host,
+            // but it must not trigger Ryujinx's configured focus-loss pause/mute action.
+            if (_nextendoDashboardTakesFocus)
+            {
+                return;
+            }
+
             if (ConfigurationState.Instance.FocusLostActionType.Value is FocusLostType.DoNothing)
                 return;
 

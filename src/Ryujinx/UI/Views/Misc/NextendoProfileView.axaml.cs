@@ -1,7 +1,8 @@
-using Avalonia;
+﻿using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
@@ -9,8 +10,16 @@ using Ryujinx.Ava.Common;
 using Ryujinx.Ava.Common.Locale;
 using Ryujinx.Ava.UI.Helpers;
 using Ryujinx.Ava.UI.Models;
+using Ryujinx.Ava.Systems.AppLibrary;
+using Ryujinx.Ava.Systems.Configuration;
 using Ryujinx.Common.Configuration;
 using Ryujinx.Common.Logging;
+using Ryujinx.HLE.HOS.Applets.MyPage;
+using FluentAvalonia.UI.Controls;
+using IGamepad = Ryujinx.Input.IGamepad;
+using GamepadStateSnapshot = Ryujinx.Input.GamepadStateSnapshot;
+using GamepadButtonInputId = Ryujinx.Input.GamepadButtonInputId;
+using StickInputId = Ryujinx.Input.StickInputId;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -21,19 +30,41 @@ using System.Threading.Tasks;
 namespace Ryujinx.Ava.UI.Views.Misc
 {
     /// <summary>
-    /// [Nextendo] App-style profile panel opened from the Switch launcher's circular profile
-    /// button. Identity header (avatar / name / friend code / presence + session controls on
-    /// top) and three social tabs mirroring the companion app: Friends, Activity and Play
-    /// history. Reuses the same API + models as the settings and friends-window views.
+    /// [Nextendo] Central dashboard hosted in the main emulator window. It reuses the existing
+    /// account, friends, activity and history APIs while keeping the game running behind it.
     /// </summary>
     public partial class NextendoProfileView : UserControl
     {
         private readonly ObservableCollection<NextendoFriendModel> _friends = [];
         private readonly ObservableCollection<NextendoFriendModel> _requests = [];
-        private readonly ObservableCollection<NextendoFriendModel> _playingNow = [];
         private readonly ObservableCollection<NextendoLobbyPlayerModel> _recent = [];
+        private readonly ObservableCollection<NextendoLobbyPlayerModel> _lobby = [];
         private readonly ObservableCollection<NextendoHistoryModel> _history = [];
+        private readonly ObservableCollection<NextendoHistoryModel> _selectedFriendHistory = [];
+        private readonly ObservableCollection<NextendoGameInviteModel> _invites = [];
+        private readonly ObservableCollection<NextendoFriendModel> _gameInviteFriends = [];
+        private readonly HashSet<ulong> _selectedGameInviteRecipients = [];
         private readonly Dictionary<ulong, string> _recentCodes = [];
+        private List<NextendoApi.HistoryItem> _syncedHistory = [];
+        private FriendInvitationRequest _gameInvitationRequest;
+        private Action<bool> _gameInvitationCompleted;
+        private IGamepad _navigationGamepad;
+        private string _navigationGamepadId;
+        private bool _navigationUpDown;
+        private bool _navigationDownDown;
+        private bool _navigationRightDown;
+        private bool _navigationLeftDown;
+        private bool _navigationConfirmDown;
+        private bool _navigationBackDown;
+        private int _contentFocusIndex;
+        private int _selectedNavigationIndex;
+        private Control _selectedPanel;
+        private Control _reportReturnPanel;
+        private Control _problemReturnPanel;
+        private bool _problemSending;
+        private bool _accountNetworkCheckRunning;
+        private bool _navigatingSidebar = true;
+        private readonly bool _isGameRunningContext;
 
         // Estado de la modale de reporte (0 / vacío cuando no hay reporte abierto).
         private ulong _reportTarget;
@@ -53,22 +84,41 @@ namespace Ryujinx.Ava.UI.Views.Misc
         ];
 
         private readonly DispatcherTimer _refreshTimer;
+        private readonly DispatcherTimer _navigationTimer;
 
-        public NextendoProfileView()
+        public event EventHandler CloseRequested;
+
+        public NextendoProfileView() : this(false)
+        {
+        }
+
+        public NextendoProfileView(bool isGameRunning)
         {
             InitializeComponent();
 
+            _isGameRunningContext = isGameRunning;
+            EmulationTabButton.IsVisible = isGameRunning;
+
             FriendsList.ItemsSource = _friends;
             RequestsList.ItemsSource = _requests;
-            PlayingNowList.ItemsSource = _playingNow;
             RecentList.ItemsSource = _recent;
+            LobbyList.ItemsSource = _lobby;
             HistoryList.ItemsSource = _history;
+            AccountHistoryList.ItemsSource = _history;
+            SelectedFriendHistoryList.ItemsSource = _selectedFriendHistory;
+            InvitesList.ItemsSource = _invites;
+            GameInviteFriendsList.ItemsSource = _gameInviteFriends;
+            _selectedPanel = AccountTab;
+            SelectedFriendFavoriteButton.Tag = 0UL;
+            SelectedFriendRemoveButton.Tag = 0UL;
 
             CopyCodeButton.Click += CopyCode_Click;
             SignOutButton.Click += SignOut_Click;
             ConnectButton.Click += async (_, _) => await ConnectAccount();
             AddFriendButton.Click += async (_, _) => await AddFriend();
-            AcceptAllButton.Click += async (_, _) => await AcceptAll();
+            ProfileName.PointerPressed += (_, _) => OpenAccountPage();
+            AvatarImage.PointerPressed += (_, _) => OpenAccountPage();
+            NextendoGameInvites.Changed += RefreshInvites;
 
             // Presence goes stale fast; 20s matches the account server's own freshness window.
             _refreshTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(20) };
@@ -77,7 +127,10 @@ namespace Ryujinx.Ava.UI.Views.Misc
                 RefreshOwnStatus();
                 _ = LoadFriends();
                 _ = LoadActivity();
+                _ = LoadLobby();
             };
+            _navigationTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(75) };
+            _navigationTimer.Tick += (_, _) => PollDashboardGamepad();
         }
 
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
@@ -90,13 +143,23 @@ namespace Ryujinx.Ava.UI.Views.Misc
             _ = LoadFriends();
             _ = LoadActivity();
             _ = LoadHistory();
+            _ = LoadLobby();
+            _ = NextendoGameInvites.RefreshAsync();
+            RefreshInvites();
+            _ = CheckAccountNetworkAsync();
 
             _refreshTimer.Start();
+            _navigationTimer.Start();
         }
 
         protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
         {
             _refreshTimer.Stop();
+            _navigationTimer.Stop();
+            _navigationGamepad?.Dispose();
+            _navigationGamepad = null;
+            _navigationGamepadId = null;
+            NextendoGameInvites.Changed -= RefreshInvites;
             base.OnDetachedFromVisualTree(e);
         }
 
@@ -140,30 +203,860 @@ namespace Ryujinx.Ava.UI.Views.Misc
             ConnectButton.IsVisible = !linked;
         }
 
-        // Tabs: only the selected panel is visible; pill buttons reflect the active tab.
+        private void OpenAccountCard(object sender, PointerPressedEventArgs e) => OpenAccountPage();
+
+        private void OpenAccountPage()
+        {
+            try { Ryujinx.Common.Helper.OpenHelper.OpenUrl("https://nextendo.network/compte"); }
+            catch { /* The system browser is optional. */ }
+        }
+
+        private void SelectAccountTab(object sender, RoutedEventArgs e)
+        {
+            _navigatingSidebar = false;
+            SetSelectedPanel(AccountTab);
+        }
+
         private void SelectFriendsTab(object sender, RoutedEventArgs e)
         {
-            FriendsTab.IsVisible = true;
-            ActivityTab.IsVisible = false;
-            HistoryTab.IsVisible = false;
+            _navigatingSidebar = false;
+            SetSelectedPanel(FriendsTab);
+        }
+
+        private void SelectRequestsTab(object sender, RoutedEventArgs e)
+        {
+            _navigatingSidebar = false;
+            SetSelectedPanel(RequestsTab);
+        }
+
+        /// <summary>Shows the game's MyPage invite picker inside the Invites dashboard category.</summary>
+        public void BeginGameInvitation(FriendInvitationRequest request, Action<bool> completed)
+        {
+            _gameInvitationRequest = request;
+            _gameInvitationCompleted = completed;
+            _selectedGameInviteRecipients.Clear();
+            GameInviteSection.IsVisible = true;
+            GameInviteStatusText.Text = $"Choose up to {Math.Min(request.RecipientLimit, 15)} friends to invite.";
+            SendGameInviteButton.IsEnabled = false;
+            _navigatingSidebar = false;
+            SetSelectedPanel(RequestsTab);
+            Dispatcher.UIThread.Post(FocusFirstContentControl);
+            _ = LoadFriends();
+        }
+
+        public void CancelPendingGameInvitation()
+        {
+            CompleteGameInvitation(false);
+        }
+
+        private void CompleteGameInvitation(bool sent)
+        {
+            Action<bool> completed = _gameInvitationCompleted;
+            if (_gameInvitationRequest == null)
+            {
+                return;
+            }
+
+            _gameInvitationRequest = null;
+            _gameInvitationCompleted = null;
+            _selectedGameInviteRecipients.Clear();
+            _gameInviteFriends.Clear();
+            GameInviteSection.IsVisible = false;
+            completed?.Invoke(sent);
+        }
+
+        private void GameInviteSelection_Click(object sender, RoutedEventArgs e)
+        {
+            if (_gameInvitationRequest == null || sender is not CheckBox { Tag: ulong pid } checkBox)
+            {
+                return;
+            }
+
+            if (checkBox.IsChecked == true)
+            {
+                if (_selectedGameInviteRecipients.Count >= Math.Min(_gameInvitationRequest.RecipientLimit, 15))
+                {
+                    checkBox.IsChecked = false;
+                    GameInviteStatusText.Text = $"You can invite up to {Math.Min(_gameInvitationRequest.RecipientLimit, 15)} friends.";
+                    return;
+                }
+
+                _selectedGameInviteRecipients.Add(pid);
+            }
+            else
+            {
+                _selectedGameInviteRecipients.Remove(pid);
+            }
+
+            SendGameInviteButton.IsEnabled = _selectedGameInviteRecipients.Count > 0;
+        }
+
+        private async void SendGameInvite_Click(object sender, RoutedEventArgs e)
+        {
+            if (_gameInvitationRequest == null || _selectedGameInviteRecipients.Count == 0)
+            {
+                return;
+            }
+
+            SendGameInviteButton.IsEnabled = false;
+            GameInviteStatusText.Text = "Sending invitation…";
+            (bool ok, string message) = await NextendoApi.SendGameInvitationAsync(
+                _gameInvitationRequest.TitleId,
+                _selectedGameInviteRecipients.ToList(),
+                _gameInvitationRequest.UserData,
+                _gameInvitationRequest.Description);
+
+            if (ok)
+            {
+                CompleteGameInvitation(true);
+            }
+            else
+            {
+                GameInviteStatusText.Text = message;
+                SendGameInviteButton.IsEnabled = _selectedGameInviteRecipients.Count > 0;
+            }
+        }
+
+        private void CancelGameInvite_Click(object sender, RoutedEventArgs e)
+        {
+            CompleteGameInvitation(false);
         }
 
         private void SelectActivityTab(object sender, RoutedEventArgs e)
         {
-            FriendsTab.IsVisible = false;
-            ActivityTab.IsVisible = true;
-            HistoryTab.IsVisible = false;
+            _navigatingSidebar = false;
+            SetSelectedPanel(ActivityTab);
 
             _ = LoadActivity();
         }
 
         private void SelectHistoryTab(object sender, RoutedEventArgs e)
         {
-            FriendsTab.IsVisible = false;
-            ActivityTab.IsVisible = false;
-            HistoryTab.IsVisible = true;
+            _navigatingSidebar = false;
+            SetSelectedPanel(HistoryTab);
 
             _ = LoadHistory();
+        }
+
+        private void ReportProblem_Click(object sender, RoutedEventArgs e)
+        {
+            if (_selectedPanel != ReportProblemTab)
+            {
+                _problemReturnPanel = _selectedPanel;
+            }
+
+            ProblemErrorCodeBox.Text = "";
+            ProblemCommentBox.Text = "";
+            ProblemAttachLogCheck.IsChecked = true;
+            ShowStatus(ProblemReportStatusText, "", true);
+            SetSelectedPanel(ReportProblemTab);
+            _navigatingSidebar = false;
+            Dispatcher.UIThread.Post(FocusFirstContentControl);
+        }
+
+        private void CancelProblemReport_Click(object sender, RoutedEventArgs e)
+        {
+            SetSelectedPanel(_problemReturnPanel ?? AccountTab);
+            _navigatingSidebar = false;
+            Dispatcher.UIThread.Post(FocusFirstContentControl);
+        }
+
+        private async void SendProblemReport_Click(object sender, RoutedEventArgs e)
+        {
+            if (_problemSending)
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(ProblemErrorCodeBox.Text) && string.IsNullOrWhiteSpace(ProblemCommentBox.Text))
+            {
+                ShowStatus(ProblemReportStatusText, LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_ReportEmpty], false);
+                return;
+            }
+
+            if (!NextendoAccount.IsLinked)
+            {
+                ShowStatus(ProblemReportStatusText, LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_ReportNeedsAccount], false);
+                return;
+            }
+
+            _problemSending = true;
+            ProblemReportSendButton.IsEnabled = false;
+            ShowStatus(ProblemReportStatusText, LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_ReportSending], true);
+
+            (bool ok, string message) = ProblemAttachLogCheck.IsChecked == true
+                ? await NextendoApi.SendReportAsync(ProblemErrorCodeBox.Text?.Trim(), ProblemCommentBox.Text?.Trim())
+                : await NextendoApi.SendReportAsync(ProblemErrorCodeBox.Text?.Trim(), ProblemCommentBox.Text?.Trim(), attachLog: false);
+
+            _problemSending = false;
+            ProblemReportSendButton.IsEnabled = true;
+            ShowStatus(ProblemReportStatusText, ok ? LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_ReportSent] : message, ok);
+        }
+
+        private void SelectLobbyTab(object sender, RoutedEventArgs e)
+        {
+            _navigatingSidebar = false;
+            SetSelectedPanel(LobbyTab);
+            _ = LoadLobby();
+        }
+
+        private void SelectEmulationTab(object sender, RoutedEventArgs e)
+        {
+            if (!_isGameRunningContext)
+            {
+                return;
+            }
+
+            _navigatingSidebar = false;
+            SetSelectedPanel(EmulationTab);
+        }
+
+        private static Ryujinx.Ava.UI.ViewModels.MainWindowViewModel RunningViewModel => RyujinxApp.MainWindow?.ViewModel;
+
+        private void ToggleFullscreen_Click(object sender, RoutedEventArgs e) => RunningViewModel?.ToggleFullscreen();
+
+        private void PauseGame_Click(object sender, RoutedEventArgs e)
+        {
+            if (RunningViewModel?.AppHost is not { } host)
+            {
+                return;
+            }
+
+            if (host.Device.System.IsPaused)
+            {
+                host.Resume();
+            }
+            else
+            {
+                host.Pause();
+            }
+
+            PauseGameButton.Content = host.Device.System.IsPaused ? "Resume Game" : "Pause Game";
+        }
+
+        private void RestartGame_Click(object sender, RoutedEventArgs e) => RunningViewModel?.RestartEmulation();
+
+        private async void StopGame_Click(object sender, RoutedEventArgs e)
+        {
+            if (RunningViewModel?.AppHost is { } host)
+            {
+                if (!ConfigurationState.Instance.ShowConfirmExit)
+                {
+                    host.Stop();
+                    return;
+                }
+
+                ContentDialog dialog = new()
+                {
+                    Title = LocaleManager.Instance[LocaleKeys.DialogStopEmulationTitle],
+                    Content = LocaleManager.Instance[LocaleKeys.DialogStopEmulationMessage],
+                    PrimaryButtonText = LocaleManager.Instance[LocaleKeys.InputDialogYes],
+                    SecondaryButtonText = LocaleManager.Instance[LocaleKeys.InputDialogNo],
+                    DefaultButton = ContentDialogButton.Primary,
+                };
+
+                // Let the dashboard's gamepad poll drive this choice while the confirmation is
+                // open. In game context A accepts and B cancels, matching the dashboard controls.
+                _navigationTimer.Stop();
+                bool selectedPrimary = true;
+                bool upWasDown = false;
+                bool downWasDown = false;
+                bool leftWasDown = false;
+                bool rightWasDown = false;
+                bool confirmWasDown = false;
+                bool backWasDown = false;
+                DispatcherTimer dialogNavigationTimer = new() { Interval = TimeSpan.FromMilliseconds(75) };
+                dialogNavigationTimer.Tick += (_, _) =>
+                {
+                    IGamepad gamepad = GetNavigationGamepad();
+                    if (gamepad == null)
+                    {
+                        return;
+                    }
+
+                    GamepadStateSnapshot snapshot = gamepad.GetMappedStateSnapshot();
+                    (float stickX, float stickY) = snapshot.GetStick(StickInputId.Left);
+                    bool up = snapshot.IsPressed(GamepadButtonInputId.DpadUp) || stickY > 0.5f;
+                    bool down = snapshot.IsPressed(GamepadButtonInputId.DpadDown) || stickY < -0.5f;
+                    bool left = snapshot.IsPressed(GamepadButtonInputId.DpadLeft) || stickX < -0.5f;
+                    bool right = snapshot.IsPressed(GamepadButtonInputId.DpadRight) || stickX > 0.5f;
+                    bool confirm = snapshot.IsPressed(GamepadButtonInputId.A);
+                    bool back = snapshot.IsPressed(GamepadButtonInputId.B);
+
+                    if ((up && !upWasDown) || (down && !downWasDown) ||
+                        (left && !leftWasDown) || (right && !rightWasDown))
+                    {
+                        selectedPrimary = !selectedPrimary;
+                        dialog.DefaultButton = selectedPrimary ? ContentDialogButton.Primary : ContentDialogButton.Secondary;
+                    }
+
+                    if (confirm && !confirmWasDown)
+                    {
+                        dialog.Hide(selectedPrimary ? ContentDialogResult.Primary : ContentDialogResult.Secondary);
+                    }
+                    else if (back && !backWasDown)
+                    {
+                        dialog.Hide(ContentDialogResult.Secondary);
+                    }
+
+                    upWasDown = up;
+                    downWasDown = down;
+                    leftWasDown = left;
+                    rightWasDown = right;
+                    confirmWasDown = confirm;
+                    backWasDown = back;
+                };
+
+                try
+                {
+                    Task<ContentDialogResult> dialogTask = ContentDialogHelper.ShowAsync(dialog);
+                    dialogNavigationTimer.Start();
+                    ContentDialogResult result = await dialogTask;
+
+                    if (result == ContentDialogResult.Primary)
+                    {
+                        host.Stop();
+                    }
+                }
+                finally
+                {
+                    dialogNavigationTimer.Stop();
+                    _navigationTimer.Start();
+                }
+            }
+        }
+
+        private void SetSelectedPanel(Control selected)
+        {
+            if (ReportOverlay.IsVisible)
+            {
+                ReportOverlay.IsVisible = false;
+                _reportTarget = 0;
+                _reportReason = "";
+            }
+
+            _selectedPanel = selected;
+            _selectedNavigationIndex = selected == AccountTab ? 0 :
+                selected == FriendsTab ? 1 :
+                selected == RequestsTab ? 2 :
+                selected == LobbyTab ? 3 :
+                selected == ActivityTab ? 4 :
+                selected == HistoryTab ? 5 :
+                selected == ReportProblemTab ? 6 : 7;
+            AccountTab.IsVisible = selected == AccountTab;
+            FriendsTab.IsVisible = selected == FriendsTab;
+            RequestsTab.IsVisible = selected == RequestsTab;
+            LobbyTab.IsVisible = selected == LobbyTab;
+            ActivityTab.IsVisible = selected == ActivityTab;
+            HistoryTab.IsVisible = selected == HistoryTab;
+            ReportProblemTab.IsVisible = selected == ReportProblemTab;
+            EmulationTab.IsVisible = selected == EmulationTab && _isGameRunningContext;
+
+            SetNavigationSelection(AccountTabButton, selected == AccountTab);
+            SetNavigationSelection(FriendsTabButton, selected == FriendsTab);
+            SetNavigationSelection(RequestsTabButton, selected == RequestsTab);
+            SetNavigationSelection(LobbyTabButton, selected == LobbyTab);
+            SetNavigationSelection(ActivityTabButton, selected == ActivityTab);
+            SetNavigationSelection(HistoryTabButton, selected == HistoryTab);
+            SetNavigationSelection(ReportProblemButton, selected == ReportProblemTab);
+            SetNavigationSelection(EmulationTabButton, selected == EmulationTab);
+        }
+
+        private void FriendCard_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button { Tag: ulong pid })
+            {
+                ShowFriendProfile(pid);
+                Dispatcher.UIThread.Post(FocusFirstContentControl);
+            }
+        }
+
+        private void ShowFriendProfile(ulong pid)
+        {
+            NextendoFriendModel friend = _friends.FirstOrDefault(item => item.Pid == pid);
+            if (friend is null)
+            {
+                return;
+            }
+
+            SelectedFriendName.Text = friend.Name;
+            SelectedFriendCode.Text = friend.FriendCode;
+            SelectedFriendStatus.Text = friend.StatusText;
+            SelectedFriendImage.Source = friend.Image is { Length: > 0 } ? new Bitmap(new MemoryStream(friend.Image)) : null;
+            SelectedFriendPresence.Text = friend.IsOnline ? "Online" : "Offline";
+            SelectedFriendPresence.Foreground = friend.StatusTextColor;
+            SelectedFriendStatus.Foreground = friend.StatusTextColor;
+            SelectedFriendGameInitial.Text = "";
+            SelectedFriendGameImage.Source = null;
+            SelectedFriendGameImage.IsVisible = false;
+
+            string gameName = NextendoGameNames.Resolve(friend.AppId);
+            if (friend.IsOnline && !string.IsNullOrWhiteSpace(friend.AppId))
+            {
+                SelectedFriendStatus.Text = gameName ?? friend.StatusText;
+                SelectedFriendGameInitial.Text = string.IsNullOrEmpty(gameName) ? "?" : gameName[..1].ToUpperInvariant();
+                SetSelectedFriendGameCover(friend.AppId);
+            }
+            else
+            {
+                SelectedFriendStatus.Text = friend.IsOnline ? "Main Menu" : "Offline";
+                SelectedFriendGameInitial.Text = "—";
+            }
+            SelectedFriendFavoriteButton.Tag = pid;
+            SelectedFriendFavoriteButton.Content = friend.Favorite ? "★ Favorite" : "☆ Favorite";
+            SelectedFriendFavoriteButton.Foreground = friend.Favorite ? Brush.Parse("#F5C518") : Brush.Parse("#FFCCCCCC");
+            SelectedFriendRemoveButton.Tag = pid;
+            FriendsListScroll.IsVisible = false;
+            FriendProfileScroll.IsVisible = true;
+            _ = LoadSelectedFriendHistory(pid);
+        }
+
+        private async Task LoadSelectedFriendHistory(ulong pid)
+        {
+            _selectedFriendHistory.Clear();
+            NoSelectedFriendHistoryText.IsVisible = false;
+
+            List<NextendoApi.HistoryItem> history = await NextendoApi.GetFriendHistoryAsync(pid);
+            if (!FriendProfileScroll.IsVisible || SelectedFriendRemoveButton.Tag is not ulong selectedPid || selectedPid != pid)
+            {
+                return;
+            }
+
+            foreach (NextendoApi.HistoryItem item in history)
+            {
+                byte[] icon = null;
+                if (!string.IsNullOrEmpty(item.IconBase64))
+                {
+                    try { icon = Convert.FromBase64String(item.IconBase64); } catch { /* Ignore a missing or invalid cover. */ }
+                }
+
+                _selectedFriendHistory.Add(new NextendoHistoryModel
+                {
+                    Name = string.IsNullOrWhiteSpace(item.Name) ? NextendoGameNames.Resolve(item.TitleId) ?? item.TitleId : item.Name,
+                    Icon = icon,
+                    PlayedText = FormatPlayed(item.Seconds),
+                    LastText = FormatLast(item.LastPlayed),
+                });
+            }
+
+            NoSelectedFriendHistoryText.IsVisible = _selectedFriendHistory.Count == 0;
+        }
+
+        private async void AccountNetworkCheck_Click(object sender, RoutedEventArgs e)
+        {
+            await CheckAccountNetworkAsync();
+        }
+
+        private async Task CheckAccountNetworkAsync()
+        {
+            if (_accountNetworkCheckRunning)
+            {
+                return;
+            }
+
+            _accountNetworkCheckRunning = true;
+            AccountNetworkCheckButton.IsEnabled = false;
+            AccountNetworkCheckButton.Content = "Checking…";
+
+            try
+            {
+                NextendoNetworkCheck.Result result = await NextendoNetworkCheck.CheckAsync();
+                AccountPingValue.Text = result.Reachable ? $"{result.LatencyMs} ms" : "Unavailable";
+                AccountPingValue.Foreground = Brush.Parse(result.LatencyColor);
+                (LocaleKeys natLabel, _) = result.Nat switch
+                {
+                    NextendoNetworkCheck.NatType.Open => (LocaleKeys.Dialog_Nextendo_NatOpen, LocaleKeys.Dialog_Nextendo_NatOpenTooltip),
+                    NextendoNetworkCheck.NatType.Strict => (LocaleKeys.Dialog_Nextendo_NatStrict, LocaleKeys.Dialog_Nextendo_NatStrictTooltip),
+                    _ => (LocaleKeys.Dialog_Nextendo_NatUnknown, LocaleKeys.Dialog_Nextendo_NatUnknownTooltip),
+                };
+                AccountNatValue.Text = LocaleManager.Instance[natLabel];
+                AccountNatValue.Foreground = Brush.Parse(result.NatColor);
+            }
+            finally
+            {
+                _accountNetworkCheckRunning = false;
+                AccountNetworkCheckButton.IsEnabled = true;
+                AccountNetworkCheckButton.Content = "Check";
+            }
+        }
+
+        private void SetSelectedFriendGameCover(string appId)
+        {
+            try
+            {
+                ApplicationLibrary library = RyujinxApp.MainWindow?.ApplicationLibrary;
+                if (library is null || !ulong.TryParse(appId, System.Globalization.NumberStyles.HexNumber, null, out ulong titleId))
+                {
+                    return;
+                }
+
+                ApplicationData game = library.Applications.Items.FirstOrDefault(app => app.Id == titleId || app.IdBase == (titleId & ~0x1FFFUL));
+                if (game?.Icon is not { Length: > 0 } icon)
+                {
+                    return;
+                }
+
+                SelectedFriendGameImage.Source = new Bitmap(new MemoryStream(icon));
+                SelectedFriendGameImage.IsVisible = true;
+            }
+            catch
+            {
+                // A missing or unsupported local icon should not prevent viewing a friend's profile.
+            }
+        }
+
+        private void BackToFriends_Click(object sender, RoutedEventArgs e)
+        {
+            FriendProfileScroll.IsVisible = false;
+            FriendsListScroll.IsVisible = true;
+        }
+
+        private IGamepad GetNavigationGamepad()
+        {
+            Ryujinx.Input.HLE.InputManager inputManager = RyujinxApp.MainWindow?.InputManager;
+            if (inputManager?.GamepadDriver == null)
+            {
+                return null;
+            }
+
+            Ryujinx.Common.Configuration.Hid.InputConfig config = RyujinxApp.MainWindow.ViewModel.AppHost?.NpadManager?.GetPlayerInputConfigByIndex(0);
+            string targetId = config is Ryujinx.Common.Configuration.Hid.Controller.StandardControllerInputConfig ? config.Id : null;
+
+            if (string.IsNullOrEmpty(targetId))
+            {
+                targetId = inputManager.GamepadDriver.GetGamepads().FirstOrDefault(gamepad => gamepad.IsConnected)?.Id;
+            }
+
+            if (string.IsNullOrEmpty(targetId))
+            {
+                _navigationGamepad?.Dispose();
+                _navigationGamepad = null;
+                _navigationGamepadId = null;
+                return null;
+            }
+
+            if (_navigationGamepad is { IsConnected: true } && _navigationGamepadId == targetId)
+            {
+                return _navigationGamepad;
+            }
+
+            _navigationGamepad?.Dispose();
+            _navigationGamepad = null;
+            _navigationGamepadId = targetId;
+
+            try
+            {
+                _navigationGamepad = inputManager.GamepadDriver.GetGamepad(targetId);
+                if (_navigationGamepad != null && config != null)
+                {
+                    _navigationGamepad.SetConfiguration(config);
+                }
+            }
+            catch
+            {
+                _navigationGamepad = null;
+            }
+
+            return _navigationGamepad;
+        }
+
+        private void PollDashboardGamepad()
+        {
+            IGamepad gamepad = GetNavigationGamepad();
+            if (gamepad == null)
+            {
+                ResetNavigationButtons();
+                return;
+            }
+
+            GamepadStateSnapshot snapshot = gamepad.GetMappedStateSnapshot();
+            (float stickX, float stickY) = snapshot.GetStick(StickInputId.Left);
+            bool up = snapshot.IsPressed(GamepadButtonInputId.DpadUp) || stickY > 0.5f;
+            bool down = snapshot.IsPressed(GamepadButtonInputId.DpadDown) || stickY < -0.5f;
+            bool right = snapshot.IsPressed(GamepadButtonInputId.DpadRight) || stickX > 0.5f;
+            bool left = snapshot.IsPressed(GamepadButtonInputId.DpadLeft) || stickX < -0.5f;
+            // On the launcher the console layout uses B to activate and A to return. While a
+            // title is running, honor the swapped in-game A/B mapping for dashboard navigation.
+            bool confirm = snapshot.IsPressed(_isGameRunningContext ? GamepadButtonInputId.A : GamepadButtonInputId.B);
+            bool back = snapshot.IsPressed(_isGameRunningContext ? GamepadButtonInputId.B : GamepadButtonInputId.A);
+            bool showingFriend = FriendsTab.IsVisible && FriendProfileScroll.IsVisible;
+
+            if (ReportOverlay.IsVisible && back && !_navigationBackDown)
+            {
+                ReportCancel_Click(this, null);
+            }
+            else if (ReportProblemTab.IsVisible && back && !_navigationBackDown)
+            {
+                CancelProblemReport_Click(this, null);
+            }
+            else if (showingFriend && back && !_navigationBackDown)
+            {
+                BackToFriends_Click(this, null);
+                Dispatcher.UIThread.Post(FocusFirstContentControl);
+            }
+            else if (showingFriend)
+            {
+                if (up && !_navigationUpDown)
+                    MoveContentFocus(0, -1);
+                else if (down && !_navigationDownDown)
+                    MoveContentFocus(0, 1);
+                else if (left && !_navigationLeftDown)
+                    MoveContentFocus(-1, 0);
+                else if (right && !_navigationRightDown)
+                    MoveContentFocus(1, 0);
+                else if (confirm && !_navigationConfirmDown)
+                    ActivateFocusedContentControl();
+            }
+            else if (_navigatingSidebar)
+            {
+                if (up && !_navigationUpDown)
+                {
+                    MovePanelSelection(-1);
+                    FocusSelectedNavigationButton();
+                }
+                else if (down && !_navigationDownDown)
+                {
+                    MovePanelSelection(1);
+                    FocusSelectedNavigationButton();
+                }
+                if ((right && !_navigationRightDown) || (confirm && !_navigationConfirmDown))
+                {
+                    ActivateSelectedCategory();
+                }
+                else if (back && !_navigationBackDown)
+                {
+                    CloseRequested?.Invoke(this, EventArgs.Empty);
+                }
+            }
+            else
+            {
+                if (back && !_navigationBackDown)
+                {
+                    _navigatingSidebar = true;
+                    FocusSelectedNavigationButton();
+                }
+                else if (up && !_navigationUpDown)
+                {
+                    MoveContentFocus(0, -1);
+                }
+                else if (down && !_navigationDownDown)
+                {
+                    MoveContentFocus(0, 1);
+                }
+                else if (left && !_navigationLeftDown)
+                {
+                    MoveContentFocus(-1, 0);
+                }
+                else if (right && !_navigationRightDown)
+                {
+                    MoveContentFocus(1, 0);
+                }
+                else if (confirm && !_navigationConfirmDown)
+                {
+                    ActivateFocusedContentControl();
+                }
+            }
+
+            _navigationUpDown = up;
+            _navigationDownDown = down;
+            _navigationLeftDown = left;
+            _navigationRightDown = right;
+            _navigationConfirmDown = confirm;
+            _navigationBackDown = back;
+        }
+
+        private List<Control> GetVisibleFocusableControls()
+        {
+            return _selectedPanel.GetLogicalDescendants()
+                .OfType<Control>()
+                .Where(control => control.Focusable && control.IsEnabled && IsVisibleInLogicalTree(control))
+                .ToList();
+        }
+
+        private static bool IsVisibleInLogicalTree(ILogical logical)
+        {
+            for (ILogical current = logical; current != null; current = current.LogicalParent)
+            {
+                if (current is Control control && !control.IsVisible)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private void FocusFirstContentControl()
+        {
+            List<Control> controls = GetVisibleFocusableControls();
+            _contentFocusIndex = 0;
+            controls.FirstOrDefault()?.Focus(NavigationMethod.Directional);
+        }
+
+        private void MoveContentFocus(int horizontalDirection, int verticalDirection)
+        {
+            List<Control> controls = GetVisibleFocusableControls();
+            if (controls.Count == 0)
+            {
+                return;
+            }
+
+            int focusedIndex = controls.FindIndex(control => control.IsFocused);
+            if (focusedIndex < 0)
+            {
+                focusedIndex = Math.Clamp(_contentFocusIndex, 0, controls.Count - 1);
+            }
+            Control current = controls[focusedIndex];
+            Point? currentCenter = current.TranslatePoint(new Point(current.Bounds.Width / 2, current.Bounds.Height / 2), _selectedPanel);
+            if (currentCenter is null)
+            {
+                return;
+            }
+
+            Control candidate = null;
+            double bestScore = double.PositiveInfinity;
+            for (int index = 0; index < controls.Count; index++)
+            {
+                Control control = controls[index];
+                if (control == current)
+                {
+                    continue;
+                }
+
+                Point? point = control.TranslatePoint(new Point(control.Bounds.Width / 2, control.Bounds.Height / 2), _selectedPanel);
+                if (point is null)
+                {
+                    continue;
+                }
+
+                double dx = point.Value.X - currentCenter.Value.X;
+                double dy = point.Value.Y - currentCenter.Value.Y;
+                double primary;
+                double cross;
+                if (horizontalDirection != 0)
+                {
+                    if (dx * horizontalDirection <= 1)
+                    {
+                        continue;
+                    }
+                    primary = Math.Abs(dx);
+                    cross = Math.Abs(dy);
+                }
+                else
+                {
+                    if (dy * verticalDirection <= 1)
+                    {
+                        continue;
+                    }
+                    primary = Math.Abs(dy);
+                    cross = Math.Abs(dx);
+                }
+
+                double score = primary + cross * 1.5;
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    candidate = control;
+                    _contentFocusIndex = index;
+                }
+            }
+
+            candidate?.Focus(NavigationMethod.Directional);
+        }
+
+        private void ActivateFocusedContentControl()
+        {
+            List<Control> controls = GetVisibleFocusableControls();
+            if (controls.Count == 0)
+            {
+                return;
+            }
+
+            int focused = controls.FindIndex(control => control.IsFocused);
+            if (focused >= 0)
+            {
+                _contentFocusIndex = focused;
+            }
+
+            Control selected = controls[_contentFocusIndex % controls.Count];
+            if (selected is Button button)
+            {
+                button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            }
+            else
+            {
+                selected.Focus(NavigationMethod.Directional);
+            }
+
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (FriendsTab.IsVisible && FriendProfileScroll.IsVisible)
+                {
+                    FocusFirstContentControl();
+                }
+            });
+        }
+
+        private void FocusSelectedNavigationButton()
+        {
+            GetNavigationButtons()[_selectedNavigationIndex].Focus(NavigationMethod.Directional);
+        }
+
+        private void MovePanelSelection(int direction)
+        {
+            Button[] buttons = GetNavigationButtons();
+            _selectedNavigationIndex = (_selectedNavigationIndex + direction + buttons.Length) % buttons.Length;
+        }
+
+        private void ActivateSelectedCategory()
+        {
+            _navigatingSidebar = false;
+            switch (_selectedNavigationIndex)
+            {
+                case 0: SelectAccountTab(this, null); break;
+                case 1: SelectFriendsTab(this, null); break;
+                case 2: SelectRequestsTab(this, null); break;
+                case 3: SelectLobbyTab(this, null); break;
+                case 4: SelectActivityTab(this, null); break;
+                case 5: SelectHistoryTab(this, null); break;
+                case 6: ReportProblem_Click(this, null); return;
+                case 7: SelectEmulationTab(this, null); break;
+            }
+
+            _navigatingSidebar = false;
+            FocusFirstContentControl();
+        }
+
+        private Button[] GetNavigationButtons()
+        {
+            return _isGameRunningContext
+                ? [AccountTabButton, FriendsTabButton, RequestsTabButton, LobbyTabButton, ActivityTabButton, HistoryTabButton, ReportProblemButton, EmulationTabButton]
+                : [AccountTabButton, FriendsTabButton, RequestsTabButton, LobbyTabButton, ActivityTabButton, HistoryTabButton, ReportProblemButton];
+        }
+
+        private void ResetNavigationButtons()
+        {
+            _navigationUpDown = _navigationDownDown = _navigationLeftDown = _navigationRightDown = false;
+            _navigationConfirmDown = _navigationBackDown = false;
+        }
+
+        private static void SetNavigationSelection(Button button, bool selected)
+        {
+            bool hasSelectedClass = button.Classes.Contains("selected");
+
+            if (selected && !hasSelectedClass)
+            {
+                button.Classes.Add("selected");
+            }
+            else if (!selected && hasSelectedClass)
+            {
+                button.Classes.Remove("selected");
+            }
+        }
+
+        private void CloseDashboard_Click(object sender, RoutedEventArgs e)
+        {
+            CloseRequested?.Invoke(this, EventArgs.Empty);
         }
 
         private async Task ConnectAccount()
@@ -205,7 +1098,9 @@ namespace Ryujinx.Ava.UI.Views.Misc
             _requests.Clear();
             _history.Clear();
             _recent.Clear();
-            _playingNow.Clear();
+            _lobby.Clear();
+            _invites.Clear();
+            _syncedHistory.Clear();
 
             RefreshOwnStatus();
         }
@@ -214,52 +1109,88 @@ namespace Ryujinx.Ava.UI.Views.Misc
         {
             (List<NextendoApi.Friend> friends, List<NextendoApi.Friend> requests) = await NextendoApi.GetSocialAsync();
 
-            Fill(_friends, friends.OrderByDescending(f => f.Favorite).ThenByDescending(f => f.IsOnline).ThenBy(f => f.Name, StringComparer.CurrentCultureIgnoreCase).ToList());
+            Fill(_friends, OrderFriendsByPriority(friends));
             Fill(_requests, requests);
-
+            RefreshGameInviteFriends(friends);
             NoFriendsText.IsVisible = _friends.Count == 0;
-            RequestsPanel.IsVisible = _requests.Count > 0;
+            FriendRequestsSection.IsVisible = _requests.Count > 0;
+            NoRequestsText.IsVisible = !GameInviteSection.IsVisible && _requests.Count == 0 && _invites.Count == 0;
 
-            OnlineCountText.Text = _friends.Count > 0
-                ? $"{_friends.Count(f => f.IsOnline)} / {_friends.Count} en línea"
-                : "";
+            if (FriendProfileScroll.IsVisible)
+            {
+                NextendoFriendModel selected = _friends.FirstOrDefault(friend => friend.Pid == (ulong)(SelectedFriendRemoveButton.Tag ?? 0UL));
+                if (selected is null)
+                {
+                    FriendProfileScroll.IsVisible = false;
+                    FriendsListScroll.IsVisible = true;
+                }
+                else
+                {
+                    ShowFriendProfile(selected.Pid);
+                    SelectedFriendFavoriteButton.Content = selected.Favorite ? "★ Favorite" : "☆ Favorite";
+                    SelectedFriendFavoriteButton.Foreground = selected.Favorite ? Brush.Parse("#F5C518") : Brush.Parse("#FFCCCCCC");
+                }
+            }
+
+            int online = _friends.Count(friend => friend.IsOnline);
+            SidebarOnlineCountText.Text = $"Online: {online}";
+        }
+
+        private void RefreshGameInviteFriends(List<NextendoApi.Friend> friends)
+        {
+            if (_gameInvitationRequest == null)
+            {
+                return;
+            }
+
+            IEnumerable<NextendoApi.Friend> eligible = friends.Where(friend => friend.IsOnline);
+            if (_gameInvitationRequest.Mode == 9)
+            {
+                eligible = eligible.Where(friend => _gameInvitationRequest.AccountIds.Contains(friend.Pid));
+            }
+
+            List<NextendoApi.Friend> ordered = OrderFriendsByPriority(eligible.ToList());
+            HashSet<ulong> eligiblePids = ordered.Select(friend => friend.Pid).ToHashSet();
+            _selectedGameInviteRecipients.IntersectWith(eligiblePids);
+            Fill(_gameInviteFriends, ordered);
+            foreach (NextendoFriendModel friend in _gameInviteFriends)
+            {
+                bool requestedByApplet = _gameInvitationRequest.Mode == 9 &&
+                    _gameInvitationRequest.AccountIds.Contains(friend.Pid) &&
+                    _selectedGameInviteRecipients.Count < Math.Min(_gameInvitationRequest.RecipientLimit, 15);
+                if (requestedByApplet)
+                {
+                    _selectedGameInviteRecipients.Add(friend.Pid);
+                }
+
+                friend.IsSelected = _selectedGameInviteRecipients.Contains(friend.Pid);
+            }
+
+            GameInviteStatusText.Text = ordered.Count == 0
+                ? "No friends are online and available to invite."
+                : $"Choose up to {Math.Min(_gameInvitationRequest.RecipientLimit, 15)} online friends to invite.";
+            SendGameInviteButton.IsEnabled = _selectedGameInviteRecipients.Count > 0;
+            NoRequestsText.IsVisible = false;
+        }
+
+        private static List<NextendoApi.Friend> OrderFriendsByPriority(IEnumerable<NextendoApi.Friend> friends)
+        {
+            static int Priority(NextendoApi.Friend friend)
+            {
+                if (!friend.IsOnline) return 4;
+                bool playing = !string.IsNullOrWhiteSpace(friend.AppId);
+                if (friend.Favorite) return playing ? 0 : 1;
+                return playing ? 2 : 3;
+            }
+
+            return friends.OrderBy(Priority)
+                .ThenBy(friend => friend.Name, StringComparer.CurrentCultureIgnoreCase)
+                .ToList();
         }
 
         private async Task LoadActivity()
         {
-            // Who is playing right now: online friends with a game, most recently active first.
             (List<NextendoApi.Friend> friends, _) = await NextendoApi.GetSocialAsync();
-
-            var inGame = friends
-                .Where(f => f.IsOnline && !string.IsNullOrEmpty(f.AppId))
-                .OrderByDescending(f => f.OnlineStatus)
-                .ThenBy(f => f.Name, StringComparer.CurrentCultureIgnoreCase)
-                .ToList();
-
-            _playingNow.Clear();
-            foreach (var f in inGame)
-            {
-                byte[] img = null;
-                if (!string.IsNullOrEmpty(f.ImageBase64))
-                {
-                    try { img = Convert.FromBase64String(f.ImageBase64); } catch { /* ignore */ }
-                }
-
-                _playingNow.Add(new NextendoFriendModel
-                {
-                    Pid = f.Pid,
-                    Name = f.Name,
-                    Image = img,
-                    OnlineStatus = f.OnlineStatus,
-                    AppId = f.AppId,
-                    AppDetail = f.AppDetail,
-                });
-            }
-
-            PlayingNowText.Text = inGame.Count == 0
-                ? LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_NxProfileNingunoDeTusAmigosEsta]
-                : "";
-
             // Recent encounters: people met online, with avatar fetched separately.
             List<NextendoApi.NextendoPlayer> recent = await NextendoApi.GetRecentPlayersAsync();
 
@@ -281,6 +1212,7 @@ namespace Ryujinx.Ava.UI.Views.Misc
                     Image = avatar,
                     Known = p.Known,
                     IsFriend = p.Known && friends.Any(f => f.Pid == p.Pid),
+                    IsMe = p.IsMe,
                     GameName = ResolveGame(p.TitleId),
                     SeenAt = p.SeenAt,
                 });
@@ -293,6 +1225,14 @@ namespace Ryujinx.Ava.UI.Views.Misc
         {
             List<NextendoApi.HistoryItem> merged = await NextendoApi.SyncHistoryAsync(NextendoHistorySync.CollectLocalHistory());
 
+            if (merged.Count == 0 && _syncedHistory.Count > 0)
+            {
+                merged = _syncedHistory;
+            }
+            else
+            {
+                _syncedHistory = merged;
+            }
             _history.Clear();
             foreach (NextendoApi.HistoryItem h in merged)
             {
@@ -311,7 +1251,98 @@ namespace Ryujinx.Ava.UI.Views.Misc
                 });
             }
 
+            NoAccountHistoryText.IsVisible = _history.Count == 0;
             NoHistoryText.IsVisible = _history.Count == 0;
+        }
+
+        private async Task LoadLobby()
+        {
+            NextendoApi.NextendoLobby lobby = await NextendoApi.GetMyLobbyAsync();
+            if (!lobby.InLobby)
+            {
+                _lobby.Clear();
+                NoLobbyText.IsVisible = true;
+                LobbyScroll.IsVisible = false;
+                LobbyGameText.Text = "—";
+                LobbyStateText.Text = "";
+                return;
+            }
+
+            NoLobbyText.IsVisible = false;
+            LobbyScroll.IsVisible = true;
+            LobbyGameText.Text = ResolveGame(lobby.TitleId);
+            LocaleKeys? state = lobby.StateCode switch
+            {
+                "searching" => LocaleKeys.Dialog_Nextendo_LobbyStateSearching,
+                "matched" => LocaleKeys.Dialog_Nextendo_LobbyStateMatched,
+                _ => null,
+            };
+            LobbyStateText.Text = state is null
+                ? LocaleManager.Instance.UpdateAndGetDynamicValue(LocaleKeys.Dialog_Nextendo_LobbyCountFormat, lobby.Count, lobby.Max)
+                : LocaleManager.Instance.UpdateAndGetDynamicValue(LocaleKeys.Dialog_Nextendo_LobbyStateFormat, lobby.Count, lobby.Max, LocaleManager.Instance[state.Value]);
+
+            (List<NextendoApi.Friend> friends, _) = await NextendoApi.GetSocialAsync();
+            _lobby.Clear();
+            foreach (NextendoApi.NextendoPlayer player in lobby.Players)
+            {
+                _lobby.Add(new NextendoLobbyPlayerModel
+                {
+                    Pid = player.Pid,
+                    Name = string.IsNullOrEmpty(player.Name) ? $"#{player.Pid}" : player.Name,
+                    Image = await NextendoApi.GetAvatarAsync(player.Pid, player.AvatarUrl),
+                    Known = player.Known,
+                    Host = player.Host,
+                    IsMe = player.IsMe,
+                    IsFriend = friends.Any(friend => friend.Pid == player.Pid),
+                });
+            }
+        }
+
+        private void RefreshInvites()
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                _invites.Clear();
+                long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                foreach (NextendoApi.GameInvitation invite in NextendoGameInvites.Pending())
+                {
+                    _invites.Add(new NextendoGameInviteModel
+                    {
+                        Id = invite.Id,
+                        Name = invite.SenderName,
+                        FriendCode = _friends.FirstOrDefault(friend => friend.Pid == invite.SenderPid)?.FriendCode ?? "",
+                        Detail = LocaleManager.Instance.UpdateAndGetDynamicValue(LocaleKeys.Dialog_Nextendo_GameInviteLeftFormat,
+                            NextendoGameInvites.GameName(invite.TitleId), Math.Max(1, (invite.ExpiresAt - now + 59) / 60)),
+                        Image = _friends.FirstOrDefault(friend => friend.Pid == invite.SenderPid)?.Image,
+                    });
+                }
+                InvitesPanel.IsVisible = _invites.Count > 0;
+                NoRequestsText.IsVisible = !GameInviteSection.IsVisible && _invites.Count == 0 && _requests.Count == 0;
+            });
+        }
+
+        private void AcceptInvite_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button { Tag: string id })
+            {
+                string error = NextendoGameInvites.Accept(id);
+                if (error != null) ShowStatus(FriendsStatusText, error, false);
+            }
+        }
+
+        private void DeclineInvite_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button { Tag: string id }) NextendoGameInvites.Decline(id);
+        }
+
+        private async void AddLobbyFriend_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is not Button { Tag: ulong pid }) return;
+            NextendoApi.NextendoPlayer player = (await NextendoApi.GetMyLobbyAsync()).Players.FirstOrDefault(item => item.Pid == pid);
+            if (player is null || string.IsNullOrEmpty(player.FriendCode)) return;
+            (bool ok, string message) = await NextendoApi.AddFriendAsync(player.FriendCode);
+            ShowStatus(RecentStatusText, message, ok);
+            if (ok) await LoadFriends();
         }
 
         private static void Fill(ObservableCollection<NextendoFriendModel> target, List<NextendoApi.Friend> source)
@@ -367,21 +1398,6 @@ namespace Ryujinx.Ava.UI.Views.Misc
             }
         }
 
-        private async Task AcceptAll()
-        {
-            AcceptAllButton.IsEnabled = false;
-            try
-            {
-                int n = await NextendoApi.AcceptAllRequestsAsync();
-                await LoadFriends();
-                ShowStatus(FriendsStatusText, n > 0 ? LocaleManager.Instance.UpdateAndGetDynamicValue(LocaleKeys.Dialog_Nextendo_NxProfileAceptadasSolicitudes, n) : LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_NxProfileNoHaySolicitudesQueAceptar], n > 0);
-            }
-            finally
-            {
-                AcceptAllButton.IsEnabled = true;
-            }
-        }
-
         private async void AcceptRequest_Click(object sender, RoutedEventArgs e)
         {
             if (sender is Button { Tag: ulong pid })
@@ -428,6 +1444,17 @@ namespace Ryujinx.Ava.UI.Views.Misc
             }
         }
 
+        private async void CopyFriendCode_Click(object sender, RoutedEventArgs e)
+        {
+            string friendCode = SelectedFriendCode.Text;
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard;
+            if (clipboard is not null && !string.IsNullOrWhiteSpace(friendCode))
+            {
+                await clipboard.SetTextAsync(friendCode);
+                ShowStatus(FriendsStatusText, "Friend code copied.", true);
+            }
+        }
+
         // ============================================================ [Nextendo]
         // Recientes → añadir amigo + reportar (réplica de LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_NxProfileNextendoRecentlyMet])
         // ============================================================
@@ -462,7 +1489,10 @@ namespace Ryujinx.Ava.UI.Views.Misc
                 return;
             }
 
-            NextendoLobbyPlayerModel jugador = _recent.FirstOrDefault(p => p.Pid == pid);
+            NextendoLobbyPlayerModel jugador = _recent.FirstOrDefault(p => p.Pid == pid)
+                ?? _lobby.FirstOrDefault(p => p.Pid == pid);
+
+            _reportReturnPanel = ActivityTab.IsVisible ? ActivityTab : LobbyTab;
 
             _reportTarget = pid;
             _reportReason = "";
@@ -477,6 +1507,9 @@ namespace Ryujinx.Ava.UI.Views.Misc
 
             ShowStatus(RecentStatusText, "", true);
             ReportOverlay.IsVisible = true;
+            _selectedPanel = ReportOverlay;
+            _navigatingSidebar = false;
+            Dispatcher.UIThread.Post(FocusFirstContentControl);
         }
 
         /// <summary>Carga el avatar del reportado en la modale, o cae en la inicial.</summary>
@@ -549,24 +1582,14 @@ namespace Ryujinx.Ava.UI.Views.Misc
 
         private void ReportCancel_Click(object sender, RoutedEventArgs e) => CerrarModale();
 
-        /// <summary>
-        /// Clic en el velo: se cierra. El chequeo de la fuente es imprescindible —
-        /// sin él, un clic dentro de la tarjeta subiría hasta aquí y cerraría la
-        /// modale a mitad de la redacción.
-        /// </summary>
-        private void ReportOverlay_PointerPressed(object sender, PointerPressedEventArgs e)
-        {
-            if (ReferenceEquals(e.Source, ReportOverlay))
-            {
-                CerrarModale();
-            }
-        }
-
         private void CerrarModale()
         {
             _reportTarget = 0;
             _reportReason = "";
             ReportOverlay.IsVisible = false;
+            SetSelectedPanel(_reportReturnPanel ?? ActivityTab);
+            _navigatingSidebar = false;
+            Dispatcher.UIThread.Post(FocusFirstContentControl);
         }
 
         private async void ReportSend_Click(object sender, RoutedEventArgs e)

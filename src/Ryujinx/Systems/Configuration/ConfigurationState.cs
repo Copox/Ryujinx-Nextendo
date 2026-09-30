@@ -127,6 +127,8 @@ namespace Ryujinx.Ava.Systems.Configuration
                     WindowPositionX = UI.WindowStartup.WindowPositionX,
                     WindowPositionY = UI.WindowStartup.WindowPositionY,
                     WindowMaximized = UI.WindowStartup.WindowMaximized,
+                    NextendoDashboardWidth = UI.WindowStartup.NextendoDashboardWidth,
+                    NextendoDashboardHeight = UI.WindowStartup.NextendoDashboardHeight,
                 },
                 LanguageCode = UI.LanguageCode,
                 BaseStyle = UI.BaseStyle,
@@ -282,6 +284,8 @@ namespace Ryujinx.Ava.Systems.Configuration
             UI.WindowStartup.WindowPositionX.Value = 0;
             UI.WindowStartup.WindowPositionY.Value = 0;
             UI.WindowStartup.WindowMaximized.Value = false;
+            UI.WindowStartup.NextendoDashboardWidth.Value = 0;
+            UI.WindowStartup.NextendoDashboardHeight.Value = 0;
             UI.PauseEmulationWhileScanningAmiibo.Value = true;
             UI.WallpaperPath.Value = string.Empty;
             Hid.EnableKeyboard.Value = false;
