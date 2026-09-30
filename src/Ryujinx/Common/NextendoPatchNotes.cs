@@ -183,9 +183,6 @@ namespace Ryujinx.Ava.Common
             };
         }
 
-        /// <summary>Creates the localized release notes for embedding in the Nextendo dashboard.</summary>
-        public static Control CreateContent() => BuildBody();
-
         /// <summary>
         /// Builds the notes panel. The localized body uses one line per feature; a line starting with
         /// "## " opens a new version section (its remainder is the version label), any other non-empty

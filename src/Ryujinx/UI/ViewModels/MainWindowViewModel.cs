@@ -1476,9 +1476,9 @@ namespace Ryujinx.Ava.UI.ViewModels
 
             _rendererWaitEvent.WaitOne();
 
-            // Mark the runtime active only after the renderer exists. This drives the native
-            // Nextendo overlay, runtime-only dashboard categories, and gamepad remapping.
-            Dispatcher.UIThread.InvokeAsync(() => IsGameRunning = true).GetAwaiter().GetResult();
+            // IsGameRunning is set by AppHost.Start below, on the UI thread, once the renderer
+            // exists: it gates the Nextendo overlay, the runtime-only dashboard categories and
+            // gamepad remapping.
 
             AppHost?.Start();
 
