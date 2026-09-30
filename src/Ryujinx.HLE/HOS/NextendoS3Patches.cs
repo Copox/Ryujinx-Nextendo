@@ -60,6 +60,18 @@ namespace Ryujinx.HLE.HOS
             0x45, 0x45, 0x4F, 0x46,
         ];
 
+        // Pokémon Legends: Z-A 2.0.2, main build B1F12FD919EAE86AB8A978317677E64BCE443D1F: the same
+        // three checks as Scarlet/Violet (cert LDRB W10,[X21,#0x38] -> MOV W10,#1; peer CBNZ W0 and
+        // B.NE -> NOP).
+        private static readonly byte[] _legendsZaTls202 =
+        [
+            0x49, 0x50, 0x53, 0x33, 0x32,
+            0x02, 0x03, 0xB4, 0xC0, 0x00, 0x04, 0x2A, 0x00, 0x80, 0x52,
+            0x02, 0x03, 0xAA, 0xB8, 0x00, 0x04, 0x1F, 0x20, 0x03, 0xD5,
+            0x02, 0x03, 0xAB, 0xBC, 0x00, 0x04, 0x1F, 0x20, 0x03, 0xD5,
+            0x45, 0x45, 0x4F, 0x46,
+        ];
+
         // Flat 0xB02BBC: CBNZ W0,0xB02C3C; flat 0xB02AA4: B.NE 0xB02C5C.
         // Both branches lead to the peer-name rejection path.
         private static readonly byte[] _peerNameWonder121 =
@@ -193,6 +205,7 @@ namespace Ryujinx.HLE.HOS
             // Scarlet 4.0.0: the three original four-byte instructions at the
             // same offsets match Violet 4.0.0 in the decrypted main image.
             ["421C5411B487EB4D049DD065FEC9547773E8E598"] = [_violetTls301],
+            ["B1F12FD919EAE86AB8A978317677E64BCE443D1F"] = [_legendsZaTls202],
             ["44EFA84EE9C32B466EA27215D3D91DFD0EBAE625"] = [_certificatN64v420, _nomDePairN64v420],
             ["BCA1A793E41A4836EF3C03286B18E816EEC62338"] = [_certificatPeaceWalker, _nomDePairPeaceWalker],
             ["1C689518406930512C13DDF4217E7676"] = [_ctrConfianceServeur, _ctrRechercheAmis],

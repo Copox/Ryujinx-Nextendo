@@ -392,6 +392,7 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             "0100c2500fc20000" => "11.3.0", // Splatoon 3
             "01008f6008c5e000" => "4.0.0",  // Pokémon Violet
             "0100a3d008c5c000" => "4.0.0",  // Pokémon Scarlet
+            "0100f43008c44000" => "2.0.2",  // Pokémon Legends: Z-A
             // [Nextendo 2026-09-08] Super Mario Bros. Wonder. Les correctifs integres (contournement
             // du certificat epingle + deux rejets de nom de pair) sont lies a l'identifiant de build
             // FF773E90972D544EB79406EAA65396D53C43EFB9, propre a cette version exacte : une autre
@@ -498,13 +499,14 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             IsNextendoCompatible && (Version == NextendoCompatibleVersion || IsCtgpdxVariant
                 || !Ryujinx.Common.ReleaseInformation.IsValid);
 
-        // Splatoon 2 uses schedule byaml, while Scarlet and Violet use event BCAT.
+        // Splatoon 2 uses schedule byaml; Scarlet and Violet use event BCAT and Legends: Z-A
+        // uses it for Nextendo's Mystery Gifts.
         // Only these titles should show the BCAT download action.
         [JsonIgnore]
         public bool RequiresNextendoByaml => IdBaseString switch
         {
             "0100f8f0000a2000" or "01003bc0000a0000" or "01003c700009c800" or
-            "01008f6008c5e000" or "0100a3d008c5c000" => true,
+            "01008f6008c5e000" or "0100a3d008c5c000" or "0100f43008c44000" => true,
             _ => false,
         };
 

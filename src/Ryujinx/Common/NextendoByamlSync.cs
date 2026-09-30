@@ -37,9 +37,10 @@ namespace Ryujinx.Ava.Common
         // base dir is always writable (and portable-mode aware).
         private const string VioletTitleId = "01008f6008c5e000";
         private const string ScarletTitleId = "0100a3d008c5c000";
+        private const string LegendsZaTitleId = "0100f43008c44000";
         private static string SeedRoot => Path.Combine(AppDataManager.BaseDirPath, "bcat-seed");
         private static bool IsPokemon(ApplicationData app) => app?.IdBaseString is
-            VioletTitleId or ScarletTitleId;
+            VioletTitleId or ScarletTitleId or LegendsZaTitleId;
         private static string PokemonSeedRoot(ApplicationData app) => Path.Combine(SeedRoot, app.IdBaseString);
 
         // [Nextendo] Legacy next-to-exe seed location REMOVED: it let a stale copy shadow the live

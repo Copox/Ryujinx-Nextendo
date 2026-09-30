@@ -52,13 +52,13 @@ namespace Ryujinx.HLE.HOS.Applets.Browser
             initialUrl = initialUrl?.Split('\0')[0];
             callbackUrl = callbackUrl?.Split('\0')[0];
             if (_shimKind == ShimKind.Web && _commonArguments.AppletVersion >= 0x80000 &&
-                IsScarletVioletTitle(_system.Device.Processes.ActiveApplication?.ProgramId) &&
-                IsVioletTermsCallback(initialUrl, callbackUrl))
+                IsPokemonTermsTitle(_system.Device.Processes.ActiveApplication?.ProgramId) &&
+                IsPokemonTermsCallback(initialUrl, callbackUrl))
             {
-                // Complete Violet's terms applet with its requested callback so entry
-                // to Battle Stadium works without an unavailable browser page.
-                _normalSession.Push(BuildVioletTermsResponse(callbackUrl));
-                Logger.Info?.Print(LogClass.ServiceAm, "[Scarlet/Violet] Battle Stadium/competition web callback applied (terms acceptance=/agree).");
+                // Complete the terms applet with its requested callback so Battle Stadium,
+                // competition entry and Ranked Battles work without an unavailable browser page.
+                _normalSession.Push(BuildPokemonTermsResponse(callbackUrl));
+                Logger.Info?.Print(LogClass.ServiceAm, "[Pokémon] Terms page web callback applied (terms acceptance=/agree).");
                 AppletStateChanged?.Invoke(this, null);
                 return ResultCode.Success;
             }
@@ -170,10 +170,11 @@ namespace Ryujinx.HLE.HOS.Applets.Browser
 
             return stream.ToArray();
         }
-        internal static bool IsScarletVioletTitle(ulong? programId) =>
-            programId is 0x01008F6008C5E000 or 0x0100A3D008C5C000;
+        // Scarlet, Violet and Legends: Z-A.
+        internal static bool IsPokemonTermsTitle(ulong? programId) =>
+            programId is 0x01008F6008C5E000 or 0x0100A3D008C5C000 or 0x0100F43008C44000;
 
-        internal static bool IsVioletTermsCallback(string initialUrl, string callbackUrl)
+        internal static bool IsPokemonTermsCallback(string initialUrl, string callbackUrl)
         {
             if (initialUrl == null || callbackUrl == null ||
                 !initialUrl.StartsWith("https://battle-", StringComparison.Ordinal))
@@ -183,17 +184,19 @@ namespace Ryujinx.HLE.HOS.Applets.Browser
             int pathStart = initialUrl.IndexOf('/', "https://".Length);
             if (pathStart < 0 ||
                 !initialUrl[..pathStart].EndsWith(".pokemon-home.com", StringComparison.Ordinal) ||
-                !initialUrl[pathStart..].StartsWith("/scvi/", StringComparison.Ordinal))
+                !(initialUrl[pathStart..].StartsWith("/scvi/", StringComparison.Ordinal) ||
+                  initialUrl[pathStart..].StartsWith("/plza/", StringComparison.Ordinal)))
             {
                 return false;
             }
-            // Violet uses separate paths for Stadium and competition enrollment.
+            // Scarlet/Violet (/scvi/) use separate paths for Stadium and competition enrollment;
+            // Legends: Z-A's Ranked Battles use /plza/.
             // Honor only a callback on the same origin and in the same page directory.
             string page = initialUrl.Split('?')[0];
             return callbackUrl == page[..page.LastIndexOf('/')] + "/callback";
         }
 
-        internal static byte[] BuildVioletTermsResponse(string callbackUrl)
+        internal static byte[] BuildPokemonTermsResponse(string callbackUrl)
         {
             // The callback argument is a URL prefix; accepting the real terms page navigates to /agree.
             if (callbackUrl.EndsWith("/terms/callback", StringComparison.Ordinal) ||
