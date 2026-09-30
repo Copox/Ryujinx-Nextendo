@@ -102,7 +102,11 @@ namespace Ryujinx.Horizon.Sdk.Sf.Cmif
             _implProcessor.PrepareForErrorReply(ref context, out outRawData, runtimeMetadata);
 
             int outHeaderSize = Unsafe.SizeOf<CmifDomainOutHeader>();
-            int implOutDataTotalSize = ImplOutDataTotalSize;
+            // Error replies contain the CMIF output header, but omit method out-data. The
+            // implementation processor sizes its error response using headers only, so checking
+            // OutDataSize here can assert on ordinary service errors (for example an empty
+            // friends notification queue) and terminate the guest process.
+            int implOutDataTotalSize = _implMetadata.OutHeadersSize;
 
             DebugUtil.Assert(outHeaderSize + implOutDataTotalSize <= outRawData.Length);
 

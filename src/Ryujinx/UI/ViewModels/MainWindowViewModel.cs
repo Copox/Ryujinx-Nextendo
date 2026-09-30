@@ -1476,6 +1476,10 @@ namespace Ryujinx.Ava.UI.ViewModels
 
             _rendererWaitEvent.WaitOne();
 
+            // IsGameRunning is set by AppHost.Start below, on the UI thread, once the renderer
+            // exists: it gates the Nextendo overlay, the runtime-only dashboard categories and
+            // gamepad remapping.
+
             AppHost?.Start();
 
             AppHost?.DisposeContext();
@@ -2426,10 +2430,9 @@ namespace Ryujinx.Ava.UI.ViewModels
         public void OpenNextendoFriends() => NextendoFriendsWindow.Open();
 
         /// <summary>
-        /// [Nextendo] Ctrl+F now opens the launcher profile dialog (the circular profile
-        /// button), which floats above a running game the same way the friends window did.
+        /// [Nextendo] Ctrl+F toggles the in-window dashboard over the game renderer.
         /// </summary>
-        public void OpenNextendoProfile() => RyujinxApp.MainWindow.ApplicationCarousel?.OpenNextendoProfile();
+        public void OpenNextendoProfile() => Window?.ToggleNextendoDashboard();
 
         public async Task OpenAmiiboWindow()
         {

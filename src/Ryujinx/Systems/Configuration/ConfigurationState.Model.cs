@@ -100,6 +100,8 @@ namespace Ryujinx.Ava.Systems.Configuration
                 public ReactiveObject<int> WindowPositionX { get; private set; }
                 public ReactiveObject<int> WindowPositionY { get; private set; }
                 public ReactiveObject<bool> WindowMaximized { get; private set; }
+                public ReactiveObject<int> NextendoDashboardWidth { get; private set; }
+                public ReactiveObject<int> NextendoDashboardHeight { get; private set; }
 
                 public WindowStartupSettings()
                 {
@@ -108,6 +110,8 @@ namespace Ryujinx.Ava.Systems.Configuration
                     WindowPositionX = new ReactiveObject<int>();
                     WindowPositionY = new ReactiveObject<int>();
                     WindowMaximized = new ReactiveObject<bool>();
+                    NextendoDashboardWidth = new ReactiveObject<int>();
+                    NextendoDashboardHeight = new ReactiveObject<int>();
                 }
             }
 
