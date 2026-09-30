@@ -9,10 +9,11 @@ namespace Ryujinx.Tests.HLE
     {
         [TestCase(0x01008F6008C5E000UL, true)]
         [TestCase(0x0100A3D008C5C000UL, true)]
+        [TestCase(0x0100F43008C44000UL, true)]
         [TestCase(0x0100C2500FC20000UL, false)]
-        public void TermsBypassIsLimitedToScarletAndViolet(ulong programId, bool expected)
+        public void TermsBypassIsLimitedToPokemonTitles(ulong programId, bool expected)
         {
-            Assert.That(BrowserApplet.IsScarletVioletTitle(programId), Is.EqualTo(expected));
+            Assert.That(BrowserApplet.IsPokemonTermsTitle(programId), Is.EqualTo(expected));
         }
 
         [TestCase("https://battle-%.pokemon-home.com/scvi/terms/es", "https://battle-%.pokemon-home.com/scvi/terms/callback", true)]
@@ -22,9 +23,11 @@ namespace Ryujinx.Tests.HLE
         [TestCase("https://battle-%.pokemon-home.com.evil/scvi/terms/es", "https://battle-%.pokemon-home.com.evil/scvi/terms/callback", false)]
         [TestCase("https://news-%.pokemon-home.com/scvi/list/en", "https://news-%.pokemon-home.com/scvi/list/callback", false)]
         [TestCase("https://battle-%.pokemon-home.com/other/terms/es", "https://battle-%.pokemon-home.com/other/terms/callback", false)]
-        public void CallbackMustBelongToTheVioletBattlePage(string page, string callback, bool expected)
+        [TestCase("https://battle-%.pokemon-home.com/plza/terms/en", "https://battle-%.pokemon-home.com/plza/terms/callback", true)]
+        [TestCase("https://battle-%.pokemon-home.com/plza/terms/en", "https://battle-%.pokemon-home.com/scvi/terms/callback", false)]
+        public void CallbackMustBelongToThePokemonBattlePage(string page, string callback, bool expected)
         {
-            Assert.That(BrowserApplet.IsVioletTermsCallback(page, callback), Is.EqualTo(expected));
+            Assert.That(BrowserApplet.IsPokemonTermsCallback(page, callback), Is.EqualTo(expected));
         }
 
         [Test]
@@ -32,7 +35,7 @@ namespace Ryujinx.Tests.HLE
         {
             const string callback = "https://battle-%.pokemon-home.com/scvi/terms/callback";
             const string accepted = callback + "/agree";
-            byte[] response = BrowserApplet.BuildVioletTermsResponse(callback);
+            byte[] response = BrowserApplet.BuildPokemonTermsResponse(callback);
             Assert.That(response.Length, Is.EqualTo(0x2000));
             Assert.That(BitConverter.ToUInt16(response, 0), Is.EqualTo(3));
             Assert.That(BitConverter.ToUInt32(response, 4), Is.EqualTo((uint)ShimKind.Web));
@@ -52,7 +55,7 @@ namespace Ryujinx.Tests.HLE
         public void CompetitionRegistrationCallbackReportsAgreement()
         {
             const string callback = "https://battle-%.pokemon-home.com/scvi/competition/callback";
-            byte[] response = BrowserApplet.BuildVioletTermsResponse(callback);
+            byte[] response = BrowserApplet.BuildPokemonTermsResponse(callback);
             int size = BitConverter.ToUInt16(response, 22);
             Assert.That(Encoding.UTF8.GetString(response, 28, size - 1), Is.EqualTo(callback + "/agree"));
         }
@@ -61,7 +64,7 @@ namespace Ryujinx.Tests.HLE
         public void ObservedBattleTermsCallbackReportsAgreement()
         {
             const string callback = "https://battle-%.pokemon-home.com/scvi/battle-terms/callback";
-            byte[] response = BrowserApplet.BuildVioletTermsResponse(callback);
+            byte[] response = BrowserApplet.BuildPokemonTermsResponse(callback);
             int size = BitConverter.ToUInt16(response, 22);
             Assert.That(Encoding.UTF8.GetString(response, 28, size - 1), Is.EqualTo(callback + "/agree"));
         }

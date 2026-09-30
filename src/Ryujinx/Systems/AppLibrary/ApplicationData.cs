@@ -392,6 +392,7 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             "0100c2500fc20000" => "11.3.0", // Splatoon 3
             "01008f6008c5e000" => "4.0.0",  // Pokémon Violet
             "0100a3d008c5c000" => "4.0.0",  // Pokémon Scarlet
+            "0100f43008c44000" => "2.0.2",  // Pokémon Legends: Z-A
             // [Nextendo 2026-09-08] Super Mario Bros. Wonder. Les correctifs integres (contournement
             // du certificat epingle + deux rejets de nom de pair) sont lies a l'identifiant de build
             // FF773E90972D544EB79406EAA65396D53C43EFB9, propre a cette version exacte : une autre
