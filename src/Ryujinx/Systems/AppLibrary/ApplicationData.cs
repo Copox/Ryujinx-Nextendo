@@ -499,13 +499,14 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             IsNextendoCompatible && (Version == NextendoCompatibleVersion || IsCtgpdxVariant
                 || !Ryujinx.Common.ReleaseInformation.IsValid);
 
-        // Splatoon 2 uses schedule byaml, while Scarlet and Violet use event BCAT.
+        // Splatoon 2 uses schedule byaml; Scarlet and Violet use event BCAT and Legends: Z-A
+        // uses it for Nextendo's Mystery Gifts.
         // Only these titles should show the BCAT download action.
         [JsonIgnore]
         public bool RequiresNextendoByaml => IdBaseString switch
         {
             "0100f8f0000a2000" or "01003bc0000a0000" or "01003c700009c800" or
-            "01008f6008c5e000" or "0100a3d008c5c000" => true,
+            "01008f6008c5e000" or "0100a3d008c5c000" or "0100f43008c44000" => true,
             _ => false,
         };
 
