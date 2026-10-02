@@ -58,6 +58,12 @@ namespace Ryujinx.Ava.Common
                 return false;
             }
 
+            if (app.IdBaseString == Ryujinx.Common.NextendoSplatoon3Bcat.TitleId)
+            {
+                return Ryujinx.Common.NextendoSplatoon3Bcat.IsInstalled(
+                    Path.Combine(SeedRoot, Ryujinx.Common.NextendoSplatoon3Bcat.TitleId));
+            }
+
             if (IsPokemon(app))
             {
                 string titleRoot = PokemonSeedRoot(app);
@@ -132,6 +138,11 @@ namespace Ryujinx.Ava.Common
             if (app == null || !RequiresByaml(app))
             {
                 return false;
+            }
+
+            if (app.IdBaseString == Ryujinx.Common.NextendoSplatoon3Bcat.TitleId)
+            {
+                return await EnsureSplatoon3BcatAsync();
             }
 
             if (IsPokemon(app))
@@ -278,6 +289,11 @@ namespace Ryujinx.Ava.Common
                 return false;
             }
 
+            if (app.IdBaseString == Ryujinx.Common.NextendoSplatoon3Bcat.TitleId)
+            {
+                return await EnsureSplatoon3BcatAsync(force: true);
+            }
+
             if (IsPokemon(app))
             {
                 return await EnsurePokemonBcatAsync(app, force: true);
@@ -362,6 +378,33 @@ namespace Ryujinx.Ava.Common
             await dialog.ShowAsync(true);
             return ok;
         }
+
+        private static async Task<bool> EnsureSplatoon3BcatAsync(bool force = false)
+        {
+            try
+            {
+                using HttpClient http = new() { Timeout = TimeSpan.FromSeconds(60) };
+                NextendoApi.AddAppHeader(http);
+                if (!string.IsNullOrEmpty(NextendoAccount.NexToken))
+                {
+                    http.DefaultRequestHeaders.Add("Authorization", "Bearer " + NextendoAccount.NexToken);
+                }
+                bool changed = await Ryujinx.Common.NextendoSplatoon3Bcat.SyncAsync(http, BaseUrl(), SeedRoot, force);
+                Logger.Info?.Print(LogClass.Application, changed
+                    ? "[Nextendo] Splatoon 3 BCAT updated from server."
+                    : "[Nextendo] Splatoon 3 BCAT is current.");
+                return changed || (force && IsInstalledForSplatoon3());
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning?.Print(LogClass.Application,
+                    $"[Nextendo] Splatoon 3 BCAT update failed; retaining local cache: {ex.Message}");
+                return false;
+            }
+        }
+
+        private static bool IsInstalledForSplatoon3() => Ryujinx.Common.NextendoSplatoon3Bcat.IsInstalled(
+            Path.Combine(SeedRoot, Ryujinx.Common.NextendoSplatoon3Bcat.TitleId));
 
         private static async Task<HttpResponseMessage> GetPokemonBcatResponseAsync(HttpClient http, string titleId)
         {

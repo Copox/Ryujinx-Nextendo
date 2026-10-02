@@ -507,7 +507,7 @@ namespace Ryujinx.Ava.Systems.AppLibrary
         public bool RequiresNextendoByaml => IdBaseString switch
         {
             "0100f8f0000a2000" or "01003bc0000a0000" or "01003c700009c800" or
-            "01008f6008c5e000" or "0100a3d008c5c000" or "0100f43008c44000" => true,
+            "0100c2500fc20000" or "01008f6008c5e000" or "0100a3d008c5c000" or "0100f43008c44000" => true,
             _ => false,
         };
 
