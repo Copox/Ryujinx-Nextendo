@@ -7,7 +7,6 @@ using Avalonia.Media.Imaging;
 using Avalonia.Platform;
 using Avalonia.Svg.Skia;
 using Avalonia.Threading;
-using FluentAvalonia.UI.Controls;
 using Ryujinx.Ava.Common.Locale;
 using Ryujinx.Ava.Systems.AppLibrary;
 using Ryujinx.Ava.Systems.Configuration;
@@ -60,12 +59,9 @@ namespace Ryujinx.Ava.UI.Views.Misc
         private readonly List<Border> _contextMenuItemBorders = [];
         private readonly List<Action> _contextMenuActions = [];
 
-        // The profile dialog (left, circular button) so B can close it from the gamepad.
-        private ContentDialog _profileDialog;
-
-        // [Nextendo] Home+Plus combo: edge-tracked Plus press while Home is held (see
-        // PollProfileShortcut). Runs unpolled by the game gate so it works with a game open.
-        private bool _profileComboPlusPressed;
+        // [Nextendo] Edge tracking for the physical controller Home button. This poll remains
+        // active while the renderer replaces the launcher content.
+        private bool _profileHomePressed;
 
         private const int NavProfile = -1;
         private const int NavCarousel = 0;
@@ -91,9 +87,8 @@ namespace Ryujinx.Ava.UI.Views.Misc
             _connectionTimer.Start();
 
             _gamepadTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(40) };
-            // [Nextendo] The Home+Plus shortcut must keep working while a game/applet runs, so it
-            // is polled before the gated PollGamepad: for the launcher a running game briefly
-            // owns the controller for the menu ring, but the physical combo stays a dashboard one.
+            // [Nextendo] Home must keep working while a game/applet runs, so poll it before the
+            // gated launcher controls.
             _gamepadTimer.Tick += (_, _) =>
             {
                 PollProfileShortcut();
@@ -179,48 +174,12 @@ namespace Ryujinx.Ava.UI.Views.Misc
         private void ProfileButton_OnClick(object? sender, RoutedEventArgs e) => OpenNextendoProfile();
 
         /// <summary>
-        /// [Nextendo] Opens the launcher profile dialog. Public so it can be called from the
-        /// top-level window (Ctrl+F) and from the gamepad Home+Plus shortcut, both of which
-        /// must keep working while a game is running. The dialog is tracked so the gamepad's
-        /// B button can close it (see PollGamepad).
+        /// [Nextendo] Toggles the dashboard from the launcher's profile button.
         /// </summary>
-        public async void OpenNextendoProfile()
+        public void OpenNextendoProfile()
         {
-            // Already open (e.g. fast double Ctrl+F, held combo): don't stack dialogs.
-            if (_profileDialog != null)
-            {
-                return;
-            }
-
-            try
-            {
-                ClearBottomFocus();
-                // [Nextendo] Full app-style profile: identity header + Friends/Activity/History
-                // tabs in a modal dialog, shown from the Switch launcher's circular button.
-                var profile = new NextendoProfileView();
-                var dialog = new ContentDialog
-                {
-                    Title = LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_NxCarouselPerfil],
-                    Content = profile,
-                    CloseButtonText = LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_DialogCloseButton],
-                };
-
-                // Tracked so the gamepad's B button can close it (see PollGamepad).
-                _profileDialog = dialog;
-                try
-                {
-                    await ContentDialogHelper.ShowAsync(dialog);
-                }
-                finally
-                {
-                    _profileDialog = null;
-                }
-            }
-            catch (Exception)
-            {
-                _profileDialog = null;
-                // Never let a UI issue in the profile block the launcher.
-            }
+            ClearBottomFocus();
+            ViewModel?.Window?.ToggleNextendoDashboard();
         }
 
         private void ClearBottomFocus()
@@ -648,47 +607,44 @@ namespace Ryujinx.Ava.UI.Views.Misc
         }
 
         /// <summary>
-        /// [Nextendo] Launcher shortcut: hold Home and press + once → open the profile dialog.
-        /// The raw (unmapped) snapshot is used on purpose, because Home and + are physical buttons
-        /// that players reach for as a "dashboard" gesture regardless of the in-game remapping —
-        /// the mapped snapshot only exposes logical Switch buttons. It is polled outside the
-        /// PollGamepad gate so the same combo works while a game/applet runs.
+        /// [Nextendo] Physical controller Home toggles the dashboard. The raw snapshot keeps this
+        /// system button independent of in-game remapping, and polling outside PollGamepad keeps
+        /// it available while a game or applet runs.
         /// </summary>
         private void PollProfileShortcut()
         {
             IGamepad gamepad = GetConfiguredGamepad();
             if (gamepad == null)
             {
-                _profileComboPlusPressed = false;
+                _profileHomePressed = false;
                 return;
             }
 
             GamepadStateSnapshot snapshot = gamepad.GetStateSnapshot();
-
             bool home = snapshot.IsPressed(GamepadButtonInputId.Guide);
-            bool plus = snapshot.IsPressed(GamepadButtonInputId.Plus);
 
-            if (home && plus && !_profileComboPlusPressed)
+            if (home && !_profileHomePressed)
             {
-                _profileComboPlusPressed = true;
+                _profileHomePressed = true;
                 OpenNextendoProfile();
             }
-            else if (!plus)
+            else if (!home)
             {
-                _profileComboPlusPressed = false;
+                _profileHomePressed = false;
             }
         }
 
         private void PollGamepad()
         {
             // [Nextendo] While a game/applet (Mii editor, controller applet, ...) runs in the
-            // embedded renderer, or a modal window (settings, profile, ...) is open on top, the
+            // embedded renderer, or the Nextendo dashboard is open, the
             // controller belongs to that thing — the launcher must not keep consuming it (it
             // would move the menu, open panels, or even launch titles behind the Mii editor).
             // Also skip when the carousel is not on screen (another library view, or the renderer
             // replaced it). Edge flags are cleared so resumed input never triggers a phantom press.
             if (ViewModel.IsGameRunning ||
                 !IsEffectivelyVisible ||
+                ViewModel.Window?.IsNextendoDashboardOpen == true ||
                 (_window != null && _window.SettingsWindow != null))
             {
                 ResetGamepadInputFlags();
@@ -778,14 +734,11 @@ namespace Ryujinx.Ava.UI.Views.Misc
                     else
                         Confirm();
                 }
-                // Back (logical A, the side/physical-right button, Xbox-style cancel): it
-                // closes the profile dialog if one is open, otherwise it un-highlights the
-                // profile ring.
+                // Back (logical A, the side/physical-right button, Xbox-style cancel) un-highlights
+                // the profile ring when it is selected.
                 if (back && !_gamepadBackDown)
                 {
-                    if (_profileDialog != null)
-                        _profileDialog.Hide();
-                    else if (_navLevel == NavProfile)
+                    if (_navLevel == NavProfile)
                         ExitProfile();
                 }
                 if (menu && !_gamepadMenuDown && _navLevel == NavCarousel)
