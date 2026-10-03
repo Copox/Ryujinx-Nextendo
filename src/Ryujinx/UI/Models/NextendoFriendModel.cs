@@ -35,11 +35,18 @@ namespace Ryujinx.Ava.UI.Models
         /// </summary>
         public IBrush StatusColor => IsOnline ? OnlineBrush : OfflineBrush;
 
+        /// <summary>Active games are highlighted; only offline friends are muted.</summary>
+        public IBrush StatusTextColor => IsOnline ? OnlineBrush : OfflineTextBrush;
+
         private static readonly IBrush OnlineBrush = Brush.Parse("#33E86B");
         private static readonly IBrush OfflineBrush = Brush.Parse("#55808080");
+        private static readonly IBrush OfflineTextBrush = Brush.Parse("#FF9298A1");
 
         /// <summary>True when this friend is starred as a favorite (synced with the website).</summary>
         public bool Favorite { get; init; }
+
+        /// <summary>Temporary selection state used by the in-game friend invitation picker.</summary>
+        public bool IsSelected { get; set; }
 
         /// <summary>Gold when favorited, dim grey otherwise — the star's colour.</summary>
         public IBrush FavoriteColor => Favorite ? FavoriteBrush : FavoriteDimBrush;
@@ -60,8 +67,12 @@ namespace Ryujinx.Ava.UI.Models
                     return LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_FriendOffline];
                 }
 
-                string game = NextendoGameNames.Resolve(AppId);
+                if (string.IsNullOrWhiteSpace(AppId))
+                {
+                    return "Main Menu";
+                }
 
+                string game = NextendoGameNames.Resolve(AppId);
                 if (game is null)
                 {
                     return LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_FriendOnline];

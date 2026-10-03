@@ -7,5 +7,7 @@ namespace Ryujinx.Ava.Systems.Configuration.UI
         public int WindowPositionX { get; set; }
         public int WindowPositionY { get; set; }
         public bool WindowMaximized { get; set; }
+        public int NextendoDashboardWidth { get; set; }
+        public int NextendoDashboardHeight { get; set; }
     }
 }

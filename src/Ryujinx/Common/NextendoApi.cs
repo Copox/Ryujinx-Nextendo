@@ -121,6 +121,44 @@ namespace Ryujinx.Ava.Common
             return result;
         }
 
+        /// <summary>Reads a friend's play history, which the server exposes only to accepted friends.</summary>
+        public static async Task<List<HistoryItem>> GetFriendHistoryAsync(ulong pid)
+        {
+            List<HistoryItem> history = [];
+            try
+            {
+                using HttpClient http = Client();
+                using HttpResponseMessage response = await http.GetAsync($"{BaseUrl()}/api/friends/history?pid={pid}");
+                HealIfRejected(response);
+                if (!response.IsSuccessStatusCode)
+                {
+                    return history;
+                }
+
+                using JsonDocument document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+                if (document.RootElement.TryGetProperty("history", out JsonElement entries) && entries.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (JsonElement entry in entries.EnumerateArray())
+                    {
+                        history.Add(new HistoryItem
+                        {
+                            TitleId = entry.TryGetProperty("title_id", out JsonElement titleId) ? titleId.GetString() ?? "" : "",
+                            Name = entry.TryGetProperty("name", out JsonElement name) ? name.GetString() ?? "" : "",
+                            IconBase64 = entry.TryGetProperty("icon", out JsonElement icon) ? icon.GetString() ?? "" : "",
+                            Seconds = entry.TryGetProperty("seconds", out JsonElement seconds) && seconds.TryGetInt64(out long duration) ? duration : 0,
+                            LastPlayed = entry.TryGetProperty("last_played", out JsonElement lastPlayed) ? lastPlayed.GetString() ?? "" : "",
+                        });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning?.Print(LogClass.Application, $"[Nextendo] friend history failed: {ex.Message}");
+            }
+
+            return history;
+        }
+
         public static string BaseUrl()
         {
             // [Nextendo] Une seule decision, dans NextendoEndpoint : c'est elle qui choisit qui
