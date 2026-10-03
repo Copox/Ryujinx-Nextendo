@@ -600,7 +600,7 @@ namespace Ryujinx.Ava.UI.Views.Misc
             else
             {
                 SelectedFriendStatus.Text = friend.IsOnline ? "Main Menu" : "Offline";
-                SelectedFriendGameInitial.Text = "—";
+                SelectedFriendGameInitial.Text = "-";
             }
             SelectedFriendFavoriteButton.Tag = pid;
             SelectedFriendFavoriteButton.Content = friend.Favorite ? "★ Favorite" : "☆ Favorite";
@@ -1263,7 +1263,7 @@ namespace Ryujinx.Ava.UI.Views.Misc
                 _lobby.Clear();
                 NoLobbyText.IsVisible = true;
                 LobbyScroll.IsVisible = false;
-                LobbyGameText.Text = "—";
+                LobbyGameText.Text = "-";
                 LobbyStateText.Text = "";
                 return;
             }

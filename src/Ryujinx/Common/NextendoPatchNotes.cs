@@ -121,7 +121,7 @@ namespace Ryujinx.Ava.Common
                 string name = root.TryGetProperty("name", out JsonElement nameElement) ? nameElement.GetString() ?? "" : "";
                 string body = root.TryGetProperty("body", out JsonElement bodyElement) ? bodyElement.GetString() ?? "" : "";
                 string url = root.TryGetProperty("html_url", out JsonElement urlElement) ? urlElement.GetString() ?? "" : "";
-                string title = string.IsNullOrWhiteSpace(name) ? $"What's New — {tag}" : $"What's New — {name}";
+                string title = string.IsNullOrWhiteSpace(name) ? $"What's New: {tag}" : $"What's New: {name}";
 
                 return string.IsNullOrWhiteSpace(body) ? null : (title, body, url);
             }

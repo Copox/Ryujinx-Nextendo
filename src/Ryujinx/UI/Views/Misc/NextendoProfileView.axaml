@@ -101,10 +101,10 @@
                     <Border Grid.Row="0" Classes="consoleCard" Padding="12">
                         <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="8">
                             <TextBlock Text="Ping:" VerticalAlignment="Center" Opacity="0.75" />
-                            <TextBlock Grid.Column="1" Name="AccountPingValue" Text="—" VerticalAlignment="Center" FontWeight="SemiBold" />
+                            <TextBlock Grid.Column="1" Name="AccountPingValue" Text="-" VerticalAlignment="Center" FontWeight="SemiBold" />
                             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="7" VerticalAlignment="Center" Margin="18,0,0,0">
                                 <TextBlock Text="NAT Type:" VerticalAlignment="Center" Opacity="0.75" />
-                                <TextBlock Name="AccountNatValue" Text="—" VerticalAlignment="Center" FontWeight="SemiBold" />
+                                <TextBlock Name="AccountNatValue" Text="-" VerticalAlignment="Center" FontWeight="SemiBold" />
                             </StackPanel>
                             <Button Grid.Column="3" Name="AccountNetworkCheckButton" Content="Check" Click="AccountNetworkCheck_Click" />
                         </Grid>
@@ -367,7 +367,7 @@
             </Grid>
             <Grid Name="LobbyTab" IsVisible="False" RowDefinitions="Auto,*">
                 <Border Grid.Row="0" Classes="consoleCard" Padding="18" Margin="0,0,14,8">
-                    <StackPanel Spacing="2"><TextBlock Name="LobbyGameText" FontWeight="SemiBold" FontSize="18" Text="—" /><TextBlock Name="LobbyStateText" FontSize="13" Opacity="0.75" /></StackPanel>
+                    <StackPanel Spacing="2"><TextBlock Name="LobbyGameText" FontWeight="SemiBold" FontSize="18" Text="-" /><TextBlock Name="LobbyStateText" FontSize="13" Opacity="0.75" /></StackPanel>
                 </Border>
                 <Grid Grid.Row="1" Margin="0,0,14,0">
                     <TextBlock Name="NoLobbyText" Margin="0,24,0,0" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" Opacity="0.7" Text="{ext:Locale Dialog_Nextendo_LobbyEmpty}" />
