@@ -11,6 +11,8 @@ using Ryujinx.Memory;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Threading;
 using ExceptionCallback = Ryujinx.Cpu.ExceptionCallback;
 using ExceptionCallbackNoArgs = Ryujinx.Cpu.ExceptionCallbackNoArgs;
@@ -518,9 +520,11 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
             return result;
         }
 
-        private static void GenerateRandomEntropy()
+        private void GenerateRandomEntropy()
         {
-            // TODO.
+            // Keep the seed stable for this process. Guest SDKs use GetInfo(RandomEntropy)
+            // to seed their PRNG, including the UUIDs stored in Mario Party Superstars saves.
+            RandomNumberGenerator.Fill(MemoryMarshal.AsBytes(RandomEntropy.AsSpan()));
         }
 
         public Result Start(int mainThreadPriority, ulong stackSize)
