@@ -28,12 +28,13 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             Os.SignalSystemEvent(ref _completionEvent); // TODO: Figure out where we are supposed to signal this.
         }
 
-        // [Nextendo] Splatoon 3 passe par NPLN, qui nomme chaque ami par son NSA. Gate explicite par
-        // titre : tout autre jeu (Mario Kart 8, Splatoon 2...) garde le comportement PID d'origine.
+        // NPLN games identify friends by NSA ID; NEX games retain their PID mapping.
         private const string Splatoon3TitleId = "0100c2500fc20000";
+        private const string WonderTitleId = "010015100b514000";
 
         private static bool WantsNsaIds()
-            => string.Equals(NextendoFriends.CurrentTitleId, Splatoon3TitleId, StringComparison.OrdinalIgnoreCase);
+            => string.Equals(NextendoFriends.CurrentTitleId, Splatoon3TitleId, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(NextendoFriends.CurrentTitleId, WonderTitleId, StringComparison.OrdinalIgnoreCase);
 
         private static FriendImpl MakeNextendoFriend(ulong netId, string nick, PresenceStatus status, byte[] appField = null, bool sameApp = true)
         {
@@ -108,13 +109,13 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
 
             Logger.Stub?.PrintStub(LogClass.ServiceFriend, new { userId, offset, filter, pidPlaceholder, pid });
 
-            if (userId.IsNull)
+            if (userId.IsNull || offset < 0)
             {
                 return FriendResult.InvalidArgument;
             }
 
-            // [Nextendo] serve the player's real Nextendo friends (page 0 only).
-            if (offset == 0)
+            // NPLN games enumerate the full list using the requested offset.
+            if (offset == 0 || WantsNsaIds())
             {
                 bool wantNsa = WantsNsaIds();
 
@@ -124,7 +125,7 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                 // bloquant (les bloquer casse leurs acquittements PRUDP).
                 IReadOnlyList<NextendoFriends.Entry> friends =
                     wantNsa ? NextendoFriends.GetWarm(2000) : NextendoFriends.Get();
-                int n = Math.Min(friends.Count, friendIds.Length);
+                int n = Math.Min(Math.Max(0, friends.Count - offset), friendIds.Length);
                 // QUEL identifiant ce jeu attend-il dans sa liste locale ? Mario Kart 8 (NEX)
                 // redemande ses amis PAR LE PID. Splatoon 3 (NPLN) les nomme par NSA : mesure,
                 // 125 appels sur 125 a UpdateFriendInfo portaient un id de 16 chiffres hexa alors
@@ -134,7 +135,8 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                 // l'APPARTENANCE a la liste.
                 for (int i = 0; i < n; i++)
                 {
-                    ulong id = wantNsa && friends[i].Nsa != 0 ? friends[i].Nsa : friends[i].Pid;
+                    var entry = friends[offset + i];
+                    ulong id = wantNsa && entry.Nsa != 0 ? entry.Nsa : entry.Pid;
                     friendIds[i] = new NetworkServiceAccountId(id);
                 }
                 count = n;
@@ -159,30 +161,31 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
 
             Logger.Stub?.PrintStub(LogClass.ServiceFriend, new { userId, offset, filter, pidPlaceholder, pid });
 
-            if (userId.IsNull)
+            if (userId.IsNull || offset < 0)
             {
                 return FriendResult.InvalidArgument;
             }
 
-            // [Nextendo] serve the player's real Nextendo friends (page 0 only).
-            if (offset == 0)
+            // NPLN games enumerate the full list using the requested offset.
+            if (offset == 0 || WantsNsaIds())
             {
-                IReadOnlyList<NextendoFriends.Entry> friends = NextendoFriends.Get();
+                IReadOnlyList<NextendoFriends.Entry> friends = WantsNsaIds() ? NextendoFriends.GetWarm(2000) : NextendoFriends.Get();
                 bool wantNsa = WantsNsaIds();
-                int n = Math.Min(friends.Count, friendList.Length);
+                int n = Math.Min(Math.Max(0, friends.Count - offset), friendList.Length);
                 for (int i = 0; i < n; i++)
                 {
                     // Meme espace d'identifiants que GetFriendListIds, sinon Splatoon 3 recevrait
                     // ici des fiches estampillees d'un PID qu'il ne sait pas rapprocher de la liste
                     // que NPLN lui a donnee. Les autres jeux gardent le PID.
-                    ulong lid = wantNsa && friends[i].Nsa != 0 ? friends[i].Nsa : friends[i].Pid;
+                    var entry = friends[offset + i];
+                    ulong lid = wantNsa && entry.Nsa != 0 ? entry.Nsa : entry.Pid;
                     // Presence REELLE, comme le fait deja UpdateFriendInfo plus bas. Annoncer
                     // TOUT LE MONDE « en train de jouer a ce jeu » est un mensonge que le jeu
                     // peut verifier : il demande ensuite au serveur la session de chacun de ces
                     // pretendus joueurs, n'en retrouve aucune, et ecarte l'entree.
-                    PresenceStatus st = friends[i].Status > 0 ? PresenceStatus.OnlinePlay : PresenceStatus.Offline;
-                    friendList[i] = MakeNextendoFriend(lid, friends[i].Name, st, friends[i].AppField,
-                        sameApp: friends[i].Status > 0);
+                    PresenceStatus st = entry.Status > 0 ? PresenceStatus.OnlinePlay : PresenceStatus.Offline;
+                    friendList[i] = MakeNextendoFriend(lid, entry.Name, st, entry.AppField,
+                        sameApp: entry.Status > 0);
                 }
                 count = n;
 
@@ -196,7 +199,7 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                 }
             }
 
-            Logger.Info?.Print(LogClass.ServiceFriend, $"[Nextendo] GetFriendList -> count={count}");
+            Logger.Info?.Print(LogClass.ServiceFriend, $"[Nextendo] GetFriendList -> offset={offset} count={count}");
 
             return Result.Success;
         }
