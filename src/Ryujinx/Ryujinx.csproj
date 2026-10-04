@@ -64,6 +64,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="NSec.Cryptography" />
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Avalonia.Diagnostics" Condition="'$(Configuration)'=='Debug'" />

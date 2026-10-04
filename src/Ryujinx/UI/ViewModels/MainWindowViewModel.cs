@@ -338,6 +338,9 @@ namespace Ryujinx.Ava.UI.ViewModels
             // the badge next to each supported game reads them.
             Ryujinx.Ava.Common.NextendoOnlineCounts.Start(applicationLibrary);
 
+            // Additional remote display metadata for titles absent from the built-in table.
+            Ryujinx.Ava.Common.NextendoServiceCatalog.Start(applicationLibrary, () => !IsGameRunning && WindowState != WindowState.Minimized);
+
             // [Nextendo] And the Discord-style avatars of friends currently playing each game,
             // shown as overlapping round pictures on the right of the game row.
             Ryujinx.Ava.Common.NextendoFriendActivity.Start(applicationLibrary);
@@ -2076,7 +2079,13 @@ namespace Ryujinx.Ava.UI.ViewModels
             // compte chez NOUS. Quelqu'un qui joue sur son propre serveur n'a rien à voir avec
             // ces conditions, et les lui appliquer reviendrait à l'empêcher de jouer au nom
             // d'un service qu'il a justement désactivé.
-            if (application.IsNextendoCompatible && !NextendoServerOverride.HorsNextendo)
+            Ryujinx.Common.Configuration.NextendoAccount.OnlineBlocked = false;
+            Ryujinx.Ava.Common.ServiceLaunchDecision serviceLaunch = Ryujinx.Ava.Common.ServiceLaunchDecision.Unmanaged;
+            if (!application.IsNextendoCompatible && !NextendoServerOverride.HorsNextendo)
+            {
+                serviceLaunch = await Ryujinx.Ava.Common.NextendoServiceCatalog.EvaluateLaunchAsync(application);
+            }
+            if ((application.IsNextendoCompatible || serviceLaunch.Managed) && !NextendoServerOverride.HorsNextendo)
             {
                 // Evaluate the gate FRESH every launch — OnlineBlocked is runtime-only, so reset
                 // it first or a stale "blocked" from a previous launch (or a since-created guest)
@@ -2091,10 +2100,12 @@ namespace Ryujinx.Ava.UI.ViewModels
                 }
 
                 Ryujinx.Ava.Common.NextendoBeta.BlockReason remote = Ryujinx.Ava.Common.NextendoBeta.Evaluate();
-                bool versionBad = !application.IsNextendoVersionOk;
+                bool versionBad = application.IsNextendoCompatible
+                    ? !application.IsNextendoVersionOk : serviceLaunch.VersionMismatch;
+                bool requirementsBad = !application.IsNextendoCompatible && !serviceLaunch.OnlineAllowed;
 
                 Ryujinx.Common.Configuration.NextendoAccount.OnlineBlocked =
-                    remote != Ryujinx.Ava.Common.NextendoBeta.BlockReason.None || versionBad;
+                    remote != Ryujinx.Ava.Common.NextendoBeta.BlockReason.None || versionBad || requirementsBad;
 
                 // Refresh the remote config for the NEXT launch (a flipped kill-switch applies then).
                 _ = Ryujinx.Ava.Common.NextendoBeta.RefreshAsync();
@@ -2119,7 +2130,12 @@ namespace Ryujinx.Ava.UI.ViewModels
                     {
                         problems.Add("• " + LocaleManager.GetFormatted(
                             LocaleKeys.Dialog_Nextendo_OnlineProblemVersion,
-                            application.Version, application.NextendoCompatibleVersion));
+                            application.Version, application.IsNextendoCompatible ? application.NextendoCompatibleVersion : serviceLaunch.RequiredVersions));
+                    }
+
+                    if (requirementsBad && !versionBad)
+                    {
+                        problems.Add("• " + serviceLaunch.Message);
                     }
 
                     if (!Ryujinx.Common.Configuration.NextendoAccount.IsLinked)
