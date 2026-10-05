@@ -22,6 +22,9 @@ namespace Ryujinx.Ava.Systems.AppLibrary
                 _servicePlayers.Value)
             : "";
 
+        [JsonIgnore]
+        public bool CanUseNextendoCloudSaves => IdBaseString == "0100c2500fc20000" && IsNextendoVersionOk;
+
         // Called on the UI thread. Existing built-in titles always keep their original path.
         public void ApplyServiceAvailability(ServiceListing listing, int? players)
         {
@@ -36,7 +39,7 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             _serviceListing = listing;
             _servicePlayers = players;
             foreach (string property in new[] { nameof(IsAvailableOnService), nameof(ServiceVersion), nameof(ServiceBadge),
-                nameof(ServicePlayersOnline), nameof(HasServicePlayersCount), nameof(ServicePlayersText) })
+                nameof(ServicePlayersOnline), nameof(HasServicePlayersCount), nameof(ServicePlayersText), nameof(CanUseNextendoCloudSaves) })
             {
                 PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(property));
             }

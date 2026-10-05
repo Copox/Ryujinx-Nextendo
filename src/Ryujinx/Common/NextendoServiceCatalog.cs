@@ -45,7 +45,7 @@ namespace Ryujinx.Ava.Common
             if (application.IsNextendoCompatible)
                 return ServiceLaunchDecision.Unmanaged;
             if (_catalog == null)
-                return application.WasListedOnService ? ServiceLaunchDecision.Unavailable : ServiceLaunchDecision.Unmanaged;
+                return ServiceLaunchDecision.Unavailable;
             if (!_catalog.IsValid(DateTimeOffset.UtcNow))
                 await RefreshAsync();
             await RefreshLock.WaitAsync();

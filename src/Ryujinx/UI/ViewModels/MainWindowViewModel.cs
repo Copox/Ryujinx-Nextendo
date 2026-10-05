@@ -2079,7 +2079,8 @@ namespace Ryujinx.Ava.UI.ViewModels
             // compte chez NOUS. Quelqu'un qui joue sur son propre serveur n'a rien à voir avec
             // ces conditions, et les lui appliquer reviendrait à l'empêcher de jouer au nom
             // d'un service qu'il a justement désactivé.
-            Ryujinx.Common.Configuration.NextendoAccount.OnlineBlocked = false;
+            Ryujinx.Ava.Common.ServiceLaunchPolicy.ResetOnlineBlock();
+            Ryujinx.Ava.Common.NextendoSaveSync.Playing = null;
             Ryujinx.Ava.Common.ServiceLaunchDecision serviceLaunch = Ryujinx.Ava.Common.ServiceLaunchDecision.Unmanaged;
             if (!application.IsNextendoCompatible && !NextendoServerOverride.HorsNextendo)
             {
@@ -2104,8 +2105,8 @@ namespace Ryujinx.Ava.UI.ViewModels
                     ? !application.IsNextendoVersionOk : serviceLaunch.VersionMismatch;
                 bool requirementsBad = !application.IsNextendoCompatible && !serviceLaunch.OnlineAllowed;
 
-                Ryujinx.Common.Configuration.NextendoAccount.OnlineBlocked =
-                    remote != Ryujinx.Ava.Common.NextendoBeta.BlockReason.None || versionBad || requirementsBad;
+                Ryujinx.Ava.Common.ServiceLaunchPolicy.UpdateOnlineBlock(
+                    remote != Ryujinx.Ava.Common.NextendoBeta.BlockReason.None, versionBad, serviceLaunch);
 
                 // Refresh the remote config for the NEXT launch (a flipped kill-switch applies then).
                 _ = Ryujinx.Ava.Common.NextendoBeta.RefreshAsync();
@@ -2176,7 +2177,7 @@ namespace Ryujinx.Ava.UI.ViewModels
             // [Nextendo] Download this title's cloud save and apply it BEFORE the game
             // runs (compatible titles only; only meaningful because the user owns + is
             // launching this game).
-            if (application.IsNextendoVersionOk && Ryujinx.Common.Configuration.NextendoAccount.IsLinked)
+            if (application.CanUseNextendoCloudSaves && Ryujinx.Common.Configuration.NextendoAccount.IsLinked)
             {
                 // [Nextendo] If the local save folder is EMPTY but the account has a cloud save,
                 // ask the player (Switch-style) before starting: download it, or launch anyway with
@@ -2316,10 +2317,10 @@ namespace Ryujinx.Ava.UI.ViewModels
             // First push after 60s, then every 3 min. Disposed on exit.
             _nextendoSaveTimer?.Dispose();
             _nextendoSaveTimer = null;
-            if (application.IsNextendoVersionOk && Ryujinx.Common.Configuration.NextendoAccount.IsLinked)
+            if (application.CanUseNextendoCloudSaves && Ryujinx.Common.Configuration.NextendoAccount.IsLinked)
             {
                 // Track the playing title so the crash handler can push its save best-effort.
-                Ryujinx.Ava.Common.NextendoSaveSync.Playing = (application.Id, application.IdString);
+                Ryujinx.Ava.Common.NextendoSaveSync.Playing = application;
                 _nextendoSaveTimer = new System.Threading.Timer(
                     _ => { if (IsGameRunning) { _ = FlushNextendoSaveAsync(); } },
                     null, TimeSpan.FromSeconds(60), TimeSpan.FromMinutes(3));
@@ -2377,14 +2378,14 @@ namespace Ryujinx.Ava.UI.ViewModels
         public async Task FlushNextendoSaveAsync()
         {
             ApplicationData app = _currentApplicationData;
-            if (app != null && app.IsNextendoVersionOk && Ryujinx.Common.Configuration.NextendoAccount.IsLinked)
+            if (app != null && app.CanUseNextendoCloudSaves && Ryujinx.Common.Configuration.NextendoAccount.IsLinked)
             {
-                await Ryujinx.Ava.Common.NextendoSaveSync.PushAsync(app.Id, app.IdString);
+                await Ryujinx.Ava.Common.NextendoSaveSync.PushAsync(app);
             }
             else
             {
                 Logger.Info?.Print(LogClass.Application,
-                    $"[Nextendo] close-flush skipped (app={app?.Name ?? "null"} versionOk={app?.IsNextendoVersionOk} linked={Ryujinx.Common.Configuration.NextendoAccount.IsLinked})");
+                    $"[Nextendo] close-flush skipped (app={app?.Name ?? "null"} cloudEligible={app?.CanUseNextendoCloudSaves} linked={Ryujinx.Common.Configuration.NextendoAccount.IsLinked})");
             }
         }
 

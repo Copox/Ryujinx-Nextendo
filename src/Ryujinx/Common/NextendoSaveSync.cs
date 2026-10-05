@@ -20,7 +20,7 @@ namespace Ryujinx.Ava.Common
         // [Nextendo] The title currently being played (set on launch, cleared on a normal exit).
         // Lets the crash handler (Program.ProcessUnhandledException) push the save best-effort when
         // the app is terminating abnormally, on top of the periodic in-game push.
-        public static (ulong Id, string IdString)? Playing;
+        public static ApplicationData Playing;
 
         /// <summary>
         /// [Nextendo] Best-effort synchronous save upload during a crash / abnormal termination.
@@ -28,16 +28,16 @@ namespace Ryujinx.Ava.Common
         /// </summary>
         public static void EmergencyFlush()
         {
-            (ulong Id, string IdString)? p = Playing;
-            if (p == null)
+            ApplicationData p = Playing;
+            if (p == null || !p.CanUseNextendoCloudSaves)
             {
                 return;
             }
 
             try
             {
-                Logger.Info?.Print(LogClass.Application, $"[Nextendo] crash save-flush for {p.Value.IdString}");
-                Task push = PushAsync(p.Value.Id, p.Value.IdString);
+                Logger.Info?.Print(LogClass.Application, $"[Nextendo] crash save-flush for {p.IdString}");
+                Task push = PushAsync(p);
                 push.Wait(TimeSpan.FromSeconds(8));
             }
             catch (Exception ex)
@@ -58,7 +58,7 @@ namespace Ryujinx.Ava.Common
         public static async Task PullAsync(ApplicationData app)
         {
             // [Nextendo beta] Cloud saves are excluded for GUEST profiles — skip pull entirely.
-            if (app == null || !app.IsNextendoCompatible || !NextendoAccount.IsLinked || NextendoAccount.IsGuest || string.IsNullOrEmpty(NextendoAccount.NexToken))
+            if (app == null || !app.CanUseNextendoCloudSaves || !NextendoAccount.IsLinked || NextendoAccount.IsGuest || string.IsNullOrEmpty(NextendoAccount.NexToken))
             {
                 return;
             }
@@ -111,7 +111,7 @@ namespace Ryujinx.Ava.Common
         // the save zip bytes, or null when there is no cloud save or the profile isn't eligible.
         public static async Task<byte[]> FetchCloudSaveAsync(ApplicationData app)
         {
-            if (app == null || !app.IsNextendoCompatible || !NextendoAccount.IsLinked || NextendoAccount.IsGuest || string.IsNullOrEmpty(NextendoAccount.NexToken))
+            if (app == null || !app.CanUseNextendoCloudSaves || !NextendoAccount.IsLinked || NextendoAccount.IsGuest || string.IsNullOrEmpty(NextendoAccount.NexToken))
             {
                 return null;
             }
@@ -144,8 +144,14 @@ namespace Ryujinx.Ava.Common
         }
 
         // Export + upload this title's local save. Call AFTER the game has fully closed.
-        public static async Task PushAsync(ulong titleId, string idString)
+        public static async Task PushAsync(ApplicationData app)
         {
+            if (app == null || !app.CanUseNextendoCloudSaves)
+            {
+                return;
+            }
+            ulong titleId = app.Id;
+            string idString = app.IdString;
             Logger.Info?.Print(LogClass.Application, $"[Nextendo] save push START {idString} (linked={NextendoAccount.IsLinked} token={!string.IsNullOrEmpty(NextendoAccount.NexToken)})");
 
             // [Nextendo beta] Cloud saves are excluded for GUEST profiles — never push.

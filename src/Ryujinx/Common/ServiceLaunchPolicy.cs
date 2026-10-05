@@ -8,11 +8,24 @@ namespace Ryujinx.Ava.Common
     }
     public static class ServiceLaunchPolicy
     {
+        public static void ResetOnlineBlock()
+        {
+            Ryujinx.Common.Configuration.NextendoAccount.OnlineBlocked = false;
+        }
+
+        public static void UpdateOnlineBlock(bool serviceBlocked, bool versionMismatch, ServiceLaunchDecision decision)
+        {
+            Ryujinx.Common.Configuration.NextendoAccount.OnlineBlocked =
+                serviceBlocked || versionMismatch || (decision.Managed && !decision.OnlineAllowed);
+        }
+
         public static ServiceLaunchDecision Evaluate(bool known, bool fresh, ServiceListing listing, string installed)
         {
+            if (!fresh)
+                return ServiceLaunchDecision.Unavailable;
             if (!known)
                 return ServiceLaunchDecision.Unmanaged;
-            if (!fresh || listing == null)
+            if (listing == null)
                 return ServiceLaunchDecision.Unavailable;
             if (!listing.Enabled)
                 return new(true, false, false, "", "This title is currently disabled on Nextendo. You can continue offline.");

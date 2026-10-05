@@ -71,7 +71,7 @@ namespace Ryujinx.Ava.Common
                     string envelope = await ReadBoundedAsync(response);
                     VerifiedServiceDocument verified = ServiceCatalogParser.Verify(envelope, _kind, DateTimeOffset.UtcNow);
                     _validate(verified.Payload);
-                    if (Document != null && verified.Revision < Document.Revision)
+                    if ((Document ?? LastAuthenticatedDocument) is VerifiedServiceDocument previous && verified.Revision < previous.Revision)
                         throw new FormatException("Catalog revision rollback.");
                     Document = verified;
                     LastAuthenticatedDocument = verified;
