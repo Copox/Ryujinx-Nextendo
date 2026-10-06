@@ -83,6 +83,36 @@ namespace Ryujinx.Ava.Common
                     }
                 }
 
+                // SM3DW currently exposes its public aggregate through the site's dashboard
+                // bridge. Prefer the common endpoint once it includes this title.
+                const string sm3dwTitleId = "010028600ebda000";
+                if (!parsed.ContainsKey(sm3dwTitleId))
+                {
+                    parsed[sm3dwTitleId] = For(sm3dwTitleId);
+                    try
+                    {
+                        using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(2));
+                        using HttpResponseMessage sm3dw = await http.GetAsync(
+                            $"{NextendoApi.BaseUrl()}/game-stats/sm3dw", timeout.Token);
+                        if (sm3dw.IsSuccessStatusCode)
+                        {
+                            using JsonDocument stats = JsonDocument.Parse(
+                                await sm3dw.Content.ReadAsStringAsync(timeout.Token));
+                            if (stats.RootElement.TryGetProperty("online", out JsonElement online)
+                                && online.ValueKind == JsonValueKind.True
+                                && stats.RootElement.TryGetProperty("connected", out JsonElement connected)
+                                && connected.TryGetInt32(out int count) && count >= 0)
+                            {
+                                parsed[sm3dwTitleId] = count;
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // Keep SM3DW's last count without interrupting updates for other games.
+                    }
+                }
+
                 lock (_lock)
                 {
                     _counts = parsed;
