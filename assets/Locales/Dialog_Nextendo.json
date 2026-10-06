@@ -10274,6 +10274,106 @@
         "zh_CN": "Nextendo — 快速上手",
         "zh_TW": "Nextendo — 快速上手"
       }
+    },
+    {
+      "ID": "AboutNextendoContent",
+      "Translations": {
+        "ar_SA": "Ryujinx Nextendo هو إصدار Nextendo Network من Ryujinx: يربط ألعابك بخوادم Nextendo على الإنترنت.\nNextendo مشروع مجتمعي مستقل، لا علاقة له بـ Nintendo.",
+        "de_DE": "Ryujinx Nextendo ist die Nextendo-Network-Edition von Ryujinx: Sie verbindet deine Spiele mit den Online-Servern von Nextendo.\nNextendo ist ein unabhängiges Community-Projekt und nicht mit Nintendo verbunden.",
+        "el_GR": "Το Ryujinx Nextendo είναι η έκδοση Nextendo Network του Ryujinx: συνδέει τα παιχνίδια σου με τους διαδικτυακούς διακομιστές του Nextendo.\nΤο Nextendo είναι ένα ανεξάρτητο κοινοτικό έργο, χωρίς σχέση με τη Nintendo.",
+        "en_US": "Ryujinx Nextendo is the Nextendo Network edition of Ryujinx: it connects your games to the Nextendo online servers.\nNextendo is an independent community project, not affiliated with Nintendo.",
+        "es_ES": "Ryujinx Nextendo es la edición de Ryujinx para Nextendo Network: conecta tus juegos a los servidores en línea de Nextendo.\nNextendo es un proyecto comunitario independiente, sin relación con Nintendo.",
+        "fr_FR": "Ryujinx Nextendo est l'édition Nextendo Network de Ryujinx : elle connecte tes jeux aux serveurs en ligne de Nextendo.\nNextendo est un projet communautaire indépendant, sans lien avec Nintendo.",
+        "he_IL": "Ryujinx Nextendo היא מהדורת Nextendo Network של Ryujinx: היא מחברת את המשחקים שלך לשרתים המקוונים של Nextendo.\nNextendo הוא פרויקט קהילתי עצמאי, ללא קשר ל-Nintendo.",
+        "it_IT": "Ryujinx Nextendo è l'edizione Nextendo Network di Ryujinx: collega i tuoi giochi ai server online di Nextendo.\nNextendo è un progetto comunitario indipendente, non affiliato a Nintendo.",
+        "ja_JP": "Ryujinx Nextendo は Ryujinx の Nextendo Network 版で、ゲームを Nextendo のオンラインサーバーに接続します。\nNextendo は任天堂とは関係のない、独立したコミュニティプロジェクトです。",
+        "ko_KR": "Ryujinx Nextendo는 Ryujinx의 Nextendo Network 에디션으로, 게임을 Nextendo 온라인 서버에 연결합니다.\nNextendo는 Nintendo와 관련이 없는 독립 커뮤니티 프로젝트입니다.",
+        "no_NO": "Ryujinx Nextendo er Nextendo Network-utgaven av Ryujinx: den kobler spillene dine til Nextendos nettservere.\nNextendo er et uavhengig fellesskapsprosjekt uten tilknytning til Nintendo.",
+        "pl_PL": "Ryujinx Nextendo to edycja Ryujinx dla Nextendo Network: łączy twoje gry z serwerami online Nextendo.\nNextendo to niezależny projekt społeczności, niepowiązany z Nintendo.",
+        "pt_BR": "Ryujinx Nextendo é a edição do Ryujinx para a Nextendo Network: ela conecta seus jogos aos servidores online da Nextendo.\nA Nextendo é um projeto comunitário independente, sem vínculo com a Nintendo.",
+        "ru_RU": "Ryujinx Nextendo является редакцией Ryujinx для Nextendo Network: она подключает твои игры к онлайн-серверам Nextendo.\nNextendo является независимым проектом сообщества, не связанным с Nintendo.",
+        "sv_SE": "Ryujinx Nextendo är Nextendo Network-utgåvan av Ryujinx: den ansluter dina spel till Nextendos onlineservrar.\nNextendo är ett oberoende gemenskapsprojekt utan koppling till Nintendo.",
+        "th_TH": "Ryujinx Nextendo คือ Ryujinx รุ่น Nextendo Network ที่เชื่อมต่อเกมของคุณกับเซิร์ฟเวอร์ออนไลน์ของ Nextendo\nNextendo เป็นโปรเจกต์ชุมชนอิสระ ไม่มีส่วนเกี่ยวข้องกับ Nintendo",
+        "tr_TR": "Ryujinx Nextendo, Ryujinx'in Nextendo Network sürümüdür: oyunlarını Nextendo çevrim içi sunucularına bağlar.\nNextendo, Nintendo ile bağlantısı olmayan bağımsız bir topluluk projesidir.",
+        "uk_UA": "Ryujinx Nextendo є виданням Ryujinx для Nextendo Network: воно підключає твої ігри до онлайн-серверів Nextendo.\nNextendo є незалежним проєктом спільноти, не пов'язаним із Nintendo.",
+        "zh_CN": "Ryujinx Nextendo 是 Ryujinx 的 Nextendo Network 版本，它将你的游戏连接到 Nextendo 在线服务器。\nNextendo 是一个独立的社区项目，与任天堂无关。",
+        "zh_TW": "Ryujinx Nextendo 是 Ryujinx 的 Nextendo Network 版本，它會將你的遊戲連線到 Nextendo 線上伺服器。\nNextendo 是一個獨立的社群專案，與任天堂無關。"
+      }
+    },
+    {
+      "ID": "AboutNextendoTeamTitle",
+      "Translations": {
+        "ar_SA": "فريق Nextendo:",
+        "de_DE": "Nextendo-Team:",
+        "el_GR": "Η ομάδα του Nextendo:",
+        "en_US": "Nextendo Team:",
+        "es_ES": "Equipo de Nextendo:",
+        "fr_FR": "L'équipe Nextendo :",
+        "he_IL": "צוות Nextendo:",
+        "it_IT": "Team Nextendo:",
+        "ja_JP": "Nextendo チーム：",
+        "ko_KR": "Nextendo 팀:",
+        "no_NO": "Nextendo-teamet:",
+        "pl_PL": "Zespół Nextendo:",
+        "pt_BR": "Equipe Nextendo:",
+        "ru_RU": "Команда Nextendo:",
+        "sv_SE": "Nextendo-teamet:",
+        "th_TH": "ทีม Nextendo:",
+        "tr_TR": "Nextendo Ekibi:",
+        "uk_UA": "Команда Nextendo:",
+        "zh_CN": "Nextendo 团队：",
+        "zh_TW": "Nextendo 團隊："
+      }
+    },
+    {
+      "ID": "AboutNextendoTeamList",
+      "Translations": {
+        "ar_SA": "Kazuu: مالك المشروع\nCollecting: المطور الرئيسي لـ Citron و Nextendo\nalye: مطور ومصمم رئيسي\nJuanBrew: المطور الرئيسي لـ Prelude\nZara: المطور الرئيسي لـ Splatoon 3\nMars: شخص رائع جدًا ومختبر الخوادم\nAnakin_sky05: مطور Prelude ومحلل بروتوكولات الشبكة",
+        "de_DE": "Kazuu: Projektinhaber\nCollecting: Hauptentwickler von Citron und Nextendo\nalye: Entwickler und leitender Designer\nJuanBrew: Hauptentwickler von Prelude\nZara: Hauptentwickler für Splatoon 3\nMars: super cooler Typ und Servertester\nAnakin_sky05: Prelude-Entwickler und Netzwerkprotokoll-Analyst",
+        "el_GR": "Kazuu: ιδιοκτήτης του έργου\nCollecting: κύριος προγραμματιστής του Citron και του Nextendo\nalye: προγραμματιστής και επικεφαλής σχεδιαστής\nJuanBrew: κύριος προγραμματιστής του Prelude\nZara: κύριος προγραμματιστής του Splatoon 3\nMars: πολύ κουλ τύπος και δοκιμαστής διακομιστών\nAnakin_sky05: προγραμματιστής του Prelude και αναλυτής πρωτοκόλλων δικτύου",
+        "en_US": "Kazuu: project owner\nCollecting: main Citron & Nextendo developer\nalye: developer & lead designer\nJuanBrew: main Prelude developer\nZara: main Splatoon 3 developer\nMars: super cool guy & server tester\nAnakin_sky05: Prelude developer & network protocol analyst",
+        "es_ES": "Kazuu: propietario del proyecto\nCollecting: desarrollador principal de Citron y Nextendo\nalye: desarrollador y diseñador principal\nJuanBrew: desarrollador principal de Prelude\nZara: desarrollador principal de Splatoon 3\nMars: tipo súper genial y probador de servidores\nAnakin_sky05: desarrollador de Prelude y analista de protocolos de red",
+        "fr_FR": "Kazuu: fondateur du projet\nCollecting: développeur principal de Citron et de Nextendo\nalye: développeur et designer principal\nJuanBrew: développeur principal de Prelude\nZara: développeur principal de Splatoon 3\nMars: mec super cool et testeur des serveurs\nAnakin_sky05: développeur Prelude et analyste des protocoles réseau",
+        "he_IL": "Kazuu: בעל הפרויקט\nCollecting: המפתח הראשי של Citron ו-Nextendo\nalye: מפתח ומעצב ראשי\nJuanBrew: המפתח הראשי של Prelude\nZara: המפתח הראשי של Splatoon 3\nMars: בחור סופר מגניב ובודק שרתים\nAnakin_sky05: מפתח Prelude ומנתח פרוטוקולי רשת",
+        "it_IT": "Kazuu: proprietario del progetto\nCollecting: sviluppatore principale di Citron e Nextendo\nalye: sviluppatore e designer principale\nJuanBrew: sviluppatore principale di Prelude\nZara: sviluppatore principale di Splatoon 3\nMars: tipo super simpatico e tester dei server\nAnakin_sky05: sviluppatore di Prelude e analista dei protocolli di rete",
+        "ja_JP": "Kazuu：プロジェクトオーナー\nCollecting：Citron と Nextendo のメイン開発者\nalye：開発者兼リードデザイナー\nJuanBrew：Prelude のメイン開発者\nZara：スプラトゥーン3 のメイン開発者\nMars：最高にクールな人兼サーバーテスター\nAnakin_sky05：Prelude 開発者兼ネットワークプロトコル解析担当",
+        "ko_KR": "Kazuu: 프로젝트 소유자\nCollecting: Citron 및 Nextendo 주요 개발자\nalye: 개발자 겸 수석 디자이너\nJuanBrew: Prelude 주요 개발자\nZara: 스플래툰 3 주요 개발자\nMars: 엄청 멋진 사람 겸 서버 테스터\nAnakin_sky05: Prelude 개발자 겸 네트워크 프로토콜 분석가",
+        "no_NO": "Kazuu: prosjekteier\nCollecting: hovedutvikler for Citron og Nextendo\nalye: utvikler og hoveddesigner\nJuanBrew: hovedutvikler for Prelude\nZara: hovedutvikler for Splatoon 3\nMars: superkul fyr og servertester\nAnakin_sky05: Prelude-utvikler og nettverksprotokollanalytiker",
+        "pl_PL": "Kazuu: właściciel projektu\nCollecting: główny programista Citron i Nextendo\nalye: programista i główny projektant\nJuanBrew: główny programista Prelude\nZara: główny programista Splatoon 3\nMars: super fajny gość i tester serwerów\nAnakin_sky05: programista Prelude i analityk protokołów sieciowych",
+        "pt_BR": "Kazuu: dono do projeto\nCollecting: desenvolvedor principal do Citron e do Nextendo\nalye: desenvolvedor e designer principal\nJuanBrew: desenvolvedor principal do Prelude\nZara: desenvolvedor principal de Splatoon 3\nMars: cara super legal e testador de servidores\nAnakin_sky05: desenvolvedor do Prelude e analista de protocolos de rede",
+        "ru_RU": "Kazuu: владелец проекта\nCollecting: главный разработчик Citron и Nextendo\nalye: разработчик и ведущий дизайнер\nJuanBrew: главный разработчик Prelude\nZara: главный разработчик Splatoon 3\nMars: очень крутой парень и тестировщик серверов\nAnakin_sky05: разработчик Prelude и аналитик сетевых протоколов",
+        "sv_SE": "Kazuu: projektägare\nCollecting: huvudutvecklare för Citron och Nextendo\nalye: utvecklare och huvuddesigner\nJuanBrew: huvudutvecklare för Prelude\nZara: huvudutvecklare för Splatoon 3\nMars: supercool kille och servertestare\nAnakin_sky05: Prelude-utvecklare och nätverksprotokollanalytiker",
+        "th_TH": "Kazuu: เจ้าของโปรเจกต์\nCollecting: นักพัฒนาหลักของ Citron และ Nextendo\nalye: นักพัฒนาและหัวหน้าดีไซเนอร์\nJuanBrew: นักพัฒนาหลักของ Prelude\nZara: นักพัฒนาหลักของ Splatoon 3\nMars: หนุ่มสุดเจ๋งและผู้ทดสอบเซิร์ฟเวอร์\nAnakin_sky05: นักพัฒนา Prelude และนักวิเคราะห์โปรโตคอลเครือข่าย",
+        "tr_TR": "Kazuu: proje sahibi\nCollecting: Citron ve Nextendo baş geliştiricisi\nalye: geliştirici ve baş tasarımcı\nJuanBrew: Prelude baş geliştiricisi\nZara: Splatoon 3 baş geliştiricisi\nMars: süper havalı biri ve sunucu test uzmanı\nAnakin_sky05: Prelude geliştiricisi ve ağ protokolü analisti",
+        "uk_UA": "Kazuu: власник проєкту\nCollecting: головний розробник Citron і Nextendo\nalye: розробник і провідний дизайнер\nJuanBrew: головний розробник Prelude\nZara: головний розробник Splatoon 3\nMars: дуже крутий хлопець і тестувальник серверів\nAnakin_sky05: розробник Prelude та аналітик мережевих протоколів",
+        "zh_CN": "Kazuu：项目负责人\nCollecting：Citron 与 Nextendo 主要开发者\nalye：开发者兼首席设计师\nJuanBrew：Prelude 主要开发者\nZara：斯普拉遁 3 主要开发者\nMars：超酷的人兼服务器测试员\nAnakin_sky05：Prelude 开发者兼网络协议分析师",
+        "zh_TW": "Kazuu：專案負責人\nCollecting：Citron 與 Nextendo 主要開發者\nalye：開發者兼首席設計師\nJuanBrew：Prelude 主要開發者\nZara：斯普拉遁 3 主要開發者\nMars：超酷的人兼伺服器測試員\nAnakin_sky05：Prelude 開發者兼網路協定分析師"
+      }
+    },
+    {
+      "ID": "AboutNextendoUrlTooltipMessage",
+      "Translations": {
+        "ar_SA": "موقع Nextendo Network",
+        "de_DE": "Website von Nextendo Network",
+        "el_GR": "Ιστότοπος του Nextendo Network",
+        "en_US": "Nextendo Network website",
+        "es_ES": "Sitio web de Nextendo Network",
+        "fr_FR": "Site de Nextendo Network",
+        "he_IL": "האתר של Nextendo Network",
+        "it_IT": "Sito web di Nextendo Network",
+        "ja_JP": "Nextendo Network のウェブサイト",
+        "ko_KR": "Nextendo Network 웹사이트",
+        "no_NO": "Nettstedet til Nextendo Network",
+        "pl_PL": "Strona Nextendo Network",
+        "pt_BR": "Site da Nextendo Network",
+        "ru_RU": "Сайт Nextendo Network",
+        "sv_SE": "Nextendo Networks webbplats",
+        "th_TH": "เว็บไซต์ Nextendo Network",
+        "tr_TR": "Nextendo Network web sitesi",
+        "uk_UA": "Сайт Nextendo Network",
+        "zh_CN": "Nextendo Network 网站",
+        "zh_TW": "Nextendo Network 網站"
+      }
     }
   ]
 }
