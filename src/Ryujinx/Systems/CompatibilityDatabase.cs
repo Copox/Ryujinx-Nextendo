@@ -62,6 +62,7 @@ namespace Ryujinx.Ava.Systems
                 : default(Optional<string>);
 
             GameName = ColStr(row[indices.GameName]);
+            _nextendo = new(ResolveNextendo);
 
             Labels = ColStr(row[indices.Labels]).Split(';');
             Status = ColStr(row[indices.Status]).ToLower() switch
@@ -84,6 +85,27 @@ namespace Ryujinx.Ava.Systems
 
         public string GameName { get; }
         public Optional<string> TitleId { get; }
+
+        // [Nextendo] Online support on Nextendo Network: the built-in title table first, then
+        // the titles of the signed service catalog (loaded once when the list opens).
+        public static System.Collections.Generic.Dictionary<string, string> NextendoCatalogVersions { get; set; }
+            = new(StringComparer.OrdinalIgnoreCase);
+
+        public bool IsNextendo => _nextendo.Value.Listed;
+        public string NextendoBadge => _nextendo.Value.Version.Length > 0 ? "Nextendo · v" + _nextendo.Value.Version : "Nextendo";
+
+        private readonly Lazy<(bool Listed, string Version)> _nextendo;
+
+        private (bool, string) ResolveNextendo()
+        {
+            if (!TitleId.HasValue)
+                return (false, string.Empty);
+            string id = TitleId.Value.ToLowerInvariant();
+            string builtIn = Ryujinx.Ava.Systems.AppLibrary.ApplicationData.NextendoVersionFor(id);
+            if (!string.IsNullOrEmpty(builtIn))
+                return (true, builtIn);
+            return NextendoCatalogVersions.TryGetValue(id, out string v) ? (true, v ?? string.Empty) : (false, string.Empty);
+        }
         public string[] Labels { get; }
         public LocaleKeys? Status { get; }
 

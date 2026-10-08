@@ -64,7 +64,10 @@ namespace Ryujinx.Ava.UI.Views.Main
 
             FaqMenuItem.Command =
                 SetupGuideMenuItem.Command =
-                    LdnGuideMenuItem.Command = Commands.Create<string>(OpenHelper.OpenUrl);
+                    LdnGuideMenuItem.Command =
+                        NextendoWikiMenuItem.Command =
+                            NextendoWebsiteMenuItem.Command =
+                                NextendoDiscordMenuItem.Command = Commands.Create<string>(OpenHelper.OpenUrl);
 
             WindowSize720PMenuItem.Command =
                 WindowSize1080PMenuItem.Command =

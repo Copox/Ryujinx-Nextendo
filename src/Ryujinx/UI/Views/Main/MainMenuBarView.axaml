@@ -302,6 +302,22 @@
                         Header="{ext:Locale MenuBarHelpFaq}"
                         Icon="{ext:Icon fa-solid fa-circle-info}"
                         CommandParameter="{x:Static common:SharedConstants.FaqWikiUrl}" />
+                    <Separator />
+                    <MenuItem
+                        Name="NextendoWikiMenuItem"
+                        Header="{ext:Locale Dialog_Nextendo_HelpNextendoWiki}"
+                        Icon="{ext:Icon fa-solid fa-book}"
+                        CommandParameter="https://wiki.nextendo.network/" />
+                    <MenuItem
+                        Name="NextendoWebsiteMenuItem"
+                        Header="{ext:Locale Dialog_Nextendo_HelpNextendoWebsite}"
+                        Icon="{ext:Icon fa-solid fa-globe}"
+                        CommandParameter="https://nextendo.network/" />
+                    <MenuItem
+                        Name="NextendoDiscordMenuItem"
+                        Header="{ext:Locale Dialog_Nextendo_HelpNextendoDiscord}"
+                        Icon="{ext:Icon fa-brands fa-discord}"
+                        CommandParameter="https://discord.gg/XPfeCMwnzQ" />
                 </MenuItem>
                 <Separator />
                 <MenuItem

@@ -363,7 +363,10 @@ namespace Ryujinx.Ava.Systems.AppLibrary
         // The single game version Nextendo Network currently supports for this title.
         // A different version can't reach the Nextendo servers (different NEX access key).
         [JsonIgnore]
-        public string NextendoCompatibleVersion => IdBaseString switch
+        public string NextendoCompatibleVersion => NextendoVersionFor(IdBaseString);
+
+        // Same table, reachable without an ApplicationData (the compatibility list uses it).
+        public static string NextendoVersionFor(string idBase) => idBase switch
         {
             // [Nextendo 2026-09-07] 4.0.0, publiee le 1er septembre avec le support Switch 2.
             // Version MAJEURE, donc on ne l'a pas montee a l'aveugle : verifiee par une COURSE

@@ -86,6 +86,16 @@
                         </Flyout>
                     </DropDownButton.Flyout>
                 </DropDownButton>
+                <ToggleButton
+                    Margin="10, 0, 0, 0"
+                    VerticalAlignment="Center"
+                    IsChecked="{Binding OnlyShowNextendoGames}"
+                    ToolTip.Tip="{ext:Locale Dialog_Nextendo_CompatNextendoGamesTooltip}">
+                    <StackPanel Orientation="Horizontal" Spacing="7">
+                        <Ellipse Width="9" Height="9" Fill="#FF3553" VerticalAlignment="Center" />
+                        <TextBlock Text="{ext:Locale Dialog_Nextendo_CompatNextendoGames}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </ToggleButton>
             </StackPanel>
             <CheckBox Grid.Column="3" Margin="15, 0, 155, 0" IsChecked="{Binding OnlyShowOwnedGames}">
                 <TextBlock Text="{ext:Locale CompatibilityListOnlyShowOwnedGames}" />
@@ -150,6 +160,16 @@
                         </Flyout>
                     </DropDownButton.Flyout>
                 </DropDownButton>
+                <ToggleButton
+                    Margin="10, 0, 0, 0"
+                    VerticalAlignment="Center"
+                    IsChecked="{Binding OnlyShowNextendoGames}"
+                    ToolTip.Tip="{ext:Locale Dialog_Nextendo_CompatNextendoGamesTooltip}">
+                    <StackPanel Orientation="Horizontal" Spacing="7">
+                        <Ellipse Width="9" Height="9" Fill="#FF3553" VerticalAlignment="Center" />
+                        <TextBlock Text="{ext:Locale Dialog_Nextendo_CompatNextendoGames}" VerticalAlignment="Center" />
+                    </StackPanel>
+                </ToggleButton>
             </StackPanel>
             <CheckBox Grid.Column="2" Margin="20, 0, 50, 0" IsChecked="{Binding OnlyShowOwnedGames}">
                 <TextBlock Text="{ext:Locale CompatibilityListOnlyShowOwnedGames}" />
@@ -246,31 +266,56 @@
                               ColumnDefinitions="Auto,Auto,Auto,*"
                               Background="Transparent"
                               ToolTip.Tip="{Binding  LocalizedLastUpdated}">
-                            <TextBlock Grid.Column="0"
-                                       Text="{Binding GameName}"
-                                       Width="525"
-                                       VerticalAlignment="Center"
-                                       HorizontalAlignment="Center"
-                                       TextWrapping="Wrap" />
+                            <StackPanel Grid.Column="0"
+                                        Width="525"
+                                        Orientation="Horizontal"
+                                        Spacing="10"
+                                        VerticalAlignment="Center">
+                                <TextBlock Text="{Binding GameName}"
+                                           MaxWidth="395"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center"
+                                           TextWrapping="Wrap" />
+                                <Border IsVisible="{Binding IsNextendo}"
+                                        Background="#33FF3553"
+                                        BorderBrush="#FF3553"
+                                        BorderThickness="1"
+                                        CornerRadius="9"
+                                        Padding="8, 2"
+                                        VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding NextendoBadge}"
+                                               FontSize="11"
+                                               FontWeight="SemiBold"
+                                               Foreground="#FF7A8E" />
+                                </Border>
+                            </StackPanel>
                             <TextBlock Grid.Column="1"
                                        Width="135"
                                        Padding="7, 0, 0, 0"
                                        FontFamily="{StaticResource JetBrainsMono}"
+                                       Opacity="0.7"
                                        Text="{Binding FormattedTitleId}"
                                        VerticalAlignment="Center"
                                        HorizontalAlignment="Center"
                                        TextWrapping="Wrap" />
-                            <TextBlock Grid.Column="2"
-                                       Padding="7, 0"
-                                       Text="{Binding LocalizedStatus}"
-                                       Width="100"
-                                       Background="Transparent"
-                                       ToolTip.Tip="{Binding LocalizedStatusDescription}"
-                                       Foreground="{Binding Status, Converter={x:Static helpers:PlayabilityStatusConverter.Shared}}"
-                                       VerticalAlignment="Center"
-                                       HorizontalAlignment="Center"
-                                       TextWrapping="NoWrap" />
+                            <Grid Grid.Column="2"
+                                  Width="100"
+                                  Background="Transparent"
+                                  ToolTip.Tip="{Binding LocalizedStatusDescription}"
+                                  VerticalAlignment="Center">
+                                <Grid HorizontalAlignment="Left" Margin="7, 0">
+                                    <Border CornerRadius="10"
+                                            Opacity="0.16"
+                                            Background="{Binding Status, Converter={x:Static helpers:PlayabilityStatusConverter.Shared}}" />
+                                    <TextBlock Margin="10, 3"
+                                               Text="{Binding LocalizedStatus}"
+                                               FontWeight="SemiBold"
+                                               Foreground="{Binding Status, Converter={x:Static helpers:PlayabilityStatusConverter.Shared}}"
+                                               TextWrapping="NoWrap" />
+                                </Grid>
+                            </Grid>
                             <TextBlock Grid.Column="3"
+                                       Opacity="0.8"
                                        Text="{Binding FormattedIssueLabels}"
                                        VerticalAlignment="Center"
                                        HorizontalAlignment="Left"
