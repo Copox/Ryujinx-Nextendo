@@ -236,9 +236,36 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         // IsSystemBufferSharingEnabled()
         public ResultCode IsSystemBufferSharingEnabled(ServiceCtx context)
         {
-            // NOTE: Service checks a private field and return an error if the SystemBufferSharing is disabled.
+            // System applets (the HOME Menu) draw into frame buffers shared with the system
+            // instead of allocating their own: answering "disabled" pushes them onto a fallback
+            // that takes several MiB out of their fixed memory budget.
+            bool systemApplet = context.Device.Processes.GetProcess(context.ClientProcessId)?.ProgramId is >= 0x0100000000001000 and <= 0x0100000000001FFF;
 
-            return ResultCode.NotImplemented;
+            if (!systemApplet || System.Environment.GetEnvironmentVariable("NEXTENDO_SHARED_FB") != "1")
+            {
+                return ResultCode.NotImplemented;
+            }
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(42)] // 4.0.0+
+        // GetSystemSharedLayerHandle() -> (nn::vi::fbshare::SharedBufferHandle, nn::vi::fbshare::SharedLayerHandle)
+        public ResultCode GetSystemSharedLayerHandle(ServiceCtx context)
+        {
+            context.ResponseData.Write(1UL); // shared buffer id
+            context.ResponseData.Write(1UL); // shared layer id
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(43)] // 5.0.0+
+        // GetSystemSharedBufferHandle() -> nn::vi::fbshare::SharedBufferHandle
+        public ResultCode GetSystemSharedBufferHandle(ServiceCtx context)
+        {
+            context.ResponseData.Write(1UL);
+
+            return ResultCode.Success;
         }
 
         [CommandCmif(44)] // 10.0.0+
