@@ -444,5 +444,24 @@ namespace Ryujinx.HLE.HOS.Services.Settings
 
             return ResultCode.Success;
         }
+        [CommandCmif(71)]
+        // GetSleepSettings() -> nn::settings::system::SleepSettings
+        public ResultCode GetSleepSettings(ServiceCtx context)
+        {
+            context.ResponseData.Write(0u); // Flags
+            context.ResponseData.Write(0);  // HandheldSleepPlan
+            context.ResponseData.Write(0);  // ConsoleSleepPlan
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(99)]
+        // GetBatteryPercentageFlag() -> bool
+        public ResultCode GetBatteryPercentageFlag(ServiceCtx context)
+        {
+            context.ResponseData.Write(false);
+
+            return ResultCode.Success;
+        }
     }
 }

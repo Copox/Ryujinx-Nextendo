@@ -149,6 +149,31 @@ namespace Ryujinx.HLE.HOS.Services.Ns
     class IContentManagementInterface : IpcService
     {
         public IContentManagementInterface() { }
+
+        [CommandCmif(43)]
+        // CheckSdCardMountStatus()
+        public ResultCode CheckSdCardMountStatus(ServiceCtx context)
+        {
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(47)]
+        // GetTotalSpaceSize(u8 storageId) -> s64
+        public ResultCode GetTotalSpaceSize(ServiceCtx context)
+        {
+            context.ResponseData.Write(32L * 1024 * 1024 * 1024);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(48)]
+        // GetFreeSpaceSize(u8 storageId) -> s64
+        public ResultCode GetFreeSpaceSize(ServiceCtx context)
+        {
+            context.ResponseData.Write(16L * 1024 * 1024 * 1024);
+
+            return ResultCode.Success;
+        }
     }
 
     class IDocumentInterface : IpcService

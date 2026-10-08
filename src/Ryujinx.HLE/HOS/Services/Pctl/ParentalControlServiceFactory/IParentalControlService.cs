@@ -8,6 +8,9 @@ namespace Ryujinx.HLE.HOS.Services.Pctl.ParentalControlServiceFactory
     class IParentalControlService : IpcService
     {
         private readonly ulong _pid;
+        private readonly StubEvent _synchronizationEvent;
+        private readonly StubEvent _playTimerEvent;
+        private readonly StubEvent _unlinkedEvent;
         private readonly int _permissionFlag;
         private ulong _titleId;
         private ParentalControlFlagValue _parentalControlFlag;
@@ -25,6 +28,9 @@ namespace Ryujinx.HLE.HOS.Services.Pctl.ParentalControlServiceFactory
         public IParentalControlService(ServiceCtx context, ulong pid, bool withInitialize, int permissionFlag)
         {
             _pid = pid;
+            _synchronizationEvent = new StubEvent(context);
+            _playTimerEvent = new StubEvent(context);
+            _unlinkedEvent = new StubEvent(context);
             _permissionFlag = permissionFlag;
 
             if (withInitialize)
@@ -262,5 +268,64 @@ namespace Ryujinx.HLE.HOS.Services.Pctl.ParentalControlServiceFactory
                 return ResultCode.Success;
             }
         }
+        // [Nextendo, HOME Menu work] Parental controls are off: nothing is restricted, no play
+        // timer runs, the console is not linked to the mobile app.
+
+        [CommandCmif(1006)]
+        // IsRestrictionTemporaryUnlocked() -> bool
+        public ResultCode IsRestrictionTemporaryUnlocked(ServiceCtx context)
+        {
+            context.ResponseData.Write(false);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(1432)]
+        // GetSynchronizationEvent() -> handle<copy>
+        public ResultCode GetSynchronizationEvent(ServiceCtx context) { _synchronizationEvent.ReplyWithHandle(context); return ResultCode.Success; }
+
+        [CommandCmif(1453)]
+        // IsPlayTimerEnabled() -> bool
+        public ResultCode IsPlayTimerEnabled(ServiceCtx context)
+        {
+            context.ResponseData.Write(false);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(1454)]
+        // GetPlayTimerRemainingTime() -> nn::TimeSpanType
+        public ResultCode GetPlayTimerRemainingTime(ServiceCtx context)
+        {
+            context.ResponseData.Write(0L);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(1455)]
+        // IsRestrictedByPlayTimer() -> bool
+        public ResultCode IsRestrictedByPlayTimer(ServiceCtx context)
+        {
+            context.ResponseData.Write(false);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(1457)]
+        // GetPlayTimerEventToRequestSuspension() -> handle<copy>
+        public ResultCode GetPlayTimerEventToRequestSuspension(ServiceCtx context) { _playTimerEvent.ReplyWithHandle(context); return ResultCode.Success; }
+
+        [CommandCmif(1458)]
+        // IsPlayTimerAlarmDisabled() -> bool
+        public ResultCode IsPlayTimerAlarmDisabled(ServiceCtx context)
+        {
+            context.ResponseData.Write(false);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(1473)]
+        // GetUnlinkedEvent() -> handle<copy>
+        public ResultCode GetUnlinkedEvent(ServiceCtx context) { _unlinkedEvent.ReplyWithHandle(context); return ResultCode.Success; }
     }
 }

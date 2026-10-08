@@ -228,5 +228,13 @@ namespace Ryujinx.HLE.HOS.Services.Nifm.StaticService
                 GeneralServiceManager.Remove(_generalServiceDetail.ClientId);
             }
         }
+        [CommandCmif(17)]
+        // IsEthernetCommunicationEnabled() -> bool
+        public ResultCode IsEthernetCommunicationEnabled(ServiceCtx context)
+        {
+            context.ResponseData.Write(false);
+
+            return ResultCode.Success;
+        }
     }
 }
