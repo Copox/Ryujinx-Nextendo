@@ -125,6 +125,8 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
 
                 Logger.Notice.Print(LogClass.ServiceAm, $"Applet {applet.AppletId} started as process {pid} (caller {applet.CallerPid}, mode {applet.Mode}).");
 
+                HomeMenuStatus.Set(applet.AppletId.ToString());
+
                 // The caller leaves the foreground, the applet takes it.
                 StateFor(system, applet.CallerPid).SetFocus(false);
                 applet.State.SetFocus(true);
@@ -170,6 +172,8 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
 
             applet.Exited = true;
             applet.OnExited?.Invoke();
+
+            HomeMenuStatus.Set(TryGet(applet.CallerPid, out RealApplet caller) ? caller.AppletId.ToString() : "");
 
             StateFor(system, applet.CallerPid).SetFocus(true);
         }

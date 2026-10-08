@@ -50,6 +50,7 @@ namespace Ryujinx.Ava.Systems
                     or "01006bd001e06000"                                       // Minecraft
                     or "01009b500007c000"                                       // ARMS
                     or "0100bde00862a000"                                       // Mario Tennis Aces
+                    or "0100000000001000"                                       // HOME Menu
                     => true,
                 _ => false,
             };
@@ -74,6 +75,7 @@ namespace Ryujinx.Ava.Systems
             {
                 // Extraites du dump du joueur (NCA de contrôle) et servies par nous.
                 "0100152000022000" => Base + "mk8dx.png",
+                "0100000000001000" => "https://nextendo.network/api/game-icon/0100000000001000.jpg", // HOME Menu
                 "0100c2500fc20000" => Base + "s3.png",
 
                 // Les quatre suivantes viennent du CDN de Discord lui-même : l'application

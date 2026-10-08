@@ -90,7 +90,28 @@ namespace Ryujinx.Ava.Systems
             // Même chose pour le circuit, repéré au chargement de ses fichiers : aucun rapport
             // de jeu ne l'annonce à ce moment-là.
             NextendoCourseWatcher.Change += SurChangementDeSalon;
+            Ryujinx.HLE.HOS.HomeMenuStatus.Changed += SurChangementDeSalon;
         }
+
+        /// <summary>[Nextendo] The HOME Menu is not a game: it gets its own wording.</summary>
+        private static bool EstMenuHome(string titleId) =>
+            string.Equals(titleId, Ryujinx.HLE.HOS.HomeMenuStatus.ProgramIdText, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>Second line while on the HOME Menu: the screen the player is on.</summary>
+        private static string EcranMenuHome() => Ryujinx.HLE.HOS.HomeMenuStatus.Applet switch
+        {
+            "MyPage" => "On their user page",
+            "PhotoViewer" => "Browsing the album",
+            "Controller" => "Setting up controllers",
+            "SoftwareKeyboard" => "Typing",
+            "PlayerSelect" => "Choosing a user",
+            "MiiEdit" => "Editing a Mii",
+            "LibAppletShop" => "On the eShop",
+            "LibAppletWeb" or "LibAppletOff" or "LibAppletWhitelisted" => "Reading a page",
+            "NetConnect" => "Connecting to the internet",
+            "Cabinet" => "Managing amiibo",
+            _ => "Browsing the menu",
+        };
 
         private static void SurChangementDeSalon()
         {
@@ -275,6 +296,12 @@ namespace Ryujinx.Ava.Systems
                 Timestamps = GuestAppStartedAt ??= Timestamps.Now
             };
 
+            if (EstMenuHome(tid))
+            {
+                presence.Details = "On the HOME Menu";
+                presence.Assets.LargeImageText = "Nintendo Switch HOME Menu";
+            }
+
             _etatJeu = "";
             _etatParDefaut = appMeta.LastPlayed.HasValue && appMeta.TimePlayed.TotalSeconds > 5
                 ? $"Total play time: {ValueFormatUtils.FormatTimeSpan(appMeta.TimePlayed)}"
@@ -341,6 +368,11 @@ namespace Ryujinx.Ava.Systems
             // a dit de lui-même. Tout est facultatif ; s'il ne reste rien, le temps de jeu.
             string compose = string.Join(" · ",
                 new[] { etatSalon, circuit, _etatJeu }.Where(m => !string.IsNullOrEmpty(m)));
+
+            if (EstMenuHome(_currentTitleId))
+            {
+                compose = EcranMenuHome();
+            }
 
             presence.State = TruncateToByteLength(compose.Length > 0 ? compose : _etatParDefaut);
         }
