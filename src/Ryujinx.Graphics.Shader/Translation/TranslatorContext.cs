@@ -297,6 +297,7 @@ namespace Ryujinx.Graphics.Shader.Translation
                         Options.TargetApi,
                         Options.TargetLanguage,
                         Definitions.Stage,
+                        isMainFunction: i == 0,
                         ref usedFeatures);
 
                     Optimizer.RunPass(context);
@@ -345,6 +346,7 @@ namespace Ryujinx.Graphics.Shader.Translation
                 resourceManager.GetStorageBufferDescriptors(),
                 resourceManager.GetTextureDescriptors(),
                 resourceManager.GetImageDescriptors(),
+                resourceManager.GetPointerStoreDescriptors(),
                 originalDefinitions.Stage,
                 geometryVerticesPerPrimitive,
                 originalDefinitions.MaxOutputVertices,
