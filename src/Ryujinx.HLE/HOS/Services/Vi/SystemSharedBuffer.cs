@@ -368,6 +368,11 @@ namespace Ryujinx.HLE.HOS.Services.Vi
                 crop = new Rect(Width, Height);
             }
 
+            if (_lastPresentedSlot < 0)
+            {
+                Ryujinx.HLE.HOS.Services.Am.AppletAE.RealAppletManager.OnFirstFrame(Pid);
+            }
+
             _lastPresentedSlot = slot;
 
             IGraphicBufferProducer.QueueBufferInput input = new()

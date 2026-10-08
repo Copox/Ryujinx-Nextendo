@@ -399,7 +399,7 @@ namespace Ryujinx.HLE.HOS.Services.Hid
 
             if (state.Buttons != 0 && state.Buttons != _lastTraced)
             {
-                Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.Hid, $"[pad] {state.PlayerId} {state.Buttons}: style={currentNpad.StyleSet} supported={SupportedStyleSets} active={Active}");
+                Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.Hid, $"[pad] {state.PlayerId} {state.Buttons}: style={currentNpad.StyleSet} supported={SupportedStyleSets} active={Active} fullkey#={currentNpad.FullKey.GetCurrentEntryRef().SamplingNumber} sysext#={currentNpad.SystemExt.GetCurrentEntryRef().SamplingNumber} handheld#={currentNpad.Handheld.GetCurrentEntryRef().SamplingNumber} attr={currentNpad.FullKey.GetCurrentEntryRef().Attributes} assign={currentNpad.JoyAssignmentMode} dev={currentNpad.DeviceType}");
             }
 
             _lastTraced = state.Buttons;

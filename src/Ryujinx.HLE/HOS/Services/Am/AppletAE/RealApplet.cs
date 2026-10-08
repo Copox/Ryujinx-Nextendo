@@ -32,6 +32,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
         public KEvent PopInteractiveInDataEvent;
 
         public volatile bool Exited;
+        public bool FocusGiven;
         public Action OnExited;
     }
 
@@ -307,6 +308,32 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
 
         public static bool TryGet(ulong pid, out RealApplet applet) => _applets.TryGetValue(pid, out applet);
 
+        private static void GiveFocus(RealApplet applet)
+        {
+            lock (applet)
+            {
+                if (!applet.FocusGiven && !applet.Exited)
+                {
+                    applet.FocusGiven = true;
+                    applet.State.TakeForeground();
+                }
+            }
+        }
+
+        // An applet presented its first frame: its main loop runs, it can take the foreground.
+        public static void OnFirstFrame(ulong pid)
+        {
+            if (_applets.TryGetValue(pid, out RealApplet applet) && !applet.FocusGiven)
+            {
+                new Thread(() =>
+                {
+                    Thread.Sleep(250);
+                    GiveFocus(applet);
+                })
+                { IsBackground = true, Name = "HLE.RealApplet.Focus" }.Start();
+            }
+        }
+
         // The message queue and focus state of a process: its own when it is a real library
         // applet, the system-wide one otherwise.
         public static AppletStateMgr StateFor(Horizon system, ulong pid)
@@ -349,13 +376,37 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
 
                 HomeMenuStatus.Set(applet.AppletId.ToString());
 
-                // The caller leaves the foreground, the applet takes it.
+                // The caller leaves the foreground. The applet is told it has it once it shows
+                // its first frame (see OnFirstFrame): told at once, it reads the news while it
+                // is still setting itself up, drops it, and then ignores every button.
                 StateFor(system, applet.CallerPid).SetFocus(false);
-                applet.State.SetFocus(true);
+
+                System.Diagnostics.Stopwatch running = System.Diagnostics.Stopwatch.StartNew();
+                bool dumped = false;
 
                 while (system.KernelContext.Processes.TryGetValue(pid, out KProcess process) &&
                        process.State != ProcessState.Exited && !applet.Exited)
                 {
+                    if (!dumped && int.TryParse(Environment.GetEnvironmentVariable("NEXTENDO_QL_DUMP_MS"), out int dumpAt) && running.ElapsedMilliseconds > dumpAt)
+                    {
+                        // Debug aid: what every thread of the applet is doing at that moment.
+                        dumped = true;
+
+                        try
+                        {
+                            Logger.Notice.Print(LogClass.ServiceAm, "[dump] " + process.Debugger.GetMinidump());
+                        }
+                        catch (Exception e)
+                        {
+                            Logger.Notice.Print(LogClass.ServiceAm, "[dump] failed: " + e.Message);
+                        }
+                    }
+
+                    if (!applet.FocusGiven && running.ElapsedMilliseconds > 4000)
+                    {
+                        GiveFocus(applet); // an applet without a screen of its own
+                    }
+
                     Thread.Sleep(30);
                 }
 

@@ -477,7 +477,7 @@ namespace Ryujinx.HLE.HOS.Services.Vi.RootService
 
             if (_vsyncEventHandle == 0)
             {
-                if (context.Process.HandleTable.GenerateHandle(context.Device.System.VsyncEvent.ReadableEvent, out _vsyncEventHandle) != Result.Success)
+                if (context.Process.HandleTable.GenerateHandle(context.Device.System.CreateClientVsyncEvent().ReadableEvent, out _vsyncEventHandle) != Result.Success)
                 {
                     throw new InvalidOperationException("Out of handles!");
                 }

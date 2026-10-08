@@ -2902,6 +2902,9 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
             return WaitSynchronization(out handleIndex, ReadOnlySpan<int>.Empty, timeout);
         }
 
+        private static readonly bool _traceWaits = System.Environment.GetEnvironmentVariable("NEXTENDO_IPC_TRACE") == "1";
+        private static readonly System.Collections.Generic.HashSet<int> _tracedWaits = [];
+
         public Result WaitSynchronization(out int handleIndex, ReadOnlySpan<int> handles, long timeout)
         {
             handleIndex = 0;
@@ -2931,6 +2934,11 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
                     }
 
                     syncObjs[processedHandles] = syncObj;
+
+                    if (_traceWaits && handles.Length <= 2 && currentThread.HostThread.Name is string waiter && waiter.Contains("InputQueue") && _tracedWaits.Add(System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(syncObj)))
+                    {
+                        Logger.Notice.Print(LogClass.KernelSvc, $"[waitobj] {waiter} waits on {syncObj.GetType().Name}#{System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(syncObj):X} (handle 0x{handles[processedHandles]:X})");
+                    }
 
                     syncObj.IncrementReferenceCount();
                 }

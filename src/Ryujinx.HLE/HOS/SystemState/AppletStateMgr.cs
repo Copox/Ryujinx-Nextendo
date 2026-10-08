@@ -32,6 +32,32 @@ namespace Ryujinx.HLE.HOS.SystemState
             IndirectLayerHandles = new IdDictionary();
         }
 
+        // [Nextendo, HOME Menu work] Taking the foreground the way the system announces it to
+        // an applet: "you come to the foreground" first, "your focus changed" after.
+        public void TakeForeground()
+        {
+            string order = System.Environment.GetEnvironmentVariable("NEXTENDO_QL_FOCUS_ORDER") ?? "fg-first";
+
+            FocusState = FocusState.InFocus;
+
+            if (order == "fg-first")
+            {
+                Messages.Enqueue(AppletMessage.ChangeIntoForeground);
+                Messages.Enqueue(AppletMessage.FocusStateChanged);
+            }
+            else if (order == "focus-only")
+            {
+                Messages.Enqueue(AppletMessage.FocusStateChanged);
+            }
+            else
+            {
+                Messages.Enqueue(AppletMessage.FocusStateChanged);
+                Messages.Enqueue(AppletMessage.ChangeIntoForeground);
+            }
+
+            MessageEvent.ReadableEvent.Signal();
+        }
+
         public void SetFocus(bool isFocused)
         {
             FocusState = isFocused ? FocusState.InFocus : FocusState.OutOfFocus;

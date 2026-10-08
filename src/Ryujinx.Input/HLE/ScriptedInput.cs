@@ -11,11 +11,12 @@ namespace Ryujinx.Input.HLE
     // at the keyboard. NEXTENDO_INPUT_SCRIPT="18:A;20.5:DpadUp;22:A;40:Home" (seconds since the
     // first input update, then a ControllerKeys name, or Home for the console's HOME button).
     // Each press is held for a fifth of a second.
-    static class ScriptedInput
+    public static class ScriptedInput
     {
         private const double HoldSeconds = 0.2;
 
         private static readonly List<double> _homeTimes = [];
+        private static readonly List<(double Time, uint X, uint Y)> _touches = [];
         private static readonly List<(double Time, ControllerKeys Keys, double Hold)> _steps = Load();
         private static readonly Stopwatch _clock = new();
 
@@ -40,7 +41,13 @@ namespace Ryujinx.Input.HLE
                     continue;
                 }
 
-                if (parts[1].Equals("Home", StringComparison.OrdinalIgnoreCase))
+                if (parts[1].Equals("Touch", StringComparison.OrdinalIgnoreCase) && parts.Length == 4 &&
+                    uint.TryParse(parts[2], out uint touchX) && uint.TryParse(parts[3], out uint touchY))
+                {
+                    // "t:Touch:x:y": a tap on the 1280x720 screen.
+                    _touches.Add((time, touchX, touchY));
+                }
+                else if (parts[1].Equals("Home", StringComparison.OrdinalIgnoreCase))
                 {
                     _homeTimes.Add(time);
                 }
@@ -54,6 +61,32 @@ namespace Ryujinx.Input.HLE
             }
 
             return steps;
+        }
+
+        // True while a scripted tap is down.
+        public static bool Touch(out uint x, out uint y)
+        {
+            x = y = 0;
+
+            if (_touches.Count == 0 || !_clock.IsRunning)
+            {
+                return false;
+            }
+
+            double now = _clock.Elapsed.TotalSeconds;
+
+            foreach ((double time, uint touchX, uint touchY) in _touches)
+            {
+                if (now >= time && now < time + HoldSeconds)
+                {
+                    x = touchX;
+                    y = touchY;
+
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         // True once for each "Home" step of the script whose time has come.

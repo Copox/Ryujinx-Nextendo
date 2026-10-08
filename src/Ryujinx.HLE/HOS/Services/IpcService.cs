@@ -157,6 +157,14 @@ namespace Ryujinx.HLE.HOS.Services
                     _parameters[0] = context;
                     
                     result = (ResultCode)processRequest.Invoke(service, _parameters);
+
+                    if (_ipcTrace && context.Response.HandleDesc?.ToCopy is { Length: > 0 } copied)
+                    {
+                        // Which kernel object a returned handle stands for, to match it with a later wait.
+                        object given = context.Process.HandleTable.GetObject<Ryujinx.HLE.HOS.Kernel.Common.KAutoObject>(copied[0]);
+
+                        Logger.Notice.Print(LogClass.KernelIpc, $"[handle] {service.GetType().Name} {commandId} -> {given?.GetType().Name}#{(given == null ? 0 : System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(given)):X}");
+                    }
                                         if (_ipcTrace && result != ResultCode.Success)
                     
                         Logger.Notice.Print(LogClass.KernelIpc, $"[ipc]   -> result 0x{(int)result:X} from {service.GetType().Name} {commandId}");

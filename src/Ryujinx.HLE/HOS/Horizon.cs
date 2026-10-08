@@ -97,6 +97,21 @@ namespace Ryujinx.HLE.HOS
 
         internal KEvent VsyncEvent { get; private set; }
 
+        // [Nextendo, HOME Menu work] One vertical sync event per display client. Programs wait
+        // on theirs and clear it as they wake: with a single shared event, two programs running
+        // side by side (the HOME Menu and an applet) steal each other's wake-ups, and the one
+        // that keeps losing never runs the thread that waits on it (its input thread).
+        private readonly System.Collections.Concurrent.ConcurrentBag<KEvent> _clientVsyncEvents = [];
+
+        internal KEvent CreateClientVsyncEvent()
+        {
+            KEvent clientEvent = new(KernelContext);
+
+            _clientVsyncEvents.Add(clientEvent);
+
+            return clientEvent;
+        }
+
         internal KEvent DisplayResolutionChangeEvent { get; private set; }
 
         public KeySet KeySet => Device.FileSystem.KeySet;
@@ -491,6 +506,11 @@ namespace Ryujinx.HLE.HOS
         public void SignalVsync()
         {
             VsyncEvent.ReadableEvent.Signal();
+
+            foreach (KEvent clientEvent in _clientVsyncEvents)
+            {
+                clientEvent.ReadableEvent.Signal();
+            }
         }
 
         /// <summary>
