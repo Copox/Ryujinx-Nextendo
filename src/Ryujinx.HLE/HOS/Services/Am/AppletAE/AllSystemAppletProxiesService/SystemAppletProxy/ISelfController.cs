@@ -239,7 +239,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             // System applets (the HOME Menu) draw into frame buffers shared with the system
             // instead of allocating their own: answering "disabled" pushes them onto a fallback
             // that takes several MiB out of their fixed memory budget.
-            bool systemApplet = context.Device.Processes.GetProcess(context.ClientProcessId)?.ProgramId is >= 0x0100000000001000 and <= 0x0100000000001FFF;
+            bool systemApplet = context.Device.Processes.GetProcess(_pid)?.ProgramId is >= 0x0100000000001000 and <= 0x0100000000001FFF;
 
             if (!systemApplet || System.Environment.GetEnvironmentVariable("NEXTENDO_SHARED_FB") != "1")
             {
@@ -253,13 +253,15 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         // GetSystemSharedLayerHandle() -> (nn::vi::fbshare::SharedBufferHandle, nn::vi::fbshare::SharedLayerHandle)
         public ResultCode GetSystemSharedLayerHandle(ServiceCtx context)
         {
-            if (!Ryujinx.HLE.HOS.Services.Vi.SystemSharedBuffer.EnsureSession(context, _pid))
+            Ryujinx.HLE.HOS.Services.Vi.SystemSharedBuffer shared = Ryujinx.HLE.HOS.Services.Vi.SystemSharedBuffer.EnsureSession(context, _pid);
+
+            if (shared == null)
             {
                 return ResultCode.NotImplemented;
             }
 
-            context.ResponseData.Write(1UL); // shared buffer id
-            context.ResponseData.Write((ulong)Ryujinx.HLE.HOS.Services.Vi.SystemSharedBuffer.LayerId);
+            context.ResponseData.Write(shared.BufferHandle);
+            context.ResponseData.Write((ulong)shared.LayerId);
 
             return ResultCode.Success;
         }
@@ -268,7 +270,14 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         // GetSystemSharedBufferHandle() -> nn::vi::fbshare::SharedBufferHandle
         public ResultCode GetSystemSharedBufferHandle(ServiceCtx context)
         {
-            context.ResponseData.Write(1UL);
+            Ryujinx.HLE.HOS.Services.Vi.SystemSharedBuffer shared = Ryujinx.HLE.HOS.Services.Vi.SystemSharedBuffer.EnsureSession(context, _pid);
+
+            if (shared == null)
+            {
+                return ResultCode.NotImplemented;
+            }
+
+            context.ResponseData.Write(shared.BufferHandle);
 
             return ResultCode.Success;
         }

@@ -12,6 +12,8 @@ namespace Ryujinx.Horizon.Sdk.Sf.Cmif
     {
         private const uint MaxCmifVersion = 1;
 
+        private static readonly HipcCommandProcessor _stubProcessor = new([new CommandArg(CommandArgType.OutArgument, 0x10, 8)]);
+
         public abstract Result ProcessMessage(ref ServiceDispatchContext context, ReadOnlySpan<byte> inRawData);
 
         protected static Result ProcessMessageImpl(ref ServiceDispatchContext context, ReadOnlySpan<byte> inRawData, IReadOnlyDictionary<int, CommandHandler> entries, string objectName)
@@ -44,6 +46,7 @@ namespace Ryujinx.Horizon.Sdk.Sf.Cmif
                     // If ignore missing services is enabled, just pretend that everything is fine.
                     PrepareForStubReply(ref context, out Span<byte> outRawData);
                     CommandHandler.GetCmifOutHeaderPointer(ref outHeader, ref outRawData);
+                    outRawData.Clear();
                     outHeader[0] = new CmifOutHeader { Magic = CmifMessage.CmifOutHeaderMagic, Result = Result.Success };
 
                     Logger.Warning?.Print(LogClass.Service, $"Missing service {objectName} (command ID: {commandId}) ignored [in={inMessageRawData.Length}]");
@@ -87,6 +90,17 @@ namespace Ryujinx.Horizon.Sdk.Sf.Cmif
 
         private static void PrepareForStubReply(scoped ref ServiceDispatchContext context, out Span<byte> outRawData)
         {
+            // Through a domain the reply carries a domain header in front of the CMIF one: let
+            // the session's processor lay the message out, as it does for a real command. The
+            // stand-in command returns 0x10 bytes of zeroes.
+            if (context.Processor != null)
+            {
+                context.Processor.SetImplementationProcessor(_stubProcessor);
+                context.Processor.PrepareForReply(ref context, out outRawData, context.Processor.GetRuntimeMetadata());
+
+                return;
+            }
+
             HipcMessageData response = HipcMessage.WriteResponse(context.OutMessageBuffer, 0, 0x20 / sizeof(uint), 0, 0);
             outRawData = MemoryMarshal.Cast<uint, byte>(response.DataWords);
         }

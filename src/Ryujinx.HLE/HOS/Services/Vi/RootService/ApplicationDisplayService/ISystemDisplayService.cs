@@ -80,19 +80,36 @@ namespace Ryujinx.HLE.HOS.Services.Vi.RootService.ApplicationDisplayService
         // [Nextendo, HOME Menu work] nn::vi::fbshare, see SystemSharedBuffer.
 
         private int _acquirableEventHandle;
+        private SystemSharedBuffer _shared;
+
+        // The session of the applet on the other end: every command names it by its buffer or
+        // layer handle, first in the request.
+        private SystemSharedBuffer Shared(ServiceCtx context)
+        {
+            if (_shared == null)
+            {
+                long position = context.RequestData.BaseStream.Position;
+
+                _shared = SystemSharedBuffer.Find(context.RequestData.ReadUInt64());
+
+                context.RequestData.BaseStream.Position = position;
+            }
+
+            return _shared;
+        }
 
         [CommandCmif(8225)] // 4.0.0+
         // GetSharedBufferMemoryHandleId(u64 bufferId, nn::applet::AppletResourceUserId) -> (s32 nvmapHandle, u64 size, buffer<SharedMemoryPoolLayout, 0x16>)
         public ResultCode GetSharedBufferMemoryHandleId(ServiceCtx context)
         {
-            if (!SystemSharedBuffer.HasSession)
+            if (Shared(context) == null)
             {
                 return ResultCode.InvalidValue;
             }
 
             SystemSharedBuffer.WriteLayout(context, context.Request.ReceiveBuff[0].Position);
 
-            context.ResponseData.Write(SystemSharedBuffer.NvMapHandle);
+            context.ResponseData.Write(_shared.NvMapHandle);
             context.ResponseData.Write(0);
             context.ResponseData.Write((ulong)SystemSharedBuffer.PoolSize);
 
@@ -103,7 +120,7 @@ namespace Ryujinx.HLE.HOS.Services.Vi.RootService.ApplicationDisplayService
         // OpenSharedLayer(u64 layerId)
         public ResultCode OpenSharedLayer(ServiceCtx context)
         {
-            return SystemSharedBuffer.HasSession ? ResultCode.Success : ResultCode.InvalidValue;
+            return Shared(context) != null ? ResultCode.Success : ResultCode.InvalidValue;
         }
 
         [CommandCmif(8251)] // 4.0.0+
@@ -117,7 +134,7 @@ namespace Ryujinx.HLE.HOS.Services.Vi.RootService.ApplicationDisplayService
         // ConnectSharedLayer(u64 layerId)
         public ResultCode ConnectSharedLayer(ServiceCtx context)
         {
-            SystemSharedBuffer.Connect(context);
+            Shared(context)?.Connect(context);
 
             return ResultCode.Success;
         }
@@ -126,7 +143,7 @@ namespace Ryujinx.HLE.HOS.Services.Vi.RootService.ApplicationDisplayService
         // DisconnectSharedLayer(u64 layerId)
         public ResultCode DisconnectSharedLayer(ServiceCtx context)
         {
-            SystemSharedBuffer.Disconnect(context);
+            Shared(context)?.Disconnect(context);
 
             return ResultCode.Success;
         }
@@ -135,7 +152,7 @@ namespace Ryujinx.HLE.HOS.Services.Vi.RootService.ApplicationDisplayService
         // AcquireSharedFrameBuffer(u64 layerId) -> (android::Fence, s32[4] slots, s64 targetSlot)
         public ResultCode AcquireSharedFrameBuffer(ServiceCtx context)
         {
-            SurfaceFlinger.Status status = SystemSharedBuffer.Acquire(context, out int slot, out SurfaceFlinger.AndroidFence fence);
+            SurfaceFlinger.Status status = Shared(context).Acquire(context, out int slot, out SurfaceFlinger.AndroidFence fence);
 
             Logger.Notice.Print(LogClass.ServiceVi, $"[fbshare] acquire -> {status} slot={slot} fences={fence.FenceCount}");
 
@@ -179,7 +196,7 @@ namespace Ryujinx.HLE.HOS.Services.Vi.RootService.ApplicationDisplayService
 
             int slot = (int)context.RequestData.ReadInt64();
 
-            SurfaceFlinger.Status status = SystemSharedBuffer.Present(context, slot, crop, transform, swapInterval, fence);
+            SurfaceFlinger.Status status = _shared.Present(context, slot, crop, transform, swapInterval, fence);
 
             Logger.Notice.Print(LogClass.ServiceVi, $"[fbshare] present slot={slot} crop=({crop.Left},{crop.Top},{crop.Right},{crop.Bottom}) transform={transform} swap={swapInterval} fences={fence.FenceCount} f0=({fence.NvFences[0].Id},{fence.NvFences[0].Value}) raw={System.Convert.ToHexString(context.RequestData.BaseStream is System.IO.MemoryStream ms ? ms.ToArray() : System.Array.Empty<byte>())} -> {status}");
 
@@ -195,14 +212,14 @@ namespace Ryujinx.HLE.HOS.Services.Vi.RootService.ApplicationDisplayService
         // GetSharedFrameBufferAcquirableEvent(u64 layerId) -> handle<copy>
         public ResultCode GetSharedFrameBufferAcquirableEvent(ServiceCtx context)
         {
-            if (!SystemSharedBuffer.HasSession)
+            if (Shared(context) == null)
             {
                 return ResultCode.InvalidValue;
             }
 
             if (_acquirableEventHandle == 0)
             {
-                if (context.Process.HandleTable.GenerateHandle(SystemSharedBuffer.AcquirableEvent(context), out _acquirableEventHandle) != Ryujinx.Horizon.Common.Result.Success)
+                if (context.Process.HandleTable.GenerateHandle(_shared.AcquirableEvent(context), out _acquirableEventHandle) != Ryujinx.Horizon.Common.Result.Success)
                 {
                     throw new System.InvalidOperationException("Out of handles!");
                 }
@@ -226,7 +243,7 @@ namespace Ryujinx.HLE.HOS.Services.Vi.RootService.ApplicationDisplayService
         {
             context.RequestData.ReadUInt64();
 
-            SystemSharedBuffer.Cancel(context, (int)context.RequestData.ReadInt64());
+            _shared?.Cancel(context, (int)context.RequestData.ReadInt64());
 
             return ResultCode.Success;
         }

@@ -504,6 +504,13 @@ namespace Ryujinx.HLE.Loaders.Processes
                 meta.MainThreadStackSize,
                 device.System.State.DesiredTitleLanguage);
 
+            // [Nextendo, HOME Menu work] arp holds the properties of applications, and has room
+            // for two: library applets (0100000000001001 and up) are not registered there.
+            if (programId is > 0x0100000000001000 and <= 0x0100000000001FFF)
+            {
+                return processResult;
+            }
+
             // Register everything in arp service.
             device.System.ServiceTable.ArpWriter.AcquireRegistrar(out IRegistrar registrar);
             registrar.SetApplicationControlProperty(MemoryMarshal.Cast<byte, Horizon.Sdk.Ns.ApplicationControlProperty>(applicationControlProperties.ByteSpan)[0]);

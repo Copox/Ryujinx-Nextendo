@@ -50,5 +50,23 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
         {
             return _managerServer.LoadIdTokenCache(context);
         }
+        [CommandCmif(200)]
+        // IsRegistered() -> bool
+        public ResultCode IsRegistered(ServiceCtx context)
+        {
+            context.ResponseData.Write(true);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(250)]
+        // IsLinkedWithNintendoAccount() -> bool
+        public ResultCode IsLinkedWithNintendoAccount(ServiceCtx context)
+        {
+            // The local user is the Nextendo account the emulator is signed in with.
+            context.ResponseData.Write(true);
+
+            return ResultCode.Success;
+        }
     }
 }

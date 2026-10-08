@@ -443,6 +443,8 @@ namespace Ryujinx.Input.HLE
                     hleKeyboardInput = NpadController.GetHLEKeyboardInput(_keyboardDriver);
                 }
 
+                ScriptedInput.Apply(_hleInputStates);
+
                 _device.Hid.Npads.Update(_hleInputStates);
                 _device.Hid.Npads.UpdateSixAxis(_hleMotionStates);
 

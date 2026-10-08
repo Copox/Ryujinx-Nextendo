@@ -12,6 +12,7 @@ namespace Ryujinx.HLE.HOS.Services
     {
         private readonly KEvent _event;
         private int _handle;
+        private int _writableHandle;
 
         public StubEvent(ServiceCtx context)
         {
@@ -19,6 +20,21 @@ namespace Ryujinx.HLE.HOS.Services
         }
 
         public void Signal() => _event.ReadableEvent.Signal();
+
+        public ResultCode ReplyWithWritableHandle(ServiceCtx context)
+        {
+            if (_writableHandle == 0)
+            {
+                if (context.Process.HandleTable.GenerateHandle(_event.WritableEvent, out _writableHandle) != Result.Success)
+                {
+                    throw new InvalidOperationException("Out of handles!");
+                }
+            }
+
+            context.Response.HandleDesc = IpcHandleDesc.MakeCopy(_writableHandle);
+
+            return ResultCode.Success;
+        }
 
         public ResultCode ReplyWithHandle(ServiceCtx context)
         {

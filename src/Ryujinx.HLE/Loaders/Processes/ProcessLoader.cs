@@ -221,6 +221,30 @@ namespace Ryujinx.HLE.Loaders.Processes
             return false;
         }
 
+        // [Nextendo, HOME Menu work] A library applet started by a running system applet: a
+        // process next to the active one, which stays the active one.
+        public ulong LoadApplet(string path, System.Action<ulong> beforeStart)
+        {
+            FileStream file = new(path, FileMode.Open, FileAccess.Read);
+            Nca nca = new(_device.Configuration.VirtualFileSystem.KeySet, file.AsStorage(false));
+
+            ProcessResult processResult = nca.Load(_device, null, null);
+
+            if (processResult.ProcessId != 0 && _processesByPid.TryAdd(processResult.ProcessId, processResult))
+            {
+                beforeStart?.Invoke(processResult.ProcessId);
+
+                if (processResult.Start(_device))
+                {
+                    return processResult.ProcessId;
+                }
+
+                _processesByPid.TryRemove(processResult.ProcessId, out _);
+            }
+
+            return 0;
+        }
+
         public bool LoadUnpackedNca(string exeFsDirPath, string romFsPath = null)
         {
             ProcessResult processResult = new LocalFileSystem(exeFsDirPath).Load(_device, romFsPath);

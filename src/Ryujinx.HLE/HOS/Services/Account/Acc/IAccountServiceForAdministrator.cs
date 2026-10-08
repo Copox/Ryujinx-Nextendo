@@ -125,5 +125,58 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc
 
             return ResultCode.Success;
         }
+        [CommandCmif(100)]
+        // GetUserRegistrationNotifier() -> object<nn::account::detail::INotifier>
+        public ResultCode GetUserRegistrationNotifier(ServiceCtx context)
+        {
+            MakeObject(context, new INotifier(context));
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(101)]
+        // GetUserStateChangeNotifier() -> object<nn::account::detail::INotifier>
+        public ResultCode GetUserStateChangeNotifier(ServiceCtx context)
+        {
+            MakeObject(context, new INotifier(context));
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(103)]
+        // GetBaasUserAvailabilityChangeNotifier() -> object<nn::account::detail::INotifier>
+        public ResultCode GetBaasUserAvailabilityChangeNotifier(ServiceCtx context)
+        {
+            MakeObject(context, new INotifier(context));
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(104)]
+        // GetProfileUpdateNotifier() -> object<nn::account::detail::INotifier>
+        public ResultCode GetProfileUpdateNotifier(ServiceCtx context)
+        {
+            MakeObject(context, new INotifier(context));
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(250)]
+        // GetBaasAccountAdministrator(nn::account::Uid) -> object<nn::account::baas::IAdministrator>
+        public ResultCode GetBaasAccountAdministrator(ServiceCtx context)
+        {
+            ResultCode resultCode = _applicationServiceServer.CheckUserId(context, out UserId userId);
+
+            if (resultCode != ResultCode.Success)
+            {
+                return resultCode;
+            }
+
+            // IAdministrator starts with the commands of IManagerForSystemService; the HOME Menu
+            // opens it when the user page is entered.
+            MakeObject(context, new IManagerForSystemService(userId));
+
+            return ResultCode.Success;
+        }
     }
 }

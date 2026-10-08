@@ -1,24 +1,28 @@
 using Ryujinx.Common.Logging;
+using Ryujinx.HLE.HOS.Kernel.Memory;
+using Ryujinx.HLE.HOS.Kernel.Process;
 using Ryujinx.HLE.HOS.Kernel.Threading;
 using Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvMap;
 using Ryujinx.HLE.HOS.Services.SurfaceFlinger;
 using Ryujinx.HLE.HOS.Services.SurfaceFlinger.Types;
 using Ryujinx.Horizon.Common;
+using System.Collections.Generic;
 
 namespace Ryujinx.HLE.HOS.Services.Vi
 {
-    // nn::vi::fbshare: the frame buffers a system applet (the HOME Menu) draws into belong to
-    // the system. It hands the applet an nvmap handle on a pool of 1280x720 buffers, a layout
-    // of that pool and a layer; the applet acquires a buffer, renders, presents it.
+    // nn::vi::fbshare: the frame buffers a system applet (the HOME Menu, a library applet)
+    // draws into belong to the system. It hands the applet an nvmap handle on a pool of
+    // 1280x720 buffers, a layout of that pool and a layer; the applet acquires a buffer,
+    // renders, presents it.
     //
-    // One session, for the one system applet that can run. The pool is mapped in the applet
-    // with its heap (it never sizes that heap itself), the layer is an ordinary layer whose
-    // buffer queue is driven from here instead of through the binder.
-    static class SystemSharedBuffer
+    // One session per applet process. The pool is mapped in the applet's own address space
+    // (outside its heap, which it is free to resize), the layer is an ordinary layer whose
+    // buffer queue is driven from here instead of through the binder. The applet that opened
+    // its session last is the one on screen; when it goes, the one before it comes back.
+    class SystemSharedBuffer
     {
         public const int Width = 1280;
         public const int Height = 720;
-
         private const int BlockLinearHeight = 768;
         private const int BytesPerPixel = 4;
         private const int SlotsCount = 7;
@@ -26,58 +30,92 @@ namespace Ryujinx.HLE.HOS.Services.Vi
 
         public const uint SlotSize = Width * BlockLinearHeight * BytesPerPixel; // 0x3C0000
         public const uint PoolSize = SlotSize * SlotsCount;                    // 0x1A40000
-
         public const int LayoutSize = 0x188;
 
+        private const ulong BufferHandleBase = 0x100000000;
+
         private static readonly object _lock = new();
+        private static readonly Dictionary<ulong, SystemSharedBuffer> _sessions = new();
 
-        private static bool _created;
-        private static bool _connected;
+        private bool _connected;
+        private long _previousRenderLayer;
 
-        public static long LayerId { get; private set; }
-        public static int NvMapHandle { get; private set; }
+        public ulong Pid { get; private set; }
+        public long LayerId { get; private set; }
+        public int NvMapHandle { get; private set; }
+        public ulong BufferHandle => BufferHandleBase | Pid;
 
-        public static bool HasSession => _created;
-
-        // `pid` is the applet's own process: a service's ServiceCtx.Process is the service, and
-        // the pool has to be mapped, and the layer owned, on the applet's side.
-        public static bool EnsureSession(ServiceCtx context, ulong pid)
+        // Finds a session from either of the two handles an applet is given.
+        public static SystemSharedBuffer Find(ulong handle)
         {
             lock (_lock)
             {
-                if (_created)
+                foreach (SystemSharedBuffer session in _sessions.Values)
                 {
-                    return true;
+                    if (session.BufferHandle == handle || (ulong)session.LayerId == handle)
+                    {
+                        return session;
+                    }
                 }
 
-                if (!context.Device.System.KernelContext.Processes.TryGetValue(pid, out Ryujinx.HLE.HOS.Kernel.Process.KProcess applet))
+                return null;
+            }
+        }
+
+        // `pid` is the applet's own process: a service's ServiceCtx.Process is the service, and
+        // the pool has to be mapped, and the layer owned, on the applet's side.
+        public static SystemSharedBuffer EnsureSession(ServiceCtx context, ulong pid)
+        {
+            lock (_lock)
+            {
+                if (_sessions.TryGetValue(pid, out SystemSharedBuffer session))
+                {
+                    return session;
+                }
+
+                if (!context.Device.System.KernelContext.Processes.TryGetValue(pid, out KProcess applet))
                 {
                     Logger.Error?.Print(LogClass.ServiceVi, $"Shared frame buffers: process {pid} not found.");
 
-                    return false;
+                    return null;
                 }
 
-                // The heap grows by 2 MiB steps.
-                ulong heapSize = (PoolSize + 0x1FFFFFUL) & ~0x1FFFFFUL;
+                KPageTableBase memory = applet.MemoryManager;
+                ulong regionStart = memory.StackRegionStart;
+                ulong regionPagesCount = (memory.StackRegionEnd - regionStart) / KPageTableBase.PageSize;
 
-                Result result = applet.MemoryManager.SetHeapSize(heapSize, out ulong address);
+                Result result = memory.MapPages(
+                    PoolSize / KPageTableBase.PageSize,
+                    KPageTableBase.PageSize,
+                    0,
+                    false,
+                    regionStart,
+                    regionPagesCount,
+                    MemoryState.Stack,
+                    KMemoryPermission.ReadAndWrite,
+                    out ulong address);
 
                 if (result != Result.Success)
                 {
                     Logger.Error?.Print(LogClass.ServiceVi, $"Shared frame buffers: no memory for the pool ({result}).");
 
-                    return false;
+                    return null;
                 }
 
-                NvMapHandle = NvMapDeviceFile.CreateSharedHandle(address, PoolSize);
+                session = new SystemSharedBuffer
+                {
+                    Pid = pid,
+                    NvMapHandle = NvMapDeviceFile.CreateSharedHandle(address, PoolSize),
+                };
 
                 SurfaceFlinger.SurfaceFlinger surfaceFlinger = context.Device.System.SurfaceFlinger;
 
                 IGraphicBufferProducer producer = surfaceFlinger.CreateLayer(out long layerId, pid, LayerState.ManagedOpened);
 
-                surfaceFlinger.SetRenderLayer(layerId);
+                session._previousRenderLayer = surfaceFlinger.RenderLayerId;
+                session.LayerId = layerId;
 
-                LayerId = layerId;
+                surfaceFlinger.SetRenderLayer(layerId);
 
                 // The applet is told that queue slots 0 to 3 are pool slots 0 to 3 (see
                 // AcquireSharedFrameBuffer): one graphic buffer per slot, each at its own offset.
@@ -85,7 +123,7 @@ namespace Ryujinx.HLE.HOS.Services.Vi
                 // is on screen, and its "buffer free" event is never raised below two buffers.
                 for (int i = 0; i < QueueBuffersCount; i++)
                 {
-                    Status status = producer.SetPreallocatedBuffer(i, new AndroidStrongPointer<GraphicBuffer>(MakeGraphicBuffer(i)));
+                    Status status = producer.SetPreallocatedBuffer(i, new AndroidStrongPointer<GraphicBuffer>(session.MakeGraphicBuffer(i)));
 
                     if (status != Status.Success)
                     {
@@ -93,15 +131,45 @@ namespace Ryujinx.HLE.HOS.Services.Vi
                     }
                 }
 
-                _created = true;
+                _sessions[pid] = session;
 
-                Logger.Notice.Print(LogClass.ServiceVi, $"Shared frame buffers (process {pid}): pool at 0x{address:X} (0x{PoolSize:X}), nvmap handle {NvMapHandle}, layer {layerId}.");
+                Logger.Notice.Print(LogClass.ServiceVi, $"Shared frame buffers (process {pid}): pool at 0x{address:X} (0x{PoolSize:X}), nvmap handle {session.NvMapHandle}, layer {layerId}.");
 
-                return true;
+                return session;
             }
         }
 
-        private static GraphicBuffer MakeGraphicBuffer(int slot)
+        // The applet is gone: its layer leaves the screen for the one that was there before.
+        public static void Release(Switch device, ulong pid)
+        {
+            lock (_lock)
+            {
+                if (!_sessions.Remove(pid, out SystemSharedBuffer session))
+                {
+                    return;
+                }
+
+                SurfaceFlinger.SurfaceFlinger surfaceFlinger = device.System.SurfaceFlinger;
+
+                if (surfaceFlinger.RenderLayerId == session.LayerId)
+                {
+                    surfaceFlinger.SetRenderLayer(session._previousRenderLayer);
+                }
+
+                // Sessions opened on top of this one fall back to what was under it.
+                foreach (SystemSharedBuffer other in _sessions.Values)
+                {
+                    if (other._previousRenderLayer == session.LayerId)
+                    {
+                        other._previousRenderLayer = session._previousRenderLayer;
+                    }
+                }
+
+                surfaceFlinger.DestroyManagedLayer(session.LayerId);
+            }
+        }
+
+        private GraphicBuffer MakeGraphicBuffer(int slot)
         {
             GraphicBuffer buffer = new();
 
@@ -123,7 +191,6 @@ namespace Ryujinx.HLE.HOS.Services.Vi
             buffer.Buffer.Stride = Width;
             buffer.Buffer.FrameBufferSize = (int)SlotSize;
             buffer.Buffer.PlanesCount = 1;
-
             buffer.Buffer.Surfaces.SetFirst(new NvGraphicBufferSurface
             {
                 Width = Width,
@@ -158,12 +225,12 @@ namespace Ryujinx.HLE.HOS.Services.Vi
             }
         }
 
-        private static BufferQueueProducer Producer(ServiceCtx context)
+        private BufferQueueProducer Producer(ServiceCtx context)
         {
             return (BufferQueueProducer)context.Device.System.SurfaceFlinger.GetProducerByLayerId(LayerId);
         }
 
-        public static void Connect(ServiceCtx context)
+        public void Connect(ServiceCtx context)
         {
             lock (_lock)
             {
@@ -183,20 +250,20 @@ namespace Ryujinx.HLE.HOS.Services.Vi
             }
         }
 
-        public static void Disconnect(ServiceCtx context)
+        public void Disconnect(ServiceCtx context)
         {
             lock (_lock)
             {
                 if (_connected)
                 {
-                    Producer(context).Disconnect(NativeWindowApi.NVN);
+                    Producer(context)?.Disconnect(NativeWindowApi.NVN);
 
                     _connected = false;
                 }
             }
         }
 
-        public static Status Acquire(ServiceCtx context, out int slot, out AndroidFence fence)
+        public Status Acquire(ServiceCtx context, out int slot, out AndroidFence fence)
         {
             BufferQueueProducer producer = Producer(context);
 
@@ -212,7 +279,7 @@ namespace Ryujinx.HLE.HOS.Services.Vi
             return status;
         }
 
-        public static Status Present(ServiceCtx context, int slot, Rect crop, uint transform, int swapInterval, AndroidFence fence)
+        public Status Present(ServiceCtx context, int slot, Rect crop, uint transform, int swapInterval, AndroidFence fence)
         {
             if (crop.Width <= 0 || crop.Height <= 0)
             {
@@ -235,14 +302,14 @@ namespace Ryujinx.HLE.HOS.Services.Vi
             return Producer(context).QueueBuffer(slot, ref input, out _);
         }
 
-        public static void Cancel(ServiceCtx context, int slot)
+        public void Cancel(ServiceCtx context, int slot)
         {
             AndroidFence fence = AndroidFence.NoFence;
 
             Producer(context).CancelBuffer(slot, ref fence);
         }
 
-        public static KReadableEvent AcquirableEvent(ServiceCtx context)
+        public KReadableEvent AcquirableEvent(ServiceCtx context)
         {
             BufferQueueCore core = Producer(context).Core;
 

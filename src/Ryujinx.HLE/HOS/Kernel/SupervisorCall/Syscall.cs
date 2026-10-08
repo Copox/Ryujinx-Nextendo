@@ -2938,6 +2938,7 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
                 if (processedHandles != handles.Length)
                 {
                     // One or more handles are invalid.
+                    Logger.Warning?.Print(LogClass.KernelSvc, $"[wait] invalid handle 0x{handles[processedHandles]:X} at index {processedHandles} of {handles.Length}");
                     for (int index = 0; index < processedHandles; index++)
                     {
                         currentThread.WaitSyncObjects[index].DecrementReferenceCount();

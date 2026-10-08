@@ -5,7 +5,12 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 {
     class ILibraryAppletCreator : IpcService
     {
-        public ILibraryAppletCreator() { }
+        private readonly ulong _pid;
+
+        public ILibraryAppletCreator(ulong pid = 0)
+        {
+            _pid = pid;
+        }
 
         [CommandCmif(0)]
         // CreateLibraryApplet(u32, u32) -> object<nn::am::service::ILibraryAppletAccessor>
@@ -16,7 +21,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             int libraryAppletMode = context.RequestData.ReadInt32();
 #pragma warning restore IDE0059
 
-            MakeObject(context, new ILibraryAppletAccessor(appletId, context.Device.System));
+            MakeObject(context, new ILibraryAppletAccessor(appletId, context.Device.System, _pid, (LibraryAppletMode)libraryAppletMode));
 
             return ResultCode.Success;
         }
@@ -27,11 +32,10 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         {
             AppletId appletId = (AppletId)context.RequestData.ReadInt32();
 
-            _ = context.RequestData.ReadInt32(); // libraryAppletMode
-
+            LibraryAppletMode libraryAppletMode = (LibraryAppletMode)context.RequestData.ReadInt32();
             _ = context.RequestData.ReadUInt64(); // threadId
 
-            MakeObject(context, new ILibraryAppletAccessor(appletId, context.Device.System));
+            MakeObject(context, new ILibraryAppletAccessor(appletId, context.Device.System, _pid, libraryAppletMode));
 
             return ResultCode.Success;
         }
