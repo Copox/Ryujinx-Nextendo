@@ -886,6 +886,9 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
 
         // Memory
 
+        // [Nextendo, HOME Menu work] NEXTENDO_IPC_TRACE=1 also logs heap sizing and memory queries.
+        private static readonly bool _memTrace = Environment.GetEnvironmentVariable("NEXTENDO_IPC_TRACE") == "1";
+
         [Svc(1)]
         public Result SetHeapSize([PointerSized] out ulong address, [PointerSized] ulong size)
         {
@@ -898,7 +901,14 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
 
             KProcess process = KernelStatic.GetCurrentProcess();
 
-            return process.MemoryManager.SetHeapSize(size, out address);
+            Result heapResult = process.MemoryManager.SetHeapSize(size, out address);
+
+            if (_memTrace)
+            {
+                Logger.Notice.Print(LogClass.KernelSvc, $"[mem] SetHeapSize(0x{size:X}) = {heapResult} at 0x{address:X}");
+            }
+
+            return heapResult;
         }
 
         [Svc(2)]
@@ -1365,7 +1375,14 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
 
             KProcess process = KernelStatic.GetCurrentProcess();
 
-            return process.MemoryManager.MapPhysicalMemory(address, size);
+            Result mapResult = process.MemoryManager.MapPhysicalMemory(address, size);
+
+            if (_memTrace)
+            {
+                Logger.Notice.Print(LogClass.KernelSvc, $"[mem] MapPhysicalMemory(0x{address:X}, 0x{size:X}) = {mapResult}");
+            }
+
+            return mapResult;
         }
 
         [Svc(0x2d)]
@@ -2178,7 +2195,7 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
 
                         if (subId != -1 && subId != currentCore)
                         {
-                            return Result.Success;
+                            return TraceInfo(id, subId, value);
                         }
 
                         KScheduler scheduler = _context.Schedulers[currentCore];
@@ -2248,6 +2265,16 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
 
                 default:
                     return KernelResult.InvalidEnumValue;
+            }
+
+            return TraceInfo(id, subId, value);
+        }
+
+        private static Result TraceInfo(InfoType id, long subId, ulong value)
+        {
+            if (_memTrace && id != InfoType.RandomEntropy)
+            {
+                Logger.Notice.Print(LogClass.KernelSvc, $"[mem] GetInfo({id}, sub={subId}) = 0x{value:X}");
             }
 
             return Result.Success;
