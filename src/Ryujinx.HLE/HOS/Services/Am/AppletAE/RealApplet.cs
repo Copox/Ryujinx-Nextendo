@@ -66,6 +66,8 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
 
                 state.SetFocus(true);
 
+                Logger.Notice.Print(LogClass.ServiceAm, $"[home] system applet {pid} gets its own message queue");
+
                 _systemApplets[pid] = state;
             }
         }

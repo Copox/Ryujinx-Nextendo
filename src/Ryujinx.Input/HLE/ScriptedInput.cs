@@ -16,14 +16,14 @@ namespace Ryujinx.Input.HLE
         private const double HoldSeconds = 0.2;
 
         private static readonly List<double> _homeTimes = [];
-        private static readonly List<(double Time, ControllerKeys Keys)> _steps = Load();
+        private static readonly List<(double Time, ControllerKeys Keys, double Hold)> _steps = Load();
         private static readonly Stopwatch _clock = new();
 
         private static ControllerKeys _last;
 
-        private static List<(double, ControllerKeys)> Load()
+        private static List<(double, ControllerKeys, double)> Load()
         {
-            List<(double, ControllerKeys)> steps = [];
+            List<(double, ControllerKeys, double)> steps = [];
             string script = Environment.GetEnvironmentVariable("NEXTENDO_INPUT_SCRIPT");
 
             if (string.IsNullOrEmpty(script))
@@ -35,7 +35,7 @@ namespace Ryujinx.Input.HLE
             {
                 string[] parts = step.Split(':');
 
-                if (parts.Length != 2 || !double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out double time))
+                if (parts.Length < 2 || !double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out double time))
                 {
                     continue;
                 }
@@ -46,7 +46,10 @@ namespace Ryujinx.Input.HLE
                 }
                 else if (Enum.TryParse(parts[1], true, out ControllerKeys keys))
                 {
-                    steps.Add((time, keys));
+                    // An optional third field is how long the button stays down.
+                    double hold = parts.Length > 2 && double.TryParse(parts[2], NumberStyles.Float, CultureInfo.InvariantCulture, out double h) ? h : HoldSeconds;
+
+                    steps.Add((time, keys, hold));
                 }
             }
 
@@ -88,9 +91,9 @@ namespace Ryujinx.Input.HLE
             double now = _clock.Elapsed.TotalSeconds;
             ControllerKeys keys = 0;
 
-            foreach ((double time, ControllerKeys stepKeys) in _steps)
+            foreach ((double time, ControllerKeys stepKeys, double hold) in _steps)
             {
-                if (now >= time && now < time + HoldSeconds)
+                if (now >= time && now < time + hold)
                 {
                     keys |= stepKeys;
                 }
