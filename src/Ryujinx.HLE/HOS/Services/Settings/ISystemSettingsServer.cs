@@ -463,5 +463,79 @@ namespace Ryujinx.HLE.HOS.Services.Settings
 
             return ResultCode.Success;
         }
+        [CommandCmif(17)]
+        // GetAccountSettings() -> nn::settings::system::AccountSettings
+        public ResultCode GetAccountSettings(ServiceCtx context)
+        {
+            context.ResponseData.Write(0u);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(29)]
+        // GetNotificationSettings() -> nn::settings::system::NotificationSettings
+        public ResultCode GetNotificationSettings(ServiceCtx context)
+        {
+            context.ResponseData.Write(0u);
+            context.ResponseData.Write(0u);
+            context.ResponseData.Write(0L);
+            context.ResponseData.Write(0L);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(31)]
+        // GetAccountNotificationSettings() -> (s32 count, buffer<AccountNotificationSettings, 6>)
+        public ResultCode GetAccountNotificationSettings(ServiceCtx context)
+        {
+            context.ResponseData.Write(0);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(63)]
+        // GetPrimaryAlbumStorage() -> s32
+        public ResultCode GetPrimaryAlbumStorage(ServiceCtx context)
+        {
+            context.ResponseData.Write(1 /* SdCard */);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(95)]
+        // GetAutoUpdateEnableFlag() -> bool
+        public ResultCode GetAutoUpdateEnableFlag(ServiceCtx context)
+        {
+            context.ResponseData.Write(false);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(124)] // 4.0.0+
+        // GetErrorReportSharePermission() -> s32
+        public ResultCode GetErrorReportSharePermission(ServiceCtx context)
+        {
+            context.ResponseData.Write(2 /* Denied */);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(136)] // 4.0.0+
+        // GetKeyboardLayout() -> s32
+        public ResultCode GetKeyboardLayout(ServiceCtx context)
+        {
+            context.ResponseData.Write(0);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(170)] // 7.0.0+
+        // GetChineseTraditionalInputMethod() -> s32
+        public ResultCode GetChineseTraditionalInputMethod(ServiceCtx context)
+        {
+            context.ResponseData.Write(1);
+
+            return ResultCode.Success;
+        }
     }
 }

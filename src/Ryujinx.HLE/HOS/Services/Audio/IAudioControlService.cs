@@ -23,5 +23,31 @@ namespace Ryujinx.HLE.HOS.Services.Audio
     class IAudioControllerSession : IpcService
     {
         public IAudioControllerSession() { }
+        [CommandCmif(13)]
+        // GetOutputModeSetting(u32 target) -> u32
+        public ResultCode GetOutputModeSetting(ServiceCtx context)
+        {
+            context.ResponseData.Write(0u);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(18)]
+        // GetHeadphoneOutputLevelMode() -> u32
+        public ResultCode GetHeadphoneOutputLevelMode(ServiceCtx context)
+        {
+            context.ResponseData.Write(0u);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(31)]
+        // IsSpeakerAutoMuteEnabled() -> bool
+        public ResultCode IsSpeakerAutoMuteEnabled(ServiceCtx context)
+        {
+            context.ResponseData.Write(false);
+
+            return ResultCode.Success;
+        }
     }
 }

@@ -20,5 +20,13 @@ namespace Ryujinx.HLE.HOS.Services.Notification
             MakeObject(context, new INotificationSystemEventAccessor(context));
             return ResultCode.Success;
         }
+        [CommandCmif(520)]
+        // ListAlarmSettings() -> (s32 count, buffer<nn::notification::AlarmSetting, 6>)
+        public ResultCode ListAlarmSettings(ServiceCtx context)
+        {
+            context.ResponseData.Write(0);
+
+            return ResultCode.Success;
+        }
     }
 }

@@ -327,5 +327,42 @@ namespace Ryujinx.HLE.HOS.Services.Pctl.ParentalControlServiceFactory
         [CommandCmif(1473)]
         // GetUnlinkedEvent() -> handle<copy>
         public ResultCode GetUnlinkedEvent(ServiceCtx context) { _unlinkedEvent.ReplyWithHandle(context); return ResultCode.Success; }
+        [CommandCmif(1032)]
+        // GetSafetyLevel() -> u32
+        public ResultCode GetSafetyLevel(ServiceCtx context)
+        {
+            context.ResponseData.Write(0u);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(1035)]
+        // GetCurrentSettings() -> nn::pctl::RestrictionSettings
+        public ResultCode GetCurrentSettings(ServiceCtx context)
+        {
+            context.ResponseData.Write((byte)0);
+            context.ResponseData.Write(false);
+            context.ResponseData.Write(false);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(1039)]
+        // GetFreeCommunicationApplicationListCount() -> s32
+        public ResultCode GetFreeCommunicationApplicationListCount(ServiceCtx context)
+        {
+            context.ResponseData.Write(0);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(1403)]
+        // IsPairingActive() -> bool
+        public ResultCode IsPairingActive(ServiceCtx context)
+        {
+            context.ResponseData.Write(false);
+
+            return ResultCode.Success;
+        }
     }
 }

@@ -144,6 +144,13 @@ namespace Ryujinx.HLE.HOS.Services.Ns
     class IDownloadTaskInterface : IpcService
     {
         public IDownloadTaskInterface() { }
+        [CommandCmif(707)]
+        // EnableAutoCommit()
+        public ResultCode EnableAutoCommit(ServiceCtx context)
+        {
+
+            return ResultCode.Success;
+        }
     }
 
     class IContentManagementInterface : IpcService

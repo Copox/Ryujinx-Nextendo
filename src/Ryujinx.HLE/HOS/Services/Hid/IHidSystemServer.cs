@@ -72,5 +72,25 @@ namespace Ryujinx.HLE.HOS.Services.Hid
 
             return ResultCode.Success;
         }
+        private Ryujinx.HLE.HOS.Services.StubEvent _joyDetachOnBluetoothOffEvent;
+
+        [CommandCmif(751)]
+        // AcquireJoyDetachOnBluetoothOffEventHandle() -> handle<copy>
+        public ResultCode AcquireJoyDetachOnBluetoothOffEventHandle(ServiceCtx context)
+        {
+            _joyDetachOnBluetoothOffEvent ??= new Ryujinx.HLE.HOS.Services.StubEvent(context);
+            _joyDetachOnBluetoothOffEvent.ReplyWithHandle(context);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(850)]
+        // IsUsbFullKeyControllerEnabled() -> bool
+        public ResultCode IsUsbFullKeyControllerEnabled(ServiceCtx context)
+        {
+            context.ResponseData.Write(false);
+
+            return ResultCode.Success;
+        }
     }
 }
