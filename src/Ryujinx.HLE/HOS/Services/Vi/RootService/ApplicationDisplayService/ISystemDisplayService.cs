@@ -85,7 +85,7 @@ namespace Ryujinx.HLE.HOS.Services.Vi.RootService.ApplicationDisplayService
         // GetSharedBufferMemoryHandleId(u64 bufferId, nn::applet::AppletResourceUserId) -> (s32 nvmapHandle, u64 size, buffer<SharedMemoryPoolLayout, 0x16>)
         public ResultCode GetSharedBufferMemoryHandleId(ServiceCtx context)
         {
-            if (!SystemSharedBuffer.EnsureSession(context))
+            if (!SystemSharedBuffer.HasSession)
             {
                 return ResultCode.InvalidValue;
             }
@@ -103,7 +103,7 @@ namespace Ryujinx.HLE.HOS.Services.Vi.RootService.ApplicationDisplayService
         // OpenSharedLayer(u64 layerId)
         public ResultCode OpenSharedLayer(ServiceCtx context)
         {
-            return SystemSharedBuffer.EnsureSession(context) ? ResultCode.Success : ResultCode.InvalidValue;
+            return SystemSharedBuffer.HasSession ? ResultCode.Success : ResultCode.InvalidValue;
         }
 
         [CommandCmif(8251)] // 4.0.0+
@@ -136,6 +136,8 @@ namespace Ryujinx.HLE.HOS.Services.Vi.RootService.ApplicationDisplayService
         public ResultCode AcquireSharedFrameBuffer(ServiceCtx context)
         {
             SurfaceFlinger.Status status = SystemSharedBuffer.Acquire(context, out int slot, out SurfaceFlinger.AndroidFence fence);
+
+            Logger.Notice.Print(LogClass.ServiceVi, $"[fbshare] acquire -> {status} slot={slot} fences={fence.FenceCount}");
 
             if (status != SurfaceFlinger.Status.Success)
             {
@@ -179,6 +181,8 @@ namespace Ryujinx.HLE.HOS.Services.Vi.RootService.ApplicationDisplayService
 
             SurfaceFlinger.Status status = SystemSharedBuffer.Present(context, slot, crop, transform, swapInterval, fence);
 
+            Logger.Notice.Print(LogClass.ServiceVi, $"[fbshare] present slot={slot} crop=({crop.Left},{crop.Top},{crop.Right},{crop.Bottom}) transform={transform} swap={swapInterval} fences={fence.FenceCount} f0=({fence.NvFences[0].Id},{fence.NvFences[0].Value}) raw={System.Convert.ToHexString(context.RequestData.BaseStream is System.IO.MemoryStream ms ? ms.ToArray() : System.Array.Empty<byte>())} -> {status}");
+
             if (status != SurfaceFlinger.Status.Success)
             {
                 Logger.Warning?.Print(LogClass.ServiceVi, $"PresentSharedFrameBuffer(slot {slot}): {status}");
@@ -191,7 +195,7 @@ namespace Ryujinx.HLE.HOS.Services.Vi.RootService.ApplicationDisplayService
         // GetSharedFrameBufferAcquirableEvent(u64 layerId) -> handle<copy>
         public ResultCode GetSharedFrameBufferAcquirableEvent(ServiceCtx context)
         {
-            if (!SystemSharedBuffer.EnsureSession(context))
+            if (!SystemSharedBuffer.HasSession)
             {
                 return ResultCode.InvalidValue;
             }

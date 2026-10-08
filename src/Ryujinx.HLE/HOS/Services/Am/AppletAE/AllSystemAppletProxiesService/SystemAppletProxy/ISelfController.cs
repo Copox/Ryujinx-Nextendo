@@ -253,7 +253,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         // GetSystemSharedLayerHandle() -> (nn::vi::fbshare::SharedBufferHandle, nn::vi::fbshare::SharedLayerHandle)
         public ResultCode GetSystemSharedLayerHandle(ServiceCtx context)
         {
-            if (!Ryujinx.HLE.HOS.Services.Vi.SystemSharedBuffer.EnsureSession(context))
+            if (!Ryujinx.HLE.HOS.Services.Vi.SystemSharedBuffer.EnsureSession(context, _pid))
             {
                 return ResultCode.NotImplemented;
             }

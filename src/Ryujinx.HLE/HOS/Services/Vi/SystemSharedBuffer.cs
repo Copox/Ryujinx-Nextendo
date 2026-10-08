@@ -22,6 +22,7 @@ namespace Ryujinx.HLE.HOS.Services.Vi
         private const int BlockLinearHeight = 768;
         private const int BytesPerPixel = 4;
         private const int SlotsCount = 7;
+        private const int QueueBuffersCount = 4;
 
         public const uint SlotSize = Width * BlockLinearHeight * BytesPerPixel; // 0x3C0000
         public const uint PoolSize = SlotSize * SlotsCount;                    // 0x1A40000
@@ -36,7 +37,11 @@ namespace Ryujinx.HLE.HOS.Services.Vi
         public static long LayerId { get; private set; }
         public static int NvMapHandle { get; private set; }
 
-        public static bool EnsureSession(ServiceCtx context)
+        public static bool HasSession => _created;
+
+        // `pid` is the applet's own process: a service's ServiceCtx.Process is the service, and
+        // the pool has to be mapped, and the layer owned, on the applet's side.
+        public static bool EnsureSession(ServiceCtx context, ulong pid)
         {
             lock (_lock)
             {
@@ -45,10 +50,17 @@ namespace Ryujinx.HLE.HOS.Services.Vi
                     return true;
                 }
 
+                if (!context.Device.System.KernelContext.Processes.TryGetValue(pid, out Ryujinx.HLE.HOS.Kernel.Process.KProcess applet))
+                {
+                    Logger.Error?.Print(LogClass.ServiceVi, $"Shared frame buffers: process {pid} not found.");
+
+                    return false;
+                }
+
                 // The heap grows by 2 MiB steps.
                 ulong heapSize = (PoolSize + 0x1FFFFFUL) & ~0x1FFFFFUL;
 
-                Result result = context.Process.MemoryManager.SetHeapSize(heapSize, out ulong address);
+                Result result = applet.MemoryManager.SetHeapSize(heapSize, out ulong address);
 
                 if (result != Result.Success)
                 {
@@ -61,23 +73,35 @@ namespace Ryujinx.HLE.HOS.Services.Vi
 
                 SurfaceFlinger.SurfaceFlinger surfaceFlinger = context.Device.System.SurfaceFlinger;
 
-                IGraphicBufferProducer producer = surfaceFlinger.CreateLayer(out long layerId, context.Process.Pid, LayerState.ManagedOpened);
+                IGraphicBufferProducer producer = surfaceFlinger.CreateLayer(out long layerId, pid, LayerState.ManagedOpened);
 
                 surfaceFlinger.SetRenderLayer(layerId);
 
                 LayerId = layerId;
 
-                producer.SetPreallocatedBuffer(0, new AndroidStrongPointer<GraphicBuffer>(MakeGraphicBuffer()));
+                // The applet is told that queue slots 0 to 3 are pool slots 0 to 3 (see
+                // AcquireSharedFrameBuffer): one graphic buffer per slot, each at its own offset.
+                // A single buffer also leaves the queue with nothing to hand out while that one
+                // is on screen, and its "buffer free" event is never raised below two buffers.
+                for (int i = 0; i < QueueBuffersCount; i++)
+                {
+                    Status status = producer.SetPreallocatedBuffer(i, new AndroidStrongPointer<GraphicBuffer>(MakeGraphicBuffer(i)));
+
+                    if (status != Status.Success)
+                    {
+                        Logger.Error?.Print(LogClass.ServiceVi, $"Shared frame buffers: slot {i} not accepted ({status}).");
+                    }
+                }
 
                 _created = true;
 
-                Logger.Notice.Print(LogClass.ServiceVi, $"Shared frame buffers: pool at 0x{address:X} (0x{PoolSize:X}), nvmap handle {NvMapHandle}, layer {layerId}.");
+                Logger.Notice.Print(LogClass.ServiceVi, $"Shared frame buffers (process {pid}): pool at 0x{address:X} (0x{PoolSize:X}), nvmap handle {NvMapHandle}, layer {layerId}.");
 
                 return true;
             }
         }
 
-        private static GraphicBuffer MakeGraphicBuffer()
+        private static GraphicBuffer MakeGraphicBuffer(int slot)
         {
             GraphicBuffer buffer = new();
 
@@ -108,7 +132,7 @@ namespace Ryujinx.HLE.HOS.Services.Vi
                 Layout = 3, // block linear
                 Pitch = Width * BytesPerPixel,
                 NvMapHandle = NvMapHandle,
-                Offset = 0,
+                Offset = (int)(slot * SlotSize),
                 Kind = 0xfe, // generic 16Bx2
                 BlockHeightLog2 = 4,
                 Size = SlotSize,
@@ -220,7 +244,16 @@ namespace Ryujinx.HLE.HOS.Services.Vi
 
         public static KReadableEvent AcquirableEvent(ServiceCtx context)
         {
-            return Producer(context).Core.GetWaitBufferFreeEvent();
+            BufferQueueCore core = Producer(context).Core;
+
+            // The queue only raises its "a buffer is free" event for a client that asked for
+            // it; through the binder that is what fetching the native handle does.
+            lock (core.Lock)
+            {
+                core.EnableExternalEvent = true;
+            }
+
+            return core.GetWaitBufferFreeEvent();
         }
     }
 }

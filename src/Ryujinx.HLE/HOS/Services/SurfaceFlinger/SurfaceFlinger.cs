@@ -417,6 +417,11 @@ namespace Ryujinx.HLE.HOS.Services.SurfaceFlinger
 
             ulong frameBufferAddress = map.Address + bufferOffset;
 
+            if (System.Environment.GetEnvironmentVariable("NEXTENDO_IPC_TRACE") == "1")
+            {
+                Logger.Notice.Print(LogClass.SurfaceFlinger, $"[fbshare] post frame: handle={nvMapHandle} address=0x{frameBufferAddress:X} {frameBufferWidth}x{frameBufferHeight} fences={item.Fence.FenceCount}");
+            }
+
             Format format = ConvertColorFormat(item.GraphicBuffer.Object.Buffer.Surfaces[0].ColorFormat);
 
             byte bytesPerPixel =
@@ -475,6 +480,7 @@ namespace Ryujinx.HLE.HOS.Services.SurfaceFlinger
                 {
                     item.Fence.RegisterCallback(_device.Gpu, (x) =>
                     {
+                        if (System.Environment.GetEnvironmentVariable("NEXTENDO_IPC_TRACE") == "1") Logger.Notice.Print(LogClass.SurfaceFlinger, "[fbshare] fence signalled, frame ready");
                         _device.Gpu.Window.SignalFrameReady();
                         _device.Gpu.GPFifo.Interrupt();
                     });
@@ -482,6 +488,7 @@ namespace Ryujinx.HLE.HOS.Services.SurfaceFlinger
             }
             else
             {
+                if (System.Environment.GetEnvironmentVariable("NEXTENDO_IPC_TRACE") == "1") Logger.Notice.Print(LogClass.SurfaceFlinger, "[fbshare] frame NOT enqueued by the GPU window");
                 ReleaseBuffer(textureCallbackInformation);
             }
         }
@@ -493,6 +500,7 @@ namespace Ryujinx.HLE.HOS.Services.SurfaceFlinger
 
         private void ReleaseBuffer(TextureCallbackInformation information)
         {
+            if (System.Environment.GetEnvironmentVariable("NEXTENDO_IPC_TRACE") == "1") Logger.Notice.Print(LogClass.SurfaceFlinger, "[fbshare] buffer released by the GPU window");
             AndroidFence fence = AndroidFence.NoFence;
 
             information.Layer.Consumer.ReleaseBuffer(information.Item, ref fence);
@@ -505,6 +513,7 @@ namespace Ryujinx.HLE.HOS.Services.SurfaceFlinger
 
         private void AcquireBuffer(TextureCallbackInformation information)
         {
+            if (System.Environment.GetEnvironmentVariable("NEXTENDO_IPC_TRACE") == "1") Logger.Notice.Print(LogClass.SurfaceFlinger, "[fbshare] GPU window acquires the frame (waits for its fence)");
             information.Item.Fence.WaitForever(_device.Gpu);
         }
 
