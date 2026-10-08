@@ -151,7 +151,22 @@ namespace Ryujinx.HLE.HOS.Services.Hid
             }
         }
 
+        // [Nextendo, HOME Menu work] The interface thread writes the pad states every frame;
+        // a program that activates its pads writes a burst of empty ones from its own service
+        // thread. With two programs running (the HOME Menu and an applet) the two overlapped
+        // and left the state buffers in disorder: one writer at a time.
+        private readonly object _updateLock = new();
+        private ControllerKeys _lastTraced;
+
         public void Update(IList<GamepadInput> states)
+        {
+            lock (_updateLock)
+            {
+                UpdateLocked(states);
+            }
+        }
+
+        private void UpdateLocked(IList<GamepadInput> states)
         {
             Remap();
 
@@ -382,6 +397,13 @@ namespace Ryujinx.HLE.HOS.Services.Hid
 
             ref NpadInternalState currentNpad = ref _device.Hid.SharedMemory.Npads[(int)state.PlayerId].InternalState;
 
+            if (state.Buttons != 0 && state.Buttons != _lastTraced)
+            {
+                Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.Hid, $"[pad] {state.PlayerId} {state.Buttons}: style={currentNpad.StyleSet} supported={SupportedStyleSets} active={Active}");
+            }
+
+            _lastTraced = state.Buttons;
+
             if (currentNpad.StyleSet == NpadStyleTag.None)
             {
                 return;
@@ -454,6 +476,14 @@ namespace Ryujinx.HLE.HOS.Services.Hid
         }
 
         public void UpdateSixAxis(IList<SixAxisInput> states)
+        {
+            lock (_updateLock)
+            {
+                UpdateSixAxisLocked(states);
+            }
+        }
+
+        private void UpdateSixAxisLocked(IList<SixAxisInput> states)
         {
             Span<bool> updated = stackalloc bool[10];
 

@@ -99,10 +99,21 @@ namespace Ryujinx.Input.HLE
                 }
             }
 
+            // A scripted run is driven by the script alone: whatever a real pad or keyboard
+            // sends at the same time (someone using the machine) is dropped.
+            for (int i = 0; i < states.Count; i++)
+            {
+                GamepadInput idle = states[i];
+                idle.Buttons = 0;
+                idle.LStick = default;
+                idle.RStick = default;
+                states[i] = idle;
+            }
+
             if (keys != 0)
             {
                 GamepadInput state = states[0];
-                state.Buttons |= keys;
+                state.Buttons = keys;
                 states[0] = state;
 
                 if (keys != _last)
