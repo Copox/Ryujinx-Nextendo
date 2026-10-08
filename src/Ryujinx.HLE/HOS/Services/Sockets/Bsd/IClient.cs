@@ -12,6 +12,7 @@ using System.Text;
 
 namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd
 {
+    [Service("bsd:a", true)]
     [Service("bsd:s", true)]
     [Service("bsd:u", false)]
     class IClient : IpcService

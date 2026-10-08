@@ -86,6 +86,16 @@ namespace Ryujinx.HLE.HOS.Services.Settings
             return ResultCode.Success;
         }
 
+        [CommandCmif(21)]
+        // GetEulaVersions() -> (s32 count, buffer<nn::settings::system::EulaVersion, 6>)
+        public ResultCode GetEulaVersions(ServiceCtx context)
+        {
+            // No EULA record: nothing has been accepted on this console.
+            context.ResponseData.Write(0);
+
+            return ResultCode.Success;
+        }
+
         [CommandCmif(23)]
         // GetColorSetId() -> i32
         public ResultCode GetColorSetId(ServiceCtx context)
@@ -221,6 +231,32 @@ namespace Ryujinx.HLE.HOS.Services.Settings
             return ResultCode.Success;
         }
 
+        [CommandCmif(39)]
+        // GetTvSettings() -> nn::settings::system::TvSettings
+        public ResultCode GetTvSettings(ServiceCtx context)
+        {
+            context.ResponseData.Write(0u);   // Flags
+            context.ResponseData.Write(0);    // TvResolution: automatic
+            context.ResponseData.Write(0);    // HdmiContentType
+            context.ResponseData.Write(0);    // RgbRange
+            context.ResponseData.Write(0);    // CmuMode
+            context.ResponseData.Write(0u);   // TvUnderscan
+            context.ResponseData.Write(1.0f); // TvGamma
+            context.ResponseData.Write(1.0f); // ContrastRatio
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(47)]
+        // GetQuestFlag() -> bool
+        public ResultCode GetQuestFlag(ServiceCtx context)
+        {
+            // Not a kiosk ("Quest") unit.
+            context.ResponseData.Write(false);
+
+            return ResultCode.Success;
+        }
+
         [CommandCmif(60)]
         // IsUserSystemClockAutomaticCorrectionEnabled() -> bool
         public ResultCode IsUserSystemClockAutomaticCorrectionEnabled(ServiceCtx context)
@@ -249,6 +285,30 @@ namespace Ryujinx.HLE.HOS.Services.Settings
         public ResultCode GetSerialNumber(ServiceCtx context)
         {
             context.ResponseData.Write(Encoding.ASCII.GetBytes("RYU00000000000"));
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(75)]
+        // GetInitialLaunchSettings() -> nn::settings::system::InitialLaunchSettings
+        public ResultCode GetInitialLaunchSettings(ServiceCtx context)
+        {
+            // Flags: bit 0 completion, bit 8 user addition, bit 16 timestamp. All set: the console
+            // has been through its first-boot setup, so the HOME Menu goes straight to its menu.
+            context.ResponseData.Write(0x00010101u);
+            context.ResponseData.Write(0u);          // Reserved
+            context.ResponseData.Write(0L);          // SteadyClockTimePoint.TimePoint
+            context.ResponseData.Write(0L);          // SteadyClockTimePoint.ClockSourceId (low)
+            context.ResponseData.Write(0L);          // SteadyClockTimePoint.ClockSourceId (high)
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(76)]
+        // SetInitialLaunchSettings(nn::settings::system::InitialLaunchSettings)
+        public ResultCode SetInitialLaunchSettings(ServiceCtx context)
+        {
+            Logger.Stub?.PrintStub(LogClass.ServiceSet);
 
             return ResultCode.Success;
         }
@@ -287,6 +347,15 @@ namespace Ryujinx.HLE.HOS.Services.Settings
             context.Memory.Read(deviceNickNameBufferPosition, deviceNickNameBuffer);
 
             context.Device.System.State.DeviceNickName = Encoding.ASCII.GetString(deviceNickNameBuffer);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(79)] // 4.0.0+
+        // GetProductModel() -> s32
+        public ResultCode GetProductModel(ServiceCtx context)
+        {
+            context.ResponseData.Write(1); // ProductModel_Nx, the original console
 
             return ResultCode.Success;
         }
@@ -349,6 +418,31 @@ namespace Ryujinx.HLE.HOS.Services.Settings
             }
 
             return data;
+        }
+        [CommandCmif(126)] // 4.0.0+
+        // GetAppletLaunchFlags() -> u32
+        public ResultCode GetAppletLaunchFlags(ServiceCtx context)
+        {
+            context.ResponseData.Write(0u);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(127)] // 4.0.0+
+        // SetAppletLaunchFlags(u32)
+        public ResultCode SetAppletLaunchFlags(ServiceCtx context)
+        {
+            Logger.Stub?.PrintStub(LogClass.ServiceSet);
+
+            return ResultCode.Success;
+        }
+        [CommandCmif(185)] // 13.1.0+
+        // GetHomeMenuSchemeModel() -> u32
+        public ResultCode GetHomeMenuSchemeModel(ServiceCtx context)
+        {
+            context.ResponseData.Write(0u);
+
+            return ResultCode.Success;
         }
     }
 }

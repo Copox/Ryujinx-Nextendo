@@ -38,6 +38,27 @@ namespace Ryujinx.HLE.HOS.Services.Vi.RootService.ApplicationDisplayService
             return _applicationDisplayService.CreateStrayLayer(context);
         }
 
+        [CommandCmif(3000)]
+        // ListDisplayModes(u64) -> (u64 count, buffer<nn::vi::DisplayModeInfo, 6>)
+        public ResultCode ListDisplayModes(ServiceCtx context)
+        {
+            ulong displayId = context.RequestData.ReadUInt64();
+
+            (ulong width, ulong height) = AndroidSurfaceComposerClient.GetDisplayInfo(context, displayId);
+
+            // One mode: the current one, the same GetDisplayMode reports.
+            ulong position = context.Request.ReceiveBuff[0].Position;
+
+            context.Memory.Write(position + 0x0, (uint)width);
+            context.Memory.Write(position + 0x4, (uint)height);
+            context.Memory.Write(position + 0x8, 60.0f);
+            context.Memory.Write(position + 0xC, 0);
+
+            context.ResponseData.Write(1L);
+
+            return ResultCode.Success;
+        }
+
         [CommandCmif(3200)]
         // GetDisplayMode(u64) -> nn::vi::DisplayModeInfo
         public ResultCode GetDisplayMode(ServiceCtx context)

@@ -129,6 +129,10 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         // RequestToAcquireSleepLock()
         public ResultCode RequestToAcquireSleepLock(ServiceCtx context)
         {
+            // The emulator never sleeps, so the lock is granted at once: the caller (qlaunch)
+            // waits on this event before going any further.
+            _acquiredSleepLockEvent.ReadableEvent.Signal();
+
             Logger.Stub?.PrintStub(LogClass.ServiceAm);
 
             return ResultCode.Success;
