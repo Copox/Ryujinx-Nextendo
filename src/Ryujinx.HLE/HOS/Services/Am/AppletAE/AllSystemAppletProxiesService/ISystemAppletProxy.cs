@@ -69,7 +69,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService
         // GetHomeMenuFunctions() -> object<nn::am::service::IHomeMenuFunctions>
         public ResultCode GetHomeMenuFunctions(ServiceCtx context)
         {
-            MakeObject(context, new IHomeMenuFunctions(context.Device.System));
+            MakeObject(context, new IHomeMenuFunctions(context.Device.System, _pid));
 
             return ResultCode.Success;
         }
@@ -87,7 +87,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService
         // GetApplicationCreator() -> object<nn::am::service::IApplicationCreator>
         public ResultCode GetApplicationCreator(ServiceCtx context)
         {
-            MakeObject(context, new IApplicationCreator());
+            MakeObject(context, new IApplicationCreator(_pid));
 
             return ResultCode.Success;
         }

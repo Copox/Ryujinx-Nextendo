@@ -347,8 +347,14 @@ namespace Ryujinx.HLE.HOS.Services.Fs
         // CreateSaveDataFileSystemWithCreationInfo2(buffer<nn::fs::SaveDataCreationInfo2, 25> creationInfo) -> ()
         public ResultCode CreateSaveDataFileSystemWithCreationInfo2(ServiceCtx context)
         {
-            byte[] creationInfoBuffer = new byte[context.Request.SendBuff[0].Size];
-            context.Memory.Read(context.Request.SendBuff[0].Position, creationInfoBuffer);
+            // The structure comes as a fixed-size pointer buffer (type 0x19); older callers
+            // sent it as a mapped one.
+            bool pointer = context.Request.SendBuff.Count == 0;
+            ulong infoPosition = pointer ? context.Request.PtrBuff[0].Position : context.Request.SendBuff[0].Position;
+            ulong infoSize = pointer ? context.Request.PtrBuff[0].Size : context.Request.SendBuff[0].Size;
+
+            byte[] creationInfoBuffer = new byte[System.Math.Max(infoSize, (ulong)System.Runtime.CompilerServices.Unsafe.SizeOf<SaveDataCreationInfo2>())];
+            context.Memory.Read(infoPosition, creationInfoBuffer.AsSpan(0, (int)infoSize));
             ref readonly SaveDataCreationInfo2 creationInfo = ref SpanHelpers.AsReadOnlyStruct<SaveDataCreationInfo2>(creationInfoBuffer);
 
             return (ResultCode)_baseFileSystemProxy.Get.CreateSaveDataFileSystemWithCreationInfo2(in creationInfo).Value;

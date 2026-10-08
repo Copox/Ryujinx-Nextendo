@@ -445,6 +445,11 @@ namespace Ryujinx.Input.HLE
 
                 ScriptedInput.Apply(_hleInputStates);
 
+                if (ScriptedInput.HomePressed())
+                {
+                    _device.System.PressHomeButton();
+                }
+
                 _device.Hid.Npads.Update(_hleInputStates);
                 _device.Hid.Npads.UpdateSixAxis(_hleMotionStates);
 

@@ -13,6 +13,8 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
         // OpenSystemAppletProxy(u64, pid, handle<copy>) -> object<nn::am::service::ISystemAppletProxy>
         public ResultCode OpenSystemAppletProxy(ServiceCtx context)
         {
+            RealAppletManager.RegisterSystemApplet(context.Device.System, context.Request.HandleDesc.PId);
+
             MakeObject(context, new ISystemAppletProxy(context.Request.HandleDesc.PId));
 
             return ResultCode.Success;

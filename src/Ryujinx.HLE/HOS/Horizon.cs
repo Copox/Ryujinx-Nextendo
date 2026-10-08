@@ -336,6 +336,14 @@ namespace Ryujinx.HLE.HOS
             }
         }
 
+        /// <summary>
+        /// [Nextendo, HOME Menu work] The console's HOME button. False when no HOME Menu runs.
+        /// </summary>
+        public bool PressHomeButton()
+        {
+            return Services.Am.AppletAE.RealAppletManager.PressHome(Device);
+        }
+
         public void ReturnFocus()
         {
             AppletState.SetFocus(true);

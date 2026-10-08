@@ -14,6 +14,7 @@ namespace Ryujinx.HLE.HOS.Services.Ns
         public IApplicationManagerInterface(ServiceCtx context)
         {
             _recordUpdateEvent = new StubEvent(context);
+            Ryujinx.HLE.HOS.HomeMenuLibrary.Changed += _recordUpdateEvent.Signal;
             _sdCardMountStatusEvent = new StubEvent(context);
             _gameCardUpdateEvent = new StubEvent(context);
             _gameCardMountFailureEvent = new StubEvent(context);
@@ -59,6 +60,79 @@ namespace Ryujinx.HLE.HOS.Services.Ns
             ApplicationControlProperty nacp = context.Device.Processes.GetProcess(context.ClientProcessId).ApplicationControlProperties;
 
             context.Memory.Write(position, SpanHelpers.AsByteSpan(ref nacp).ToArray());
+
+            return ResultCode.Success;
+        }
+        [CommandCmif(1706)] // 20.0.0+
+        // GetApplicationView(buffer<nn::ncm::ApplicationId, 5>) -> buffer<nn::ns::ApplicationView, 6>
+        public ResultCode GetApplicationView(ServiceCtx context)
+        {
+            const int ViewSize = 0x58;
+
+            ulong inPosition = context.Request.SendBuff[0].Position;
+            int count = (int)(context.Request.SendBuff[0].Size / 8);
+            ulong outPosition = context.Request.ReceiveBuff[0].Position;
+            int capacity = (int)(context.Request.ReceiveBuff[0].Size / ViewSize);
+
+            for (int i = 0; i < count && i < capacity; i++)
+            {
+                ulong applicationId = context.Memory.Read<ulong>(inPosition + (ulong)(i * 8));
+                ulong view = outPosition + (ulong)(i * ViewSize);
+
+                // A title that is fully on the console: nothing downloading, nothing to update.
+                context.Memory.Write(view, new byte[ViewSize]);
+                context.Memory.Write(view + 0x00, applicationId);
+                context.Memory.Write(view + 0x08, 0u);         // version
+                context.Memory.Write(view + 0x0C, 0x401f17u);  // can be launched, has all its contents
+            }
+
+            return ResultCode.Success;
+        }
+        [CommandCmif(1704)] // 20.0.0+
+        // GetApplicationViewWithPromotionInfo(buffer<nn::ncm::ApplicationId, 5>) -> buffer<nn::ns::ApplicationViewWithPromotionInfo, 6>
+        public ResultCode GetApplicationViewWithPromotionInfo(ServiceCtx context)
+        {
+            const int EntrySize = 0x78; // the 0x58 bytes view, then 0x20 bytes of promotion info
+
+            ulong inPosition = context.Request.SendBuff[0].Position;
+            int count = (int)(context.Request.SendBuff[0].Size / 8);
+            ulong outPosition = context.Request.ReceiveBuff[0].Position;
+            int capacity = (int)(context.Request.ReceiveBuff[0].Size / EntrySize);
+
+            for (int i = 0; i < count && i < capacity; i++)
+            {
+                ulong applicationId = context.Memory.Read<ulong>(inPosition + (ulong)(i * 8));
+                ulong entry = outPosition + (ulong)(i * EntrySize);
+
+                context.Memory.Write(entry, new byte[EntrySize]);
+                context.Memory.Write(entry + 0x00, applicationId);
+                context.Memory.Write(entry + 0x08, 0u);
+                context.Memory.Write(entry + 0x0C, 0x401f17u);
+            }
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(2050)] // 6.0.0+
+        // GetApplicationRightsOnClient(u32 flags, nn::ncm::ApplicationId, nn::account::Uid) -> (s32 count, buffer<nn::ns::ApplicationRightsOnClient, 6>)
+        public ResultCode GetApplicationRightsOnClient(ServiceCtx context)
+        {
+            context.RequestData.ReadUInt64(); // flags
+            ulong applicationId = context.RequestData.ReadUInt64();
+            ulong uidLow = context.RequestData.ReadUInt64();
+            ulong uidHigh = context.RequestData.ReadUInt64();
+
+            ulong position = context.Request.ReceiveBuff[0].Position;
+
+            // One entry: the title belongs to this console, for every user.
+            context.Memory.Write(position, new byte[0x20]);
+            context.Memory.Write(position + 0x00, applicationId);
+            context.Memory.Write(position + 0x08, uidLow);
+            context.Memory.Write(position + 0x10, uidHigh);
+            context.Memory.Write(position + 0x18, (byte)(int.TryParse(System.Environment.GetEnvironmentVariable("NEXTENDO_NS_RIGHTS"), out int rights) ? rights : 1));
+            context.Memory.Write(position + 0x19, (byte)0);
+
+            context.ResponseData.Write(1);
 
             return ResultCode.Success;
         }

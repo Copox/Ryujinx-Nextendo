@@ -167,6 +167,17 @@ namespace Ryujinx.HLE.HOS.Services
 
                     Logger.Warning?.Print(LogClass.KernelIpc, $"Missing service {serviceName}: {commandId} ignored");
 
+                    if (_ipcTrace)
+                    {
+                        // What the request carries tells what the command is: argument bytes left
+                        // to read, then the sizes of each kind of buffer.
+                        IpcMessage m = context.Request;
+                        long args = context.RequestData.BaseStream.Length - context.RequestData.BaseStream.Position;
+                        string Sizes<T>(System.Collections.Generic.List<T> l, Func<T, ulong> f) => l.Count == 0 ? "-" : string.Join("/", l.ConvertAll(x => "0x" + f(x).ToString("X")));
+
+                        Logger.Notice.Print(LogClass.KernelIpc, $"[shape] {service.GetType().Name} {commandId}: args={args} in={Sizes(m.SendBuff, x => x.Size)} out={Sizes(m.ReceiveBuff, x => x.Size)} ptr={Sizes(m.PtrBuff, x => x.Size)} recv={Sizes(m.RecvListBuff, x => x.Size)} pid={(m.HandleDesc?.HasPId ?? false)} handles={(m.HandleDesc?.ToCopy.Length ?? 0)} raw={Convert.ToHexString(m.RawData, (int)Math.Min(m.RawData.Length, context.RequestData.BaseStream.Position), (int)Math.Min(40, Math.Max(0, m.RawData.Length - context.RequestData.BaseStream.Position)))}");
+                    }
+
                     // [Nextendo, HOME Menu work] An ignored command used to answer with no data at
                     // all: the caller then read whatever the previous reply left in the buffer as
                     // its output (a count, a size, a flag). Answer zeros instead.

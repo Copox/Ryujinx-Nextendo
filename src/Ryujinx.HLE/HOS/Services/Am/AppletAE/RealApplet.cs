@@ -35,9 +35,224 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
         public Action OnExited;
     }
 
+    // A game started from the HOME Menu.
+    class RunningApplication
+    {
+        public ulong Pid;
+        public ulong CallerPid;
+        public HomeMenuTitle Title;
+        public long LayerId;
+
+        public volatile bool Exited;
+        public volatile bool TerminateRequested;
+        public Action OnExited;
+    }
+
     static class RealAppletManager
     {
         private static readonly ConcurrentDictionary<ulong, RealApplet> _applets = new();
+
+        // Message queues of the system applets (the HOME Menu). An application keeps the
+        // system-wide one, as when it runs alone.
+        private static readonly ConcurrentDictionary<ulong, AppletStateMgr> _systemApplets = new();
+
+        private static volatile RunningApplication _application;
+
+        public static void RegisterSystemApplet(Horizon system, ulong pid)
+        {
+            if (!_systemApplets.ContainsKey(pid) && Environment.GetEnvironmentVariable("NEXTENDO_QL_NOOWN") != "1")
+            {
+                AppletStateMgr state = new(system);
+
+                state.SetFocus(true);
+
+                _systemApplets[pid] = state;
+            }
+        }
+
+        public static RunningApplication StartApplication(Switch device, HomeMenuTitle title, ulong callerPid, Action onExited)
+        {
+            Horizon system = device.System;
+
+            RunningApplication application = new()
+            {
+                Title = title,
+                CallerPid = callerPid,
+                OnExited = onExited,
+            };
+
+            _application = application;
+
+            Thread thread = new(() =>
+            {
+                bool isXci = title.Path.EndsWith(".xci", StringComparison.OrdinalIgnoreCase);
+                bool started;
+
+                device.Processes.SetFallback(callerPid);
+
+                try
+                {
+                    started = isXci ? device.Processes.LoadXci(title.Path, title.Id) : device.Processes.LoadNsp(title.Path, title.Id);
+                }
+                catch (Exception e)
+                {
+                    Logger.Error?.Print(LogClass.ServiceAm, $"HOME Menu: {title.Name} could not be loaded: {e.Message}");
+
+                    started = false;
+                }
+
+                ulong pid = started ? device.Processes.ActiveApplication?.ProcessId ?? 0 : 0;
+
+                if (pid == 0 || pid == callerPid)
+                {
+                    Logger.Error?.Print(LogClass.ServiceAm, $"HOME Menu: {title.Name} did not start.");
+
+                    FinishApplication(device, application);
+
+                    return;
+                }
+
+                application.Pid = pid;
+
+                Logger.Notice.Print(LogClass.ServiceAm, $"HOME Menu: {title.Name} [{title.Id:X16}] started as process {pid}.");
+
+                // The game takes the foreground with a fresh message queue.
+                while (system.AppletState.Messages.TryDequeue(out _))
+                {
+                }
+
+                StateFor(system, callerPid).SetFocus(false);
+                system.AppletState.SetFocus(true);
+
+                HomeMenuStatus.Set("Application:" + title.Name);
+
+                while (system.KernelContext.Processes.TryGetValue(pid, out KProcess process) && process.State != ProcessState.Exited)
+                {
+                    if (application.TerminateRequested)
+                    {
+                        Terminate(system, process);
+
+                        break;
+                    }
+
+                    Thread.Sleep(30);
+                }
+
+                FinishApplication(device, application);
+            })
+            {
+                Name = "HLE.HomeMenuApplication",
+                IsBackground = true,
+            };
+
+            thread.Start();
+
+            return application;
+        }
+
+        private static void FinishApplication(Switch device, RunningApplication application)
+        {
+            Horizon system = device.System;
+
+            Logger.Notice.Print(LogClass.ServiceAm, $"HOME Menu: {application.Title.Name} is over.");
+
+            application.Exited = true;
+
+            if (_application == application)
+            {
+                _application = null;
+            }
+
+            if (application.Pid != 0)
+            {
+                device.Processes.ClearProcess(application.Pid);
+            }
+
+            device.Processes.SetActive(application.CallerPid);
+
+            Vi.SystemSharedBuffer.Show(device, application.CallerPid);
+
+            application.OnExited?.Invoke();
+
+            AppletStateMgr caller = StateFor(system, application.CallerPid);
+
+            caller.Messages.Enqueue(AllSystemAppletProxiesService.SystemAppletProxy.AppletMessage.ApplicationExited);
+            caller.SetFocus(true);
+
+            HomeMenuStatus.Set("");
+        }
+
+        public static void RequestApplicationExit(Switch device, RunningApplication application)
+        {
+            if (!application.Exited)
+            {
+                device.System.AppletState.Messages.Enqueue(AllSystemAppletProxiesService.SystemAppletProxy.AppletMessage.Exit);
+                device.System.AppletState.MessageEvent.ReadableEvent.Signal();
+
+                // A game that does not listen is ended anyway.
+                application.TerminateRequested = true;
+            }
+        }
+
+        public static void BringApplicationToForeground(Switch device, RunningApplication application)
+        {
+            if (application.Exited || application.LayerId == 0)
+            {
+                return;
+            }
+
+            device.System.SurfaceFlinger.SetRenderLayer(application.LayerId);
+
+            StateFor(device.System, application.CallerPid).SetFocus(false);
+            device.System.AppletState.SetFocus(true);
+
+            HomeMenuStatus.Set("Application:" + application.Title.Name);
+        }
+
+        // The HOME button: the game goes to the background, the HOME Menu is told.
+        public static bool PressHome(Switch device)
+        {
+            foreach ((ulong pid, AppletStateMgr state) in _systemApplets)
+            {
+                RunningApplication application = _application;
+
+                if (application != null && !application.Exited && application.Pid != 0)
+                {
+                    long current = device.System.SurfaceFlinger.RenderLayerId;
+                    Vi.SystemSharedBuffer session = Vi.SystemSharedBuffer.Of(pid);
+
+                    if (session != null && current != session.LayerId)
+                    {
+                        application.LayerId = current;
+                    }
+                }
+
+                state.Messages.Enqueue(AllSystemAppletProxiesService.SystemAppletProxy.AppletMessage.DetectShortPressingHomeButton);
+                state.MessageEvent.ReadableEvent.Signal();
+
+                return true;
+            }
+
+            return false;
+        }
+
+        // The HOME Menu asks for the screen (after the HOME button).
+        public static void SystemAppletToForeground(Switch device, ulong pid)
+        {
+            RunningApplication application = _application;
+
+            if (application == null || application.Exited)
+            {
+                return;
+            }
+
+            Vi.SystemSharedBuffer.Show(device, pid);
+
+            device.System.AppletState.SetFocus(false);
+            StateFor(device.System, pid).SetFocus(true);
+
+            HomeMenuStatus.Set("");
+        }
 
         public static bool IsSystemAppletProgram(ulong programId)
         {
@@ -94,7 +309,12 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
         // applet, the system-wide one otherwise.
         public static AppletStateMgr StateFor(Horizon system, ulong pid)
         {
-            return pid != 0 && _applets.TryGetValue(pid, out RealApplet applet) ? applet.State : system.AppletState;
+            if (pid != 0 && _applets.TryGetValue(pid, out RealApplet applet))
+            {
+                return applet.State;
+            }
+
+            return pid != 0 && _systemApplets.TryGetValue(pid, out AppletStateMgr state) ? state : system.AppletState;
         }
 
         public static void Start(Switch device, RealApplet applet, string path)

@@ -600,6 +600,12 @@ namespace Ryujinx.Ava.UI.Windows
         {
             LocaleManager.Instance.UpdateAndGetDynamicValue(LocaleKeys.StatusBarGamesLoaded, e.NumAppsLoaded, e.NumAppsFound);
 
+            if (e.NumAppsLoaded == e.NumAppsFound)
+            {
+                // The library is complete: a running HOME Menu lists its titles again.
+                Ryujinx.HLE.HOS.HomeMenuLibrary.NotifyChanged();
+            }
+
             Dispatcher.UIThread.Post(() =>
             {
                 ViewModel.StatusBarProgressValue = e.NumAppsLoaded;
@@ -874,6 +880,37 @@ namespace Ryujinx.Ava.UI.Windows
                             ViewModel.SelectedIcon = Ryujinx.Common.EmbeddedResources.Read("Ryujinx/Assets.UIImages.Icon_HomeMenu.png");
                             ViewModel.LoadIconRadius = new Avalonia.CornerRadius(36);
                         }
+
+                        // The games of the library are the titles "installed" on that console.
+                        // A direct launch skips the library scan: the HOME Menu needs it.
+                        if (!_applicationsLoadedOnce)
+                        {
+                            LoadApplications();
+                        }
+
+                        Ryujinx.HLE.HOS.HomeMenuLibrary.SetProvider(() =>
+                        {
+                            List<Ryujinx.HLE.HOS.HomeMenuTitle> titles = [];
+
+                            foreach (ApplicationData app in ViewModel.Applications.ToArray())
+                            {
+                                if (app.Id < 0x0100000000010000 || string.IsNullOrEmpty(app.Path) || titles.Exists(t => t.Id == app.Id))
+                                {
+                                    continue;
+                                }
+
+                                titles.Add(new Ryujinx.HLE.HOS.HomeMenuTitle
+                                {
+                                    Id = app.Id,
+                                    Name = app.Name,
+                                    Path = app.Path,
+                                    Icon = app.Icon,
+                                    Nacp = app.HasControlHolder ? app.ControlHolder.ByteSpan.ToArray() : null,
+                                });
+                            }
+
+                            return titles;
+                        });
 
                         if (homeMenuData != null)
                             _ = ViewModel.LoadApplication(homeMenuData, _startFullscreen, homeMenuNacp);

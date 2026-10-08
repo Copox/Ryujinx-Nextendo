@@ -11,8 +11,11 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         private readonly KEvent _channelEvent;
         private int _channelEventHandle;
 
-        public IHomeMenuFunctions(Horizon system)
+        private readonly ulong _pid;
+
+        public IHomeMenuFunctions(Horizon system, ulong pid = 0)
         {
+            _pid = pid;
             // TODO: Signal this Event somewhere in future.
             _channelEvent = new KEvent(system.KernelContext);
         }
@@ -21,7 +24,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         // RequestToGetForeground()
         public ResultCode RequestToGetForeground(ServiceCtx context)
         {
-            Logger.Stub?.PrintStub(LogClass.ServiceAm);
+            RealAppletManager.SystemAppletToForeground(context.Device, _pid);
 
             return ResultCode.Success;
         }

@@ -119,6 +119,43 @@ namespace Ryujinx.HLE.HOS.Services.Ns
     class IReadOnlyApplicationRecordInterface : IpcService
     {
         public IReadOnlyApplicationRecordInterface() { }
+
+        [CommandCmif(3)] // 20.0.0+
+        // ListApplicationRecord() -> (s32 count, buffer<nn::ns::ApplicationRecord, 6>)
+        public ResultCode ListApplicationRecord(ServiceCtx context)
+        {
+            // The emulator's library is the console's list of installed titles.
+            const int RecordSize = 0x18;
+
+            ulong position = context.Request.ReceiveBuff[0].Position;
+            int capacity = (int)(context.Request.ReceiveBuff[0].Size / RecordSize);
+            int count = 0;
+
+            foreach (Ryujinx.HLE.HOS.HomeMenuTitle title in Ryujinx.HLE.HOS.HomeMenuLibrary.Titles())
+            {
+                if (count == capacity)
+                {
+                    break;
+                }
+
+                ulong record = position + (ulong)(count * RecordSize);
+
+                context.Memory.Write(record + 0x00, title.Id);
+                context.Memory.Write(record + 0x08, (byte)3);  // installed
+                context.Memory.Write(record + 0x09, (byte)0);
+                context.Memory.Write(record + 0x0A, (ushort)0);
+                context.Memory.Write(record + 0x0C, 0);
+                context.Memory.Write(record + 0x10, (long)(count + 1)); // order of last use
+
+                count++;
+            }
+
+Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.Service, $"[home] {count} title(s) listed to the HOME Menu");
+
+                        context.ResponseData.Write(count);
+
+            return ResultCode.Success;
+        }
     }
 
     class IECommerceInterface : IpcService

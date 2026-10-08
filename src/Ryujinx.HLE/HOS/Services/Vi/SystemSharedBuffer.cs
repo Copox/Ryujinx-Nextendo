@@ -139,6 +139,25 @@ namespace Ryujinx.HLE.HOS.Services.Vi
             }
         }
 
+        public static SystemSharedBuffer Of(ulong pid)
+        {
+            lock (_lock)
+            {
+                return _sessions.GetValueOrDefault(pid);
+            }
+        }
+
+        // Puts an applet's layer on screen.
+        public static void Show(Switch device, ulong pid)
+        {
+            SystemSharedBuffer session = Of(pid);
+
+            if (session != null)
+            {
+                device.System.SurfaceFlinger.SetRenderLayer(session.LayerId);
+            }
+        }
+
         // The applet is gone: its layer leaves the screen for the one that was there before.
         public static void Release(Switch device, ulong pid)
         {

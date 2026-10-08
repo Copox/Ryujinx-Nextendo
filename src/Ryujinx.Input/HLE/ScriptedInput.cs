@@ -1,19 +1,24 @@
+using Ryujinx.Common.Logging;
 using Ryujinx.HLE.HOS.Services.Hid;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 
 namespace Ryujinx.Input.HLE
 {
     // Development aid: presses buttons at given times so a menu can be driven without a person
-    // at the keyboard. NEXTENDO_INPUT_SCRIPT="18:A;20.5:DpadUp;22:A" (seconds since the first
-    // input update, then a ControllerKeys name). Each press is held for a fifth of a second.
+    // at the keyboard. NEXTENDO_INPUT_SCRIPT="18:A;20.5:DpadUp;22:A;40:Home" (seconds since the
+    // first input update, then a ControllerKeys name, or Home for the console's HOME button).
+    // Each press is held for a fifth of a second.
     static class ScriptedInput
     {
         private const double HoldSeconds = 0.2;
 
+        private static readonly List<double> _homeTimes = [];
         private static readonly List<(double Time, ControllerKeys Keys)> _steps = Load();
         private static readonly Stopwatch _clock = new();
+
         private static ControllerKeys _last;
 
         private static List<(double, ControllerKeys)> Load()
@@ -30,9 +35,16 @@ namespace Ryujinx.Input.HLE
             {
                 string[] parts = step.Split(':');
 
-                if (parts.Length == 2 &&
-                    double.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out double time) &&
-                    Enum.TryParse(parts[1], true, out ControllerKeys keys))
+                if (parts.Length != 2 || !double.TryParse(parts[0], NumberStyles.Float, CultureInfo.InvariantCulture, out double time))
+                {
+                    continue;
+                }
+
+                if (parts[1].Equals("Home", StringComparison.OrdinalIgnoreCase))
+                {
+                    _homeTimes.Add(time);
+                }
+                else if (Enum.TryParse(parts[1], true, out ControllerKeys keys))
                 {
                     steps.Add((time, keys));
                 }
@@ -41,9 +53,29 @@ namespace Ryujinx.Input.HLE
             return steps;
         }
 
+        // True once for each "Home" step of the script whose time has come.
+        public static bool HomePressed()
+        {
+            if (_homeTimes.Count == 0 || !_clock.IsRunning)
+            {
+                return false;
+            }
+
+            if (_clock.Elapsed.TotalSeconds >= _homeTimes[0])
+            {
+                Logger.Notice.Print(LogClass.Hid, $"[script] Home pressed at {_homeTimes[0]:F1}s");
+
+                _homeTimes.RemoveAt(0);
+
+                return true;
+            }
+
+            return false;
+        }
+
         public static void Apply(List<GamepadInput> states)
         {
-            if (_steps.Count == 0 || states.Count == 0)
+            if ((_steps.Count == 0 && _homeTimes.Count == 0) || states.Count == 0)
             {
                 return;
             }
@@ -72,13 +104,11 @@ namespace Ryujinx.Input.HLE
 
                 if (keys != _last)
                 {
-                    Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.Hid, $"[script] {keys} pressed at {now:F1}s for player {state.PlayerId} ({states.Count} pads)");
+                    Logger.Notice.Print(LogClass.Hid, $"[script] {keys} pressed at {now:F1}s for player {state.PlayerId} ({states.Count} pads)");
                 }
             }
 
             _last = keys;
-            {
-            }
         }
     }
 }

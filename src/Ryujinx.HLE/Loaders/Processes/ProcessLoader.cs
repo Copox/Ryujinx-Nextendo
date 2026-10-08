@@ -28,6 +28,32 @@ namespace Ryujinx.HLE.Loaders.Processes
 
         private ulong _latestPid;
 
+        // [Nextendo, HOME Menu work] The system applet that started the active application: it
+        // becomes the active program again when that application ends.
+        private ulong _fallbackPid;
+
+        public void SetFallback(ulong pid)
+        {
+            lock (_pidLock)
+            {
+                _fallbackPid = pid;
+            }
+        }
+
+        public void SetActive(ulong pid)
+        {
+            lock (_pidLock)
+            {
+                if (_processesByPid.TryGetValue(pid, out ProcessResult process))
+                {
+                    AppletExitRequested = false;
+                    _latestPid = pid;
+
+                    TitleIDs.CurrentApplication.Value = process.ProgramIdText;
+                }
+            }
+        }
+
         private readonly object _pidLock = new();
 
         // [Nextendo] A standalone applet (e.g. Mii editor) requested to exit and return to the
@@ -47,6 +73,19 @@ namespace Ryujinx.HLE.Loaders.Processes
                     if (AppletExitRequested)
                     {
                         return null;
+                    }
+
+                    // [Nextendo, HOME Menu work] The game started from the HOME Menu is over: the
+                    // HOME Menu is the active program again, the emulation goes on.
+                    if (_fallbackPid != 0 && _latestPid != _fallbackPid &&
+                        _processesByPid.TryGetValue(_fallbackPid, out ProcessResult? fallback) &&
+                        (_latestPid == 0 ||
+                         !_device.System.KernelContext.Processes.TryGetValue(_latestPid, out HOS.Kernel.Process.KProcess? latest) ||
+                         latest.State is HOS.Kernel.Process.ProcessState.Exited or HOS.Kernel.Process.ProcessState.Exiting))
+                    {
+                        _processesByPid.TryRemove(_latestPid, out _);
+                        _latestPid = _fallbackPid;
+                        TitleIDs.CurrentApplication.Value = fallback.ProgramIdText;
                     }
 
                     // Check if _latestPid is still valid
@@ -395,7 +434,12 @@ namespace Ryujinx.HLE.Loaders.Processes
             {
                 if (_processesByPid.TryRemove(pid, out _))
                 {
-                    if (_latestPid == pid)
+                    if (_latestPid == pid && _fallbackPid != 0 && _fallbackPid != pid && _processesByPid.TryGetValue(_fallbackPid, out ProcessResult fallback))
+                    {
+                        _latestPid = _fallbackPid;
+                        TitleIDs.CurrentApplication.Value = fallback.ProgramIdText;
+                    }
+                    else if (_latestPid == pid)
                     {
                         _latestPid = 0;
                         TitleIDs.CurrentApplication.Value = null;
