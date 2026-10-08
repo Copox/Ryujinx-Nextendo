@@ -90,8 +90,32 @@ namespace Ryujinx.HLE.HOS.Services.Settings
         // GetEulaVersions() -> (s32 count, buffer<nn::settings::system::EulaVersion, 6>)
         public ResultCode GetEulaVersions(ServiceCtx context)
         {
-            // No EULA record: nothing has been accepted on this console.
-            context.ResponseData.Write(0);
+            // Without an accepted EULA for its region, the HOME Menu stops on the "Important
+            // information" screen and only offers to restart. Report the agreement as accepted
+            // for every region, at a version newer than any the firmware can ask for.
+            ulong position = context.Request.ReceiveBuff[0].Position;
+            ulong size = context.Request.ReceiveBuff[0].Size;
+
+            const int EntrySize = 0x30;
+            int count = 0;
+
+            for (int region = 0; region < 7 && (ulong)((count + 1) * EntrySize) <= size; region++)
+            {
+                ulong entry = position + (ulong)(count * EntrySize);
+
+                context.Memory.Write(entry + 0x00, 0x7FFF0000u); // Version
+                context.Memory.Write(entry + 0x04, region);      // RegionCode
+                context.Memory.Write(entry + 0x08, 1);           // ClockType: network system clock
+                context.Memory.Write(entry + 0x0C, 0u);
+                context.Memory.Write(entry + 0x10, 1700000000L); // NetworkSystemClock (posix time)
+                context.Memory.Write(entry + 0x18, 0L);          // SteadyClockTimePoint.TimePoint
+                context.Memory.Write(entry + 0x20, 0L);          // SteadyClockTimePoint.ClockSourceId
+                context.Memory.Write(entry + 0x28, 0L);
+
+                count++;
+            }
+
+            context.ResponseData.Write(count);
 
             return ResultCode.Success;
         }
