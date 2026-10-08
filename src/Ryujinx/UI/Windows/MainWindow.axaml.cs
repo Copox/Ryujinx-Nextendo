@@ -789,6 +789,7 @@ namespace Ryujinx.Ava.UI.Windows
             // handle them together. A fresh install shows the wizard only; an existing install that
             // just updated shows the condensed patch notes once.
             bool firstRun = NextendoFirstRunWindow.IsFirstRun();
+            Logger.Notice.Print(LogClass.Application, $"[home-menu] CheckLaunchState: firstRun={firstRun} deferLoad={_deferLoad} path={_launchPath} keyError={ShowKeyErrorOnLoad}");
             bool showPatchNotes = !firstRun && Ryujinx.Ava.Common.NextendoPatchNotes.ShouldShow();
 
             if (firstRun || showPatchNotes)
@@ -853,13 +854,26 @@ namespace Ryujinx.Ava.UI.Windows
                 }
             }
 
+            Logger.Notice.Print(LogClass.Application, "[home-menu] startup popups done");
             if (!ShowKeyErrorOnLoad)
             {
                 if (_deferLoad)
                 {
                     _deferLoad = false;
 
-                    if (ApplicationLibrary.TryGetApplicationsFromFile(_launchPath, out List<ApplicationData> applications))
+                    // [Nextendo, HOME Menu work] "@home-menu" boots qlaunch (system title
+                    // 0100000000001000) from the installed firmware, the way the Mii editor is.
+                    // Development entry point only: there is no menu item for it.
+                    if (_launchPath == "@home-menu")
+                    {
+                        Ryujinx.Ava.Utilities.AppletMetadata homeMenu = new(ViewModel.ContentManager, "HOME Menu", 0x0100000000001000);
+                        Logger.Notice.Print(LogClass.Application, $"[home-menu] resolving qlaunch, content path={homeMenu.GetContentPath(ViewModel.ContentManager)}");
+                        if (homeMenu.CanStart(out ApplicationData homeMenuData, out LibHac.Common.BlitStruct<LibHac.Ns.ApplicationControlProperty> homeMenuNacp))
+                            _ = ViewModel.LoadApplication(homeMenuData, _startFullscreen, homeMenuNacp);
+                        else
+                            Logger.Error?.Print(LogClass.Application, "HOME Menu: qlaunch not found in the installed firmware.");
+                    }
+                    else if (ApplicationLibrary.TryGetApplicationsFromFile(_launchPath, out List<ApplicationData> applications))
                     {
                         ApplicationData applicationData;
 

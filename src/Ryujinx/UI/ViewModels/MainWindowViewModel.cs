@@ -2082,7 +2082,11 @@ namespace Ryujinx.Ava.UI.ViewModels
             Ryujinx.Ava.Common.ServiceLaunchPolicy.ResetOnlineBlock();
             Ryujinx.Ava.Common.NextendoSaveSync.Playing = null;
             Ryujinx.Ava.Common.ServiceLaunchDecision serviceLaunch = Ryujinx.Ava.Common.ServiceLaunchDecision.Unmanaged;
-            if (!application.IsNextendoCompatible && !NextendoServerOverride.HorsNextendo)
+            // [Nextendo, HOME Menu work] System titles (firmware applets, qlaunch) are not games:
+            // no service catalog entry can exist for them, so no online check applies.
+            bool systemTitle = application.Id is >= 0x0100000000000000 and <= 0x0100000000001FFF;
+            Logger.Notice.Print(LogClass.Application, $"[home-menu] LoadApplication reached the online gate, id={application.Id:x16} system={systemTitle}");
+            if (!application.IsNextendoCompatible && !NextendoServerOverride.HorsNextendo && !systemTitle)
             {
                 serviceLaunch = await Ryujinx.Ava.Common.NextendoServiceCatalog.EvaluateLaunchAsync(application);
             }
