@@ -12,6 +12,7 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
         Result Cancel();
         Result GetFriendListIds(out int count, Span<NetworkServiceAccountId> friendIds, Uid userId, int offset, SizedFriendFilter filter, ulong pidPlaceholder, ulong pid);
         Result GetFriendList(out int count, Span<FriendImpl> friendList, Uid userId, int offset, SizedFriendFilter filter, ulong pidPlaceholder, ulong pid);
+        Result GetFriendListForViewerV2(out int count, Span<FriendImpl> friendList, Uid userId, int offset, SizedFriendFilter filter);
         Result UpdateFriendInfo(Span<FriendImpl> info, Uid userId, ReadOnlySpan<NetworkServiceAccountId> friendIds, ulong pidPlaceholder, ulong pid);
         Result GetFriendProfileImage(out int size, Uid userId, NetworkServiceAccountId friendId, Span<byte> profileImage);
         Result CheckFriendListAvailability(out bool listAvailable, Uid userId);
@@ -47,9 +48,11 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
         Result GetProfileExtraList(Span<ProfileExtraImpl> extraList, Uid userId, ReadOnlySpan<NetworkServiceAccountId> friendIds);
         Result GetRelationship(out Relationship relationship, Uid userId, NetworkServiceAccountId friendId);
         Result GetUserPresenceView(out UserPresenceViewImpl userPresenceView, Uid userId);
+        Result GetUserPresenceViewV2(out UserPresenceViewImpl userPresenceView, Uid userId);
         Result GetPlayHistoryList(out int count, Span<PlayHistoryImpl> playHistoryList, Uid userId, int arg3);
         Result GetPlayHistoryStatistics(out PlayHistoryStatistics statistics, Uid userId);
         Result LoadUserSetting(out UserSettingImpl userSetting, Uid userId);
+        Result LoadUserSettingV2(out UserSettingImpl userSetting, Uid userId);
         Result SyncUserSetting(Uid userId);
         Result RequestListSummaryOverlayNotification();
         Result GetExternalApplicationCatalog(out ExternalApplicationCatalog catalog, ExternalApplicationCatalogId catalogId, LanguageCode language);

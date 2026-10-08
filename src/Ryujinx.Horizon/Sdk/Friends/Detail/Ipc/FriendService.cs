@@ -705,6 +705,47 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             return Result.Success;
         }
 
+        [CmifCommand(20108)]
+        public Result GetFriendListForViewerV2(
+            out int count,
+            [Buffer(HipcBufferFlags.Out | HipcBufferFlags.MapAlias)] Span<FriendImpl> friendList,
+            Uid userId,
+            int offset,
+            SizedFriendFilter filter)
+        {
+            count = 0;
+
+            Logger.Stub?.PrintStub(LogClass.ServiceFriend, new { userId, offset, filter });
+
+            if (userId.IsNull || offset < 0)
+            {
+                return FriendResult.InvalidArgument;
+            }
+
+            // Meme remplissage que GetFriendList : les vrais amis Nextendo avec
+            // leur presence reelle. MyPage (SDK 22) ne lit QUE cette version V2 :
+            // la laisser vide, c'est une liste d'amis vide a l'ecran.
+            if (offset == 0 || WantsNsaIds())
+            {
+                IReadOnlyList<NextendoFriends.Entry> friends = WantsNsaIds() ? NextendoFriends.GetWarm(2000) : NextendoFriends.Get();
+                bool wantNsa = WantsNsaIds();
+                int n = Math.Min(Math.Max(0, friends.Count - offset), friendList.Length);
+                for (int i = 0; i < n; i++)
+                {
+                    var entry = friends[offset + i];
+                    ulong lid = wantNsa && entry.Nsa != 0 ? entry.Nsa : entry.Pid;
+                    PresenceStatus st = entry.Status > 0 ? PresenceStatus.OnlinePlay : PresenceStatus.Offline;
+                    friendList[i] = MakeNextendoFriend(lid, entry.Name, st, entry.AppField,
+                        sameApp: entry.Status > 0);
+                }
+                count = n;
+            }
+
+            Logger.Info?.Print(LogClass.ServiceFriend, $"[Nextendo] GetFriendListForViewerV2 -> offset={offset} count={count}");
+
+            return Result.Success;
+        }
+
         [CmifCommand(20110)]
         public Result LoadFriendSetting(
             [Buffer(HipcBufferFlags.Out | HipcBufferFlags.Pointer, 0x40)] out FriendSettingImpl friendSetting,
@@ -867,6 +908,16 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             return Result.Success;
         }
 
+        [CmifCommand(20601)]
+        public Result GetUserPresenceViewV2([Buffer(HipcBufferFlags.Out | HipcBufferFlags.Pointer, 0xE0)] out UserPresenceViewImpl userPresenceView, Uid userId)
+        {
+            userPresenceView = default;
+
+            Logger.Stub?.PrintStub(LogClass.ServiceFriend, new { userId });
+
+            return Result.Success;
+        }
+
         [CmifCommand(20700)]
         public Result GetPlayHistoryList(out int count, [Buffer(HipcBufferFlags.Out | HipcBufferFlags.MapAlias)] Span<PlayHistoryImpl> playHistoryList, Uid userId, int arg3)
         {
@@ -900,6 +951,16 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
         [CmifCommand(20801)]
         public Result SyncUserSetting(Uid userId)
         {
+            Logger.Stub?.PrintStub(LogClass.ServiceFriend, new { userId });
+
+            return Result.Success;
+        }
+
+        [CmifCommand(20802)]
+        public Result LoadUserSettingV2([Buffer(HipcBufferFlags.Out | HipcBufferFlags.Pointer, 0x800)] out UserSettingImpl userSetting, Uid userId)
+        {
+            userSetting = default;
+
             Logger.Stub?.PrintStub(LogClass.ServiceFriend, new { userId });
 
             return Result.Success;
