@@ -43,6 +43,8 @@ namespace Ryujinx.Graphics.Shader.Translation
         private readonly Dictionary<TextureInfo, TextureMeta> _usedTextures;
         private readonly Dictionary<TextureInfo, TextureMeta> _usedImages;
 
+        private readonly List<PointerStoreDescriptor> _pointerStores;
+
         public int LocalMemoryId { get; private set; }
         public int SharedMemoryId { get; private set; }
 
@@ -77,6 +79,8 @@ namespace Ryujinx.Graphics.Shader.Translation
 
             _usedTextures = new();
             _usedImages = new();
+
+            _pointerStores = [];
 
             Properties.AddOrUpdateConstantBuffer(new(BufferLayout.Std140, 0, SupportBuffer.Binding, "support_buffer", SupportBuffer.GetStructureType()));
 
@@ -500,6 +504,16 @@ namespace Ryujinx.Graphics.Shader.Translation
             }
 
             return descriptors;
+        }
+
+        public void AddPointerStore(PointerStoreDescriptor descriptor)
+        {
+            _pointerStores.Add(descriptor);
+        }
+
+        public PointerStoreDescriptor[] GetPointerStoreDescriptors()
+        {
+            return _pointerStores.ToArray();
         }
 
         public TextureDescriptor[] GetTextureDescriptors(bool includeArrays = true)

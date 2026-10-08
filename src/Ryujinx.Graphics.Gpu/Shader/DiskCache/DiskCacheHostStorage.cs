@@ -18,11 +18,12 @@ namespace Ryujinx.Graphics.Gpu.Shader.DiskCache
         private const uint ShdiMagic = (byte)'S' | ((byte)'H' << 8) | ((byte)'D' << 16) | ((byte)'I' << 24);
         private const uint BufdMagic = (byte)'B' | ((byte)'U' << 8) | ((byte)'F' << 16) | ((byte)'D' << 24);
         private const uint TexdMagic = (byte)'T' | ((byte)'E' << 8) | ((byte)'X' << 16) | ((byte)'D' << 24);
+        private const uint PtrsMagic = (byte)'P' | ((byte)'T' << 8) | ((byte)'R' << 16) | ((byte)'S' << 24);
 
         private const ushort FileFormatVersionMajor = 1;
         private const ushort FileFormatVersionMinor = 2;
         private const uint FileFormatVersionPacked = ((uint)FileFormatVersionMajor << 16) | FileFormatVersionMinor;
-        private const uint CodeGenVersion = 7354;
+        private const uint CodeGenVersion = 7355;
 
         private const string SharedTocFileName = "shared.toc";
         private const string SharedDataFileName = "shared.data";
@@ -184,6 +185,8 @@ namespace Ryujinx.Graphics.Gpu.Shader.DiskCache
             /// Indicates if the vertex shader accesses draw parameters.
             /// </summary>
             public bool UsesDrawParameters;
+
+            public ushort PointerStoresCount;
         }
 
         private readonly DiskCacheGuestStorage _guestStorage;
@@ -772,6 +775,7 @@ namespace Ryujinx.Graphics.Gpu.Shader.DiskCache
             BufferDescriptor[] sBuffers = new BufferDescriptor[dataInfo.SBuffersCount];
             TextureDescriptor[] textures = new TextureDescriptor[dataInfo.TexturesCount];
             TextureDescriptor[] images = new TextureDescriptor[dataInfo.ImagesCount];
+            PointerStoreDescriptor[] pointerStores = new PointerStoreDescriptor[dataInfo.PointerStoresCount];
 
             for (int index = 0; index < dataInfo.CBuffersCount; index++)
             {
@@ -793,11 +797,17 @@ namespace Ryujinx.Graphics.Gpu.Shader.DiskCache
                 dataReader.ReadWithMagicAndSize(ref images[index], TexdMagic);
             }
 
+            for (int index = 0; index < dataInfo.PointerStoresCount; index++)
+            {
+                dataReader.ReadWithMagicAndSize(ref pointerStores[index], PtrsMagic);
+            }
+
             return new ShaderProgramInfo(
                 cBuffers,
                 sBuffers,
                 textures,
                 images,
+                pointerStores,
                 dataInfo.Stage,
                 dataInfo.GeometryVerticesPerPrimitive,
                 dataInfo.GeometryMaxOutputVertices,
@@ -838,6 +848,7 @@ namespace Ryujinx.Graphics.Gpu.Shader.DiskCache
                 UsesRtLayer = info.UsesRtLayer,
                 ClipDistancesWritten = info.ClipDistancesWritten,
                 FragmentOutputMap = info.FragmentOutputMap,
+                PointerStoresCount = (ushort)info.PointerStores.Count,
             };
 
             dataWriter.WriteWithMagicAndSize(ref dataInfo, ShdiMagic);
@@ -864,6 +875,12 @@ namespace Ryujinx.Graphics.Gpu.Shader.DiskCache
             {
                 TextureDescriptor entry = info.Images[index];
                 dataWriter.WriteWithMagicAndSize(ref entry, TexdMagic);
+            }
+
+            for (int index = 0; index < info.PointerStores.Count; index++)
+            {
+                PointerStoreDescriptor entry = info.PointerStores[index];
+                dataWriter.WriteWithMagicAndSize(ref entry, PtrsMagic);
             }
         }
     }

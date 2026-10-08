@@ -9,6 +9,7 @@ namespace Ryujinx.Graphics.Shader
         public ReadOnlyCollection<BufferDescriptor> SBuffers { get; }
         public ReadOnlyCollection<TextureDescriptor> Textures { get; }
         public ReadOnlyCollection<TextureDescriptor> Images { get; }
+        public ReadOnlyCollection<PointerStoreDescriptor> PointerStores { get; }
 
         public ShaderStage Stage { get; }
         public int GeometryVerticesPerPrimitive { get; }
@@ -26,6 +27,7 @@ namespace Ryujinx.Graphics.Shader
             BufferDescriptor[] sBuffers,
             TextureDescriptor[] textures,
             TextureDescriptor[] images,
+            PointerStoreDescriptor[] pointerStores,
             ShaderStage stage,
             int geometryVerticesPerPrimitive,
             int geometryMaxOutputVertices,
@@ -41,6 +43,7 @@ namespace Ryujinx.Graphics.Shader
             SBuffers = Array.AsReadOnly(sBuffers);
             Textures = Array.AsReadOnly(textures);
             Images = Array.AsReadOnly(images);
+            PointerStores = Array.AsReadOnly(pointerStores);
 
             Stage = stage;
             GeometryVerticesPerPrimitive = geometryVerticesPerPrimitive;
