@@ -49,7 +49,7 @@ namespace Ryujinx.Horizon.Sdk.Sf.Cmif
                     outRawData.Clear();
                     outHeader[0] = new CmifOutHeader { Magic = CmifMessage.CmifOutHeaderMagic, Result = Result.Success };
 
-                    Logger.Warning?.Print(LogClass.Service, $"Missing service {objectName} (command ID: {commandId}) ignored [in={inMessageRawData.Length}]");
+                    Logger.Warning?.Print(LogClass.Service, $"Missing service {objectName} (command ID: {commandId}) ignored [in={inMessageRawData.Length}] raw={Convert.ToHexString(inMessageRawData[..Math.Min(48, inMessageRawData.Length)])} {DescribeBuffers(ref context)}");
 
                     return Result.Success;
                 }
@@ -86,6 +86,33 @@ namespace Ryujinx.Horizon.Sdk.Sf.Cmif
             outHeader[0] = new CmifOutHeader { Magic = CmifMessage.CmifOutHeaderMagic, Result = commandResult };
 
             return Result.Success;
+        }
+
+        // What buffers an unknown request carries: they say what the command returns.
+        private static string DescribeBuffers(scoped ref ServiceDispatchContext context)
+        {
+            HipcMetadata meta = context.Request.Meta;
+            HipcMessageData data = context.Request.Data;
+            System.Text.StringBuilder text = new();
+
+            text.Append($"statics={meta.SendStaticsCount} in={meta.SendBuffersCount} out={meta.ReceiveBuffersCount} recvlist={meta.ReceiveStaticsCount} pid={meta.SendPid}");
+
+            for (int i = 0; i < meta.SendStaticsCount && i < data.SendStatics.Length; i++)
+            {
+                text.Append($" static[{i}]=0x{data.SendStatics[i].Size:X}");
+            }
+
+            for (int i = 0; i < meta.ReceiveBuffersCount && i < data.ReceiveBuffers.Length; i++)
+            {
+                text.Append($" out[{i}]=0x{data.ReceiveBuffers[i].Size:X}");
+            }
+
+            for (int i = 0; i < data.ReceiveList.Length && i < 4; i++)
+            {
+                text.Append($" recv[{i}]={System.Convert.ToHexString(System.Runtime.InteropServices.MemoryMarshal.AsBytes(data.ReceiveList.Slice(i, 1)))}");
+            }
+
+            return text.ToString();
         }
 
         private static void PrepareForStubReply(scoped ref ServiceDispatchContext context, out Span<byte> outRawData)

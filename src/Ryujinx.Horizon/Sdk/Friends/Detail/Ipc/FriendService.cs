@@ -36,6 +36,15 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             => string.Equals(NextendoFriends.CurrentTitleId, Splatoon3TitleId, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(NextendoFriends.CurrentTitleId, WonderTitleId, StringComparison.OrdinalIgnoreCase);
 
+        // True for the local profile the signed-in Nextendo account is bound to (every profile
+        // when none is recorded yet).
+        private static bool IsNextendoProfile(Uid userId)
+        {
+            string bound = NextendoAccount.ProfileUserId;
+
+            return string.IsNullOrEmpty(bound) || string.Equals(bound, userId.ToString(), StringComparison.OrdinalIgnoreCase);
+        }
+
         private static FriendImpl MakeNextendoFriend(ulong netId, string nick, PresenceStatus status, byte[] appField = null, bool sameApp = true)
         {
             Array33<byte> nameArr = default;
@@ -659,7 +668,23 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
         [CmifCommand(20100)]
         public Result GetFriendCount(out int count, Uid userId, SizedFriendFilter filter, ulong pidPlaceholder, [ClientProcessId] ulong pid)
         {
-            count = NextendoFriends.Get().Count; // [Nextendo] real friend count
+            // [Nextendo] The friends of the profile bound to the Nextendo account, and of no other
+            // local profile. Asked with the "online" filter (the badge on the HOME Menu), only those
+            // who are online count.
+            count = 0;
+
+            if (IsNextendoProfile(userId))
+            {
+                bool onlineOnly = filter.PresenceStatus is PresenceStatusFilter.Online or PresenceStatusFilter.OnlinePlay or PresenceStatusFilter.OnlineOrOnlinePlay;
+
+                foreach (NextendoFriends.Entry friend in NextendoFriends.Get())
+                {
+                    if (!onlineOnly || friend.Status > 0)
+                    {
+                        count++;
+                    }
+                }
+            }
 
             Logger.Stub?.PrintStub(LogClass.ServiceFriend, new { userId, filter, pidPlaceholder, pid });
 
@@ -725,7 +750,7 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             // Meme remplissage que GetFriendList : les vrais amis Nextendo avec
             // leur presence reelle. MyPage (SDK 22) ne lit QUE cette version V2 :
             // la laisser vide, c'est une liste d'amis vide a l'ecran.
-            if (offset == 0 || WantsNsaIds())
+            if (IsNextendoProfile(userId) && (offset == 0 || WantsNsaIds()))
             {
                 IReadOnlyList<NextendoFriends.Entry> friends = WantsNsaIds() ? NextendoFriends.GetWarm(2000) : NextendoFriends.Get();
                 bool wantNsa = WantsNsaIds();
@@ -735,13 +760,41 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                     var entry = friends[offset + i];
                     ulong lid = wantNsa && entry.Nsa != 0 ? entry.Nsa : entry.Pid;
                     PresenceStatus st = entry.Status > 0 ? PresenceStatus.OnlinePlay : PresenceStatus.Offline;
-                    friendList[i] = MakeNextendoFriend(lid, entry.Name, st, entry.AppField,
+                    FriendImpl made = MakeNextendoFriend(lid, entry.Name, st, entry.AppField,
                         sameApp: entry.Status > 0);
+
+                    const int stride = 0x220; // the V2 record: the old one and 0x20 bytes more
+                    Span<byte> raw = MemoryMarshal.AsBytes(friendList);
+
+                    if ((i + 1) * stride <= raw.Length)
+                    {
+                        raw.Slice(i * stride, stride).Clear();
+                        MemoryMarshal.AsBytes(MemoryMarshal.CreateSpan(ref made, 1)).CopyTo(raw.Slice(i * stride));
+
+                        if (Environment.GetEnvironmentVariable("NEXTENDO_FRIEND_V2_PROBE") == "2")
+                        {
+                            // Letters that change every 8 bytes, two-letter code: the text shown names the offset.
+                            for (int k = 0; k < stride; k++)
+                            {
+                                int slot = k >> 3;
+                                raw[i * stride + k] = (byte)((k & 7) < 4 ? 'A' + (slot / 26) : 'a' + (slot % 26));
+                            }
+                        }
+
+                        if (Environment.GetEnvironmentVariable("NEXTENDO_FRIEND_V2_PROBE") == "1")
+                        {
+                            // Every 8-byte slot holds its own offset: whatever the caller reads back names the field.
+                            for (int k = 0; k < stride; k += 8)
+                            {
+                                BitConverter.TryWriteBytes(raw.Slice(i * stride + k, 8), 0x5000_0000UL + (ulong)(i << 16) + (ulong)k);
+                            }
+                        }
+                    }
                 }
                 count = n;
             }
 
-            Logger.Info?.Print(LogClass.ServiceFriend, $"[Nextendo] GetFriendListForViewerV2 -> offset={offset} count={count}");
+            Logger.Info?.Print(LogClass.ServiceFriend, $"[Nextendo] GetFriendListForViewerV2 -> offset={offset} count={count} buffer={friendList.Length * 0x200} bytes");
 
             return Result.Success;
         }
@@ -904,6 +957,119 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             userPresenceView = default;
 
             Logger.Stub?.PrintStub(LogClass.ServiceFriend, new { userId });
+
+            return Result.Success;
+        }
+
+        // [Nextendo, HOME Menu work] The friend list of SDK 20+ comes in two steps: 20108 gives
+        // the list, then this command is handed every friend's id at once (a pointer buffer of
+        // 8-byte ids) and returns one 0x220-byte record per id, which is where the name, the
+        // picture and the presence shown on each tile are read.
+        [CmifCommand(20109)]
+        public Result GetFriendDetailListV2(
+            [Buffer(HipcBufferFlags.Out | HipcBufferFlags.MapAlias)] Span<byte> records,
+            Uid userId,
+            [Buffer(HipcBufferFlags.In | HipcBufferFlags.Pointer)] ReadOnlySpan<NetworkServiceAccountId> friendIds)
+        {
+            const int RecordSize = 0x220;
+
+            records.Clear();
+
+            IReadOnlyList<NextendoFriends.Entry> friends = IsNextendoProfile(userId) ? NextendoFriends.Get() : [];
+            int probe = int.TryParse(Environment.GetEnvironmentVariable("NEXTENDO_FRIEND_V2_PROBE"), out int p) ? p : 0;
+            int filled = 0;
+
+            for (int i = 0; i < friendIds.Length && (i + 1) * RecordSize <= records.Length; i++)
+            {
+                ulong wanted = friendIds[i].Id;
+
+                foreach (NextendoFriends.Entry entry in friends)
+                {
+                    if (entry.Pid != wanted && (entry.Nsa == 0 || entry.Nsa != wanted))
+                    {
+                        continue;
+                    }
+
+                    PresenceStatus status = entry.Status > 0 ? PresenceStatus.OnlinePlay : PresenceStatus.Offline;
+                    FriendImpl made = MakeNextendoFriend(wanted, entry.Name, status, entry.AppField, sameApp: false);
+                    Span<byte> record = records.Slice(i * RecordSize, RecordSize);
+
+                    MemoryMarshal.AsBytes(MemoryMarshal.CreateSpan(ref made, 1)).CopyTo(record);
+
+                    // The V2 record ends with its flags (found by probing the HOME Menu's friend
+                    // page): 0x219 favourite, 0x21A new, 0x21F valid. Nextendo has no favourites.
+                    if (probe >= 1000)
+                    {
+                        // Bit k of (probe - 1000) sets byte 0x218 + k, for every friend.
+                        for (int k = 0; k < 8; k++)
+                        {
+                            record[0x218 + k] = (byte)(((probe - 1000) >> k) & 1);
+                        }
+                    }
+                    else
+                    {
+                        record[0x21F] = 1;
+                    }
+
+                    if (probe >= 3000)
+                    {
+                        // Bit b of (probe - 3000) puts 1 in byte 0x50 + b, for every friend.
+                        record.Slice(0x50, 0x10).Clear();
+
+                        for (int b = 0; b < 16; b++)
+                        {
+                            record[0x50 + b] = (byte)(((probe - 3000) >> b) & 1);
+                        }
+                    }
+
+                    if (probe is >= 10 and < 100)
+                    {
+                        // Tail of the record (0x200..0x21F): tile number i gets byte (probe - 10) * 8 + i % 8 set.
+                        record[0x200 + (probe - 10) * 8 + (i % 8)] = 1;
+                    }
+
+                    if (probe == 4)
+                    {
+                        // Columns of the grid (four tiles a row): 0 as is, 1 without the byte at 0x128,
+                        // 2 without the last-online time, 3 without either.
+                        if ((i & 1) != 0)
+                        {
+                            record[0x128] = 0;
+                        }
+
+                        if ((i & 2) != 0)
+                        {
+                            record.Slice(0x40 + 0x10, 0x18).Clear();
+                        }
+                    }
+
+                    if (probe == 3)
+                    {
+                        // Which byte is which flag: friend number i gets byte 0x120 + i set, and nothing else there.
+                        record.Slice(0x120, 0x100).Clear();
+
+                        if (i < 0x100)
+                        {
+                            record[0x120 + i] = 1;
+                        }
+                    }
+
+                    if (probe == 2)
+                    {
+                        for (int k = 0; k < RecordSize; k++)
+                        {
+                            int slot = k >> 3;
+                            record[k] = (byte)((k & 7) < 4 ? 'A' + (slot / 26) : 'a' + (slot % 26));
+                        }
+                    }
+
+                    filled++;
+
+                    break;
+                }
+            }
+
+            Logger.Info?.Print(LogClass.ServiceFriend, $"[Nextendo] GetFriendDetailListV2 -> {friendIds.Length} ids (first 0x{(friendIds.Length > 0 ? friendIds[0].Id : 0):X}), {filled} records, buffer 0x{records.Length:X}");
 
             return Result.Success;
         }
