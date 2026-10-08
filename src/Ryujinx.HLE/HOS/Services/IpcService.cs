@@ -13,6 +13,9 @@ namespace Ryujinx.HLE.HOS.Services
 {
     abstract class IpcService
     {
+        // [Nextendo, HOME Menu work] NEXTENDO_IPC_TRACE=1 logs every CMIF call and failed result.
+        private static readonly bool _ipcTrace = System.Environment.GetEnvironmentVariable("NEXTENDO_IPC_TRACE") == "1";
+
         public IReadOnlyDictionary<int, MethodInfo> CmifCommands { get; }
         public IReadOnlyDictionary<int, MethodInfo> TipcCommands { get; }
 
@@ -148,10 +151,15 @@ namespace Ryujinx.HLE.HOS.Services
                 if (serviceExists)
                 {
                     Logger.Trace?.Print(LogClass.KernelIpc, $"{service.GetType().Name}: {processRequest.Name}");
+                    if (_ipcTrace)
+                        Logger.Notice.Print(LogClass.KernelIpc, $"[ipc] {service.GetType().Name} {commandId} {processRequest.Name}");
 
                     _parameters[0] = context;
                     
                     result = (ResultCode)processRequest.Invoke(service, _parameters);
+                                        if (_ipcTrace && result != ResultCode.Success)
+                    
+                        Logger.Notice.Print(LogClass.KernelIpc, $"[ipc]   -> result 0x{(int)result:X} from {service.GetType().Name} {commandId}");
                 }
                 else
                 {

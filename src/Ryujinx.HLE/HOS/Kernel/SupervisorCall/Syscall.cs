@@ -1894,6 +1894,24 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
                     return;
                 }
 
+                // [Nextendo, HOME Menu work] svcBreak(reason, info, size): for an SDK abort, info
+                // points to the failed Result (4 bytes). Naming it turns a blind abort into a lead.
+                try
+                {
+                    ulong infoAddress = currentThread.Context.GetX(1);
+                    ulong infoSize = currentThread.Context.GetX(2);
+                    if (infoSize == 4 && infoAddress != 0)
+                    {
+                        uint code = currentThread.Owner.CpuMemory.Read<uint>(infoAddress);
+                        Logger.Error?.Print(LogClass.KernelSvc, $"Break reason=0x{reason:X} result=0x{code:X} (module {code & 0x1FF}, description {(code >> 9) & 0x1FFF}, {2000 + (code & 0x1FF)}-{(code >> 9) & 0x1FFF:D4})");
+                    }
+                    else
+                    {
+                        Logger.Error?.Print(LogClass.KernelSvc, $"Break reason=0x{reason:X} info=0x{infoAddress:X} size=0x{infoSize:X}");
+                    }
+                }
+                catch { /* Unreadable info: keep the generic message below. */ }
+
                 Logger.Error?.Print(LogClass.KernelSvc, "The guest program broke execution!");
                 Logger.Flush();
 
