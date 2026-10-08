@@ -319,6 +319,14 @@ namespace Ryujinx.Horizon.Sdk.Sf
 
             requestValid &= rawSizeInBytes >= commandRawSize;
 
+            if (!requestValid)
+            {
+                // [Nextendo, HOME Menu work] Say what the guest sent against what the command
+                // declares: the mismatch names the missing buffer, handle or process id.
+                Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.KernelIpc,
+                    $"[ipc-shape] sent: pid={meta.SendPid} inPtr={meta.SendStaticsCount} inMap={meta.SendBuffersCount} outMap={meta.ReceiveBuffersCount} exch={meta.ExchangeBuffersCount} outPtr={meta.ReceiveStaticsCount} copy={meta.CopyHandlesCount} move={meta.MoveHandlesCount} raw={rawSizeInBytes} | declared: pid={_hasInProcessIdHolder} inPtr={_inPointerBuffersCount} inMap={_inMapAliasBuffersCount} outMap={_outMapAliasBuffersCount} outPtr={_outPointerBuffersCount} copy={_inCopyHandlesCount} move={_inMoveHandlesCount} raw>={commandRawSize}");
+            }
+
             return requestValid ? Result.Success : HipcResult.InvalidCmifRequest;
         }
 
