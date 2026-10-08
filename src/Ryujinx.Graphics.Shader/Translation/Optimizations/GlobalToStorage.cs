@@ -73,13 +73,25 @@ namespace Ryujinx.Graphics.Shader.Translation.Optimizations
 
             private readonly List<Entry> _entries;
             private readonly Dictionary<LsKey, Dictionary<uint, SearchResult>> _sharedEntries;
+            private readonly Dictionary<Operand, SearchResult> _storageLoads;
             private readonly HelperFunctionManager _hfm;
 
             public GtsContext(HelperFunctionManager hfm)
             {
                 _entries = [];
                 _sharedEntries = new Dictionary<LsKey, Dictionary<uint, SearchResult>>();
+                _storageLoads = new Dictionary<Operand, SearchResult>();
                 _hfm = hfm;
+            }
+
+            public void AddStorageLoad(Operand value, SearchResult result)
+            {
+                _storageLoads[value] = result;
+            }
+
+            public bool TryGetStorageLoad(Operand value, out SearchResult result)
+            {
+                return _storageLoads.TryGetValue(value, out result);
             }
 
             public int AddFunction(Operation baseOp, bool isMultiTarget, IReadOnlyList<uint> targetCbs, Function function)
@@ -211,9 +223,12 @@ namespace Ryujinx.Graphics.Shader.Translation.Optimizations
             BasicBlock[] blocks,
             ResourceManager resourceManager,
             IGpuAccessor gpuAccessor,
-            TargetLanguage targetLanguage)
+            TargetLanguage targetLanguage,
+            bool allowPointerStores)
         {
             GtsContext gtsContext = new(hfm);
+
+            List<LinkedListNode<INode>> pointerStoreNodes = [];
 
             foreach (BasicBlock block in blocks)
             {
@@ -226,6 +241,14 @@ namespace Ryujinx.Graphics.Shader.Translation.Optimizations
 
                     if (IsGlobalMemory(operation.StorageKind))
                     {
+                        if (allowPointerStores && TryGetPointerStore(gtsContext, blocks, block, operation, out PointerStoreDescriptor pointerStore))
+                        {
+                            resourceManager.AddPointerStore(pointerStore);
+                            pointerStoreNodes.Add(node);
+
+                            continue;
+                        }
+
                         LinkedListNode<INode> nextNode = ReplaceGlobalMemoryWithStorage(
                             gtsContext,
                             resourceManager,
@@ -277,6 +300,11 @@ namespace Ryujinx.Graphics.Shader.Translation.Optimizations
                     }
                 }
             }
+
+            foreach (LinkedListNode<INode> node in pointerStoreNodes)
+            {
+                Utils.DeleteNode(node, (Operation)node.Value);
+            }
         }
 
         private static bool IsGlobalMemory(StorageKind storageKind)
@@ -296,6 +324,189 @@ namespace Ryujinx.Graphics.Shader.Translation.Optimizations
                    StorageKind.GlobalMemoryU16;
         }
 
+        private static bool TryGetPointerStore(
+            GtsContext gtsContext,
+            BasicBlock[] blocks,
+            BasicBlock block,
+            Operation operation,
+            out PointerStoreDescriptor pointerStore)
+        {
+            pointerStore = default;
+
+            if (operation.Inst != Instruction.Store ||
+                operation.StorageKind != StorageKind.GlobalMemory ||
+                operation.GetSource(2).Type != OperandType.Constant ||
+                !IsExecutedOnEveryInvocation(blocks, block))
+            {
+                return false;
+            }
+
+            Operand pointerLow = SplitConstantOffset(operation.GetSource(0), out int storeOffset);
+
+            if (!gtsContext.TryGetStorageLoad(pointerLow, out SearchResult lowLoad) ||
+                !TryGetPointerHighLoad(gtsContext, operation.GetSource(1), out SearchResult highLoad))
+            {
+                return false;
+            }
+
+            if (lowLoad.SbCbSlot != highLoad.SbCbSlot ||
+                lowLoad.SbCbOffset != highLoad.SbCbOffset ||
+                !TryGetVertexIndexOffset(lowLoad.Offset, out int stride, out int lowOffset) ||
+                !TryGetVertexIndexOffset(highLoad.Offset, out int highStride, out int highOffset) ||
+                stride != highStride ||
+                highOffset + highLoad.ConstOffset != lowOffset + lowLoad.ConstOffset + 4)
+            {
+                return false;
+            }
+
+            pointerStore = new PointerStoreDescriptor(
+                lowLoad.SbCbSlot,
+                lowLoad.SbCbOffset,
+                stride,
+                lowOffset + lowLoad.ConstOffset,
+                storeOffset,
+                (uint)operation.GetSource(2).Value);
+
+            return true;
+        }
+
+        private static Operand SplitConstantOffset(Operand value, out int offset)
+        {
+            if (value.AsgOp is Operation addOp && addOp.Inst == Instruction.Add)
+            {
+                Operand src1 = addOp.GetSource(0);
+                Operand src2 = addOp.GetSource(1);
+
+                if (src2.Type == OperandType.Constant)
+                {
+                    offset = src2.Value;
+                    return src1;
+                }
+                else if (src1.Type == OperandType.Constant)
+                {
+                    offset = src1.Value;
+                    return src2;
+                }
+            }
+
+            offset = 0;
+            return value;
+        }
+
+        private static bool TryGetPointerHighLoad(GtsContext gtsContext, Operand addressHigh, out SearchResult result)
+        {
+            if (addressHigh.AsgOp is Operation addOp && addOp.Inst == Instruction.Add)
+            {
+                for (int index = 0; index < 2; index++)
+                {
+                    if (IsCarry(addOp.GetSource(index ^ 1)) && gtsContext.TryGetStorageLoad(addOp.GetSource(index), out result))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            return gtsContext.TryGetStorageLoad(addressHigh, out result);
+        }
+
+        private static bool IsCarry(Operand value)
+        {
+            return value.AsgOp is Operation selectOp &&
+                selectOp.Inst == Instruction.ConditionalSelect &&
+                selectOp.GetSource(1).Type == OperandType.Constant &&
+                selectOp.GetSource(1).Value == 1 &&
+                selectOp.GetSource(2).Type == OperandType.Constant &&
+                selectOp.GetSource(2).Value == 0;
+        }
+
+        private static bool TryGetVertexIndexOffset(Operand offset, out int stride, out int constOffset)
+        {
+            if (offset.Type == OperandType.Constant)
+            {
+                stride = 0;
+                constOffset = offset.Value;
+
+                return true;
+            }
+
+            if (offset.AsgOp is Operation operation)
+            {
+                if (operation.Inst == Instruction.Load && operation.StorageKind == StorageKind.Input)
+                {
+                    Operand ioVariable = operation.GetSource(0);
+
+                    if (ioVariable.Type == OperandType.Constant &&
+                        (IoVariable)ioVariable.Value is IoVariable.VertexId or IoVariable.VertexIndex)
+                    {
+                        stride = 1;
+                        constOffset = 0;
+
+                        return true;
+                    }
+                }
+                else if (operation.Inst is Instruction.Add or Instruction.Multiply or Instruction.ShiftLeft)
+                {
+                    Operand src1 = operation.GetSource(0);
+                    Operand src2 = operation.GetSource(1);
+
+                    if (src1.Type == OperandType.Constant && operation.Inst != Instruction.ShiftLeft)
+                    {
+                        (src1, src2) = (src2, src1);
+                    }
+
+                    if (src2.Type == OperandType.Constant && TryGetVertexIndexOffset(src1, out stride, out constOffset))
+                    {
+                        int value = src2.Value;
+
+                        switch (operation.Inst)
+                        {
+                            case Instruction.Add:
+                                constOffset += value;
+                                return true;
+                            case Instruction.Multiply:
+                                stride *= value;
+                                constOffset *= value;
+                                return true;
+                            case Instruction.ShiftLeft when value is >= 0 and < 32:
+                                stride <<= value;
+                                constOffset <<= value;
+                                return true;
+                        }
+                    }
+                }
+            }
+
+            stride = 0;
+            constOffset = 0;
+
+            return false;
+        }
+
+        private static bool IsExecutedOnEveryInvocation(BasicBlock[] blocks, BasicBlock block)
+        {
+            bool hasExitBlock = false;
+
+            foreach (BasicBlock exitBlock in blocks)
+            {
+                if (exitBlock.Next != null || exitBlock.HasBranch)
+                {
+                    continue;
+                }
+
+                hasExitBlock = true;
+
+                for (BasicBlock current = exitBlock; current != block; current = current.ImmediateDominator)
+                {
+                    if (current.ImmediateDominator == null || current.ImmediateDominator == current)
+                    {
+                        return false;
+                    }
+                }
+            }
+
+            return hasExitBlock;
+        }
+
         private static LinkedListNode<INode> ReplaceGlobalMemoryWithStorage(
             GtsContext gtsContext,
             ResourceManager resourceManager,
@@ -310,6 +521,11 @@ namespace Ryujinx.Graphics.Shader.Translation.Optimizations
 
             if (result.Found)
             {
+                if (operation.Inst == Instruction.Load && operation.StorageKind == StorageKind.GlobalMemory)
+                {
+                    gtsContext.AddStorageLoad(operation.Dest, result);
+                }
+
                 // We found the storage buffer that is being accessed.
                 // There are two possible paths here, if the operation is simple enough,
                 // we just generate the storage access code inline.

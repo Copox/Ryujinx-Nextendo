@@ -108,6 +108,22 @@
                             </ToolTip.Tip>
                             <TextBlock Text="Nextendo" FontSize="10" Foreground="#3EE8C8" />
                         </Border>
+                        <!-- Additional catalog display; existing built-in badges stay unchanged. -->
+                        <Border
+                            Margin="4,0,0,4"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Bottom"
+                            Background="#E60B0D12"
+                            BorderBrush="#3EE8C8"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="5,1"
+                            IsVisible="{Binding IsAvailableOnService}">
+                            <ToolTip.Tip>
+                                <TextBlock Text="{Binding ServiceTooltip}" />
+                            </ToolTip.Tip>
+                            <TextBlock Text="Nextendo" FontSize="10" Foreground="#3EE8C8" />
+                        </Border>
                         <!-- [Nextendo] Live player count, top-left; hidden at zero. -->
                         <Border
                             Margin="4,4,0,0"
@@ -125,6 +141,25 @@
                             <StackPanel Orientation="Horizontal" Spacing="3">
                                 <Ellipse Width="5" Height="5" Fill="#33E86B" VerticalAlignment="Center" />
                                 <TextBlock Text="{Binding NextendoPlayersOnline}" FontSize="10" FontWeight="SemiBold" Foreground="#33E86B" />
+                            </StackPanel>
+                        </Border>
+                        <!-- Additional catalog display; existing built-in badges stay unchanged. -->
+                        <Border
+                            Margin="4,4,0,0"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Top"
+                            Background="#E60B0D12"
+                            BorderBrush="#33E86B"
+                            BorderThickness="1"
+                            CornerRadius="4"
+                            Padding="5,1"
+                            IsVisible="{Binding HasServicePlayersCount}">
+                            <ToolTip.Tip>
+                                <TextBlock Text="{Binding ServicePlayersText}" />
+                            </ToolTip.Tip>
+                            <StackPanel Orientation="Horizontal" Spacing="3">
+                                <Ellipse Width="5" Height="5" Fill="#33E86B" VerticalAlignment="Center" />
+                                <TextBlock Text="{Binding ServicePlayersOnline}" FontSize="10" FontWeight="SemiBold" Foreground="#33E86B" />
                             </StackPanel>
                         </Border>
                         <!-- [Nextendo] Friends playing THIS game — round overlapping avatars, bottom-right. -->

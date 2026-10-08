@@ -3,6 +3,7 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
+    <PackageVersion Include="NSec.Cryptography" Version="26.4.0" />
     
     <!-- Packages included in Ryujinx should be the latest stable releases -->
     <!-- unless otherwise required for improved functionality or regressions ocurred. -->

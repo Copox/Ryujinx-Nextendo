@@ -1479,6 +1479,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
             byte oldVsClipDistancesWritten = _vsClipDistancesWritten;
 
             _drawState.VsUsesInstanceId = gs.Shaders[1]?.Info.UsesInstanceId ?? false;
+            _drawState.VsPointerStores = gs.Shaders[1]?.Info.PointerStores;
             _vsUsesDrawParameters = gs.Shaders[1]?.Info.UsesDrawParameters ?? false;
             _vsClipDistancesWritten = gs.Shaders[1]?.Info.ClipDistancesWritten ?? 0;
 

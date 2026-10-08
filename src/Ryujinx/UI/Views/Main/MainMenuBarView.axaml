@@ -233,6 +233,7 @@
                     Header="{ext:Locale Dialog_Nextendo_MenuBarRecent}"
                     Icon="{ext:Icon fa-solid fa-clock-rotate-left}" />
                 <Separator />
+                <MenuItem Header="Refresh service information" Command="{Binding RefreshServiceInformationCommand}" Icon="{ext:Icon fa-solid fa-arrows-rotate}" />
                 <MenuItem
                     Name="NextendoReportMenuItem"
                     Header="{ext:Locale Dialog_Nextendo_MenuBarReport}"

@@ -1,5 +1,7 @@
 using Ryujinx.Graphics.GAL;
 using Ryujinx.Graphics.Gpu.Shader;
+using Ryujinx.Graphics.Shader;
+using System.Collections.ObjectModel;
 
 namespace Ryujinx.Graphics.Gpu.Engine.Threed
 {
@@ -47,6 +49,8 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
         /// Indicates if any of the currently used vertex shaders reads the instance ID.
         /// </summary>
         public bool VsUsesInstanceId;
+
+        public ReadOnlyCollection<PointerStoreDescriptor> VsPointerStores;
 
         /// <summary>
         /// Indicates if any of the currently used vertex buffers is instanced.

@@ -28,7 +28,7 @@ namespace Ryujinx.Ava.Systems.AppLibrary
     // [Nextendo] INotifyPropertyChanged is implemented for ONE reason: the live "N players
     // online" badge. Everything else here is set once at scan time, but the player count changes
     // while the list is on screen, and a plain property would bind once and never update.
-    public class ApplicationData : System.ComponentModel.INotifyPropertyChanged
+    public partial class ApplicationData : System.ComponentModel.INotifyPropertyChanged
     {
         public event System.ComponentModel.PropertyChangedEventHandler PropertyChanged;
 

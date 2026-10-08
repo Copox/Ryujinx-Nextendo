@@ -3,8 +3,10 @@ using Ryujinx.Graphics.Gpu.Engine.Threed.ComputeDraw;
 using Ryujinx.Graphics.Gpu.Engine.Types;
 using Ryujinx.Graphics.Gpu.Image;
 using Ryujinx.Graphics.Gpu.Memory;
+using Ryujinx.Graphics.Shader;
 using Ryujinx.Memory.Range;
 using System;
+using System.Collections.ObjectModel;
 
 namespace Ryujinx.Graphics.Gpu.Engine.Threed
 {
@@ -590,6 +592,11 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
                 _channel.BufferManager.SetInstancedDrawVertexCount(count);
             }
 
+            if (!indexed && _drawState.VsPointerStores is { Count: > 0 } pointerStores)
+            {
+                PerformPointerStores(pointerStores, firstVertex, count);
+            }
+
             if (_drawState.VertexAsCompute != null)
             {
                 _vtgAsCompute.DrawAsCompute(
@@ -623,6 +630,59 @@ namespace Ryujinx.Graphics.Gpu.Engine.Threed
                 else
                 {
                     _context.Renderer.Pipeline.Draw(count, instanceCount, firstVertex, firstInstance);
+                }
+            }
+        }
+
+        private void PerformPointerStores(ReadOnlyCollection<PointerStoreDescriptor> stores, int firstVertex, int vertexCount)
+        {
+            MemoryManager memoryManager = _channel.MemoryManager;
+            BufferCache bufferCache = memoryManager.Physical.BufferCache;
+
+            ulong[] sbAddresses = new ulong[stores.Count];
+
+            for (int index = 0; index < stores.Count; index++)
+            {
+                ulong sbDescAddress = _channel.BufferManager.GetGraphicsUniformBufferAddress(0, stores[index].SbCbSlot);
+                sbDescAddress += (ulong)stores[index].SbCbOffset * 4;
+
+                sbAddresses[index] = memoryManager.Physical.Read<SbDescriptor>(sbDescAddress).PackAddress();
+            }
+
+            for (int vertex = firstVertex; vertex < firstVertex + vertexCount; vertex++)
+            {
+                ulong pointer = 0;
+                int index = 0;
+
+                while (index < stores.Count)
+                {
+                    PointerStoreDescriptor store = stores[index];
+
+                    if (index == 0 || !store.HasSamePointer(stores[index - 1]))
+                    {
+                        ulong pointerAddress = sbAddresses[index] + (uint)(vertex * store.PointerStride + store.PointerOffset);
+
+                        pointer = memoryManager.GetMappedSize(pointerAddress, sizeof(ulong)) == sizeof(ulong)
+                            ? memoryManager.Read<ulong>(pointerAddress, tracked: true)
+                            : 0;
+                    }
+
+                    int size = sizeof(uint);
+
+                    while (++index < stores.Count &&
+                        stores[index].HasSamePointer(store) &&
+                        stores[index].Value == store.Value &&
+                        stores[index].StoreOffset == store.StoreOffset + size)
+                    {
+                        size += sizeof(uint);
+                    }
+
+                    ulong address = pointer + (ulong)(long)store.StoreOffset;
+
+                    if (pointer != 0 && (address & 3) == 0 && memoryManager.GetMappedSize(address, (ulong)size) == (ulong)size)
+                    {
+                        bufferCache.ClearBuffer(memoryManager, address, (ulong)size, store.Value);
+                    }
                 }
             }
         }

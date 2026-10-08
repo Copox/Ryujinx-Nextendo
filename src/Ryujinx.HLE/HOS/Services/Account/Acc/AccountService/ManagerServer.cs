@@ -54,6 +54,9 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
         private DateTime _cachedTokenExpiry;
         private string _cachedTokenVersion;
         private ulong _cachedTokenProgramId;
+        private bool _cachedOnlineIdentity;
+        private bool _cachedOnlineBlocked;
+        private string _cachedNexToken;
 
         public ManagerServer(UserId userId)
         {
@@ -102,7 +105,7 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
             return rsa;
         }
 
-        private static string GenerateIdToken(string installedVersion, ulong programId)
+        private string GenerateIdToken(string installedVersion, ulong programId)
         {
             RSAParameters parameters = _nextendoIdTokenRsa.ExportParameters(true);
 
@@ -129,7 +132,7 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
                 { "sn", "XAW10000000000" },
                 { "bs:did", Convert.ToHexString(deviceAccountId).ToLower() },
                 // NSO membership flag — Splatoon 2 reads this LOCALLY to gate online entry.
-                { "hm", true },
+                { "hm", !NextendoAccount.OnlineBlocked },
             };
 
             // Scarlet shares Violet's NPLN tenant but needs its own app_id.
@@ -148,7 +151,8 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
             // server holds) along in a custom "nnex" claim. The auth server validates that
             // HMAC and rejects any PID the token doesn't prove. Present only when a Nextendo
             // account is linked (online); absent otherwise, so offline is completely unaffected.
-            string nexToken = NextendoAccount.NexToken;
+            string nexToken = NextendoAccount.IsLinked && !NextendoAccount.OnlineBlocked && IsBoundNextendoProfile
+                ? NextendoAccount.NexToken : "";
             if (!string.IsNullOrEmpty(nexToken))
             {
                 claims["nnex"] = nexToken;
@@ -252,21 +256,34 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
             string installedVersion = context.Device.Processes.ActiveApplication?.DisplayVersion;
             ulong programId = context.Device.Processes.ActiveApplication?.ProgramId ?? 0;
 
-            if (_cachedTokenData == null || DateTime.UtcNow > _cachedTokenExpiry ||
-                installedVersion != _cachedTokenVersion || programId != _cachedTokenProgramId)
-            {
-                _cachedTokenExpiry = DateTime.UtcNow + TimeSpan.FromHours(3);
-                _cachedTokenVersion = installedVersion;
-                _cachedTokenProgramId = programId;
-                _cachedTokenData = Encoding.ASCII.GetBytes(GenerateIdToken(installedVersion, programId));
-            }
-
-            byte[] tokenData = _cachedTokenData;
+            byte[] tokenData = GetIdTokenData(installedVersion, programId);
 
             context.Memory.Write(bufferPosition, tokenData);
             context.ResponseData.Write(tokenData.Length);
 
             return ResultCode.Success;
+        }
+
+        private byte[] GetIdTokenData(string installedVersion, ulong programId)
+        {
+            bool onlineIdentity = NextendoAccount.IsLinked && !NextendoAccount.OnlineBlocked && IsBoundNextendoProfile;
+            if (_cachedTokenData == null || DateTime.UtcNow > _cachedTokenExpiry ||
+                installedVersion != _cachedTokenVersion || programId != _cachedTokenProgramId ||
+                onlineIdentity != _cachedOnlineIdentity ||
+                NextendoAccount.OnlineBlocked != _cachedOnlineBlocked ||
+                NextendoAccount.NexToken != _cachedNexToken)
+            {
+                _cachedTokenExpiry = DateTime.UtcNow + TimeSpan.FromHours(3);
+                _cachedTokenVersion = installedVersion;
+                _cachedTokenProgramId = programId;
+                _cachedOnlineIdentity = onlineIdentity;
+                _cachedOnlineBlocked = NextendoAccount.OnlineBlocked;
+                _cachedNexToken = NextendoAccount.NexToken;
+                _cachedTokenData = Encoding.ASCII.GetBytes(GenerateIdToken(installedVersion, programId));
+            }
+
+            return _cachedTokenData;
+
         }
 
         public ResultCode GetNintendoAccountUserResourceCacheForApplication(ServiceCtx context)
