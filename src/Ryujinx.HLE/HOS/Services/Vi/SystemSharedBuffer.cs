@@ -66,14 +66,15 @@ namespace Ryujinx.HLE.HOS.Services.Vi
                 // A tracked read: the GPU writes the frame back to guest memory first.
                 _captures[index] = session._process.CpuMemory.GetSpan(address, (int)SlotSize, true).ToArray();
 
-                int filled = 0;
+                // A capture is a picture of the screen: opaque. The menu's own frame keeps
+                // whatever alpha its last draw left (labels, some icons), which an applet
+                // blending the capture would show as boxes.
+                byte[] capture = _captures[index];
 
-                for (int i = 0; i < _captures[index].Length; i += 4096)
+                for (int i = 3; i < capture.Length; i += 4)
                 {
-                    filled += _captures[index][i] != 0 ? 1 : 0;
+                    capture[i] = 0xFF;
                 }
-
-                Logger.Notice.Print(LogClass.ServiceVi, $"[capture] {index} from process {pid}, slot {session._lastPresentedSlot} at 0x{address:X}: {filled} of {_captures[index].Length / 4096} samples not black");
             }
             catch (System.Exception e)
             {
