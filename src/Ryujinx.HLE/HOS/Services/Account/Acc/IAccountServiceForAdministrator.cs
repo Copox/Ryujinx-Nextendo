@@ -178,5 +178,13 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc
 
             return ResultCode.Success;
         }
+        [CommandCmif(112)]
+        // LoadSaveDataThumbnail(nn::account::Uid, nn::ncm::ApplicationId) -> (u32 size, buffer<bytes, 6>)
+        public ResultCode LoadSaveDataThumbnail(ServiceCtx context)
+        {
+            // No thumbnail is kept for a save: the user selector then shows the user's own
+            // picture in full, instead of an empty thumbnail with the picture in a corner.
+            return ResultCode.InvalidArgument;
+        }
     }
 }

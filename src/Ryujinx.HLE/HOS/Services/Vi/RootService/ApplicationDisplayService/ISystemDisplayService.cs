@@ -79,6 +79,8 @@ namespace Ryujinx.HLE.HOS.Services.Vi.RootService.ApplicationDisplayService
         }
         // [Nextendo, HOME Menu work] nn::vi::fbshare, see SystemSharedBuffer.
 
+        private static readonly bool _trace = System.Environment.GetEnvironmentVariable("NEXTENDO_IPC_TRACE") == "1";
+
         private int _acquirableEventHandle;
         private SystemSharedBuffer _shared;
 
@@ -154,7 +156,7 @@ namespace Ryujinx.HLE.HOS.Services.Vi.RootService.ApplicationDisplayService
         {
             SurfaceFlinger.Status status = Shared(context).Acquire(context, out int slot, out SurfaceFlinger.AndroidFence fence);
 
-            Logger.Notice.Print(LogClass.ServiceVi, $"[fbshare] acquire -> {status} slot={slot} fences={fence.FenceCount}");
+            if (_trace) Logger.Notice.Print(LogClass.ServiceVi, $"[fbshare] acquire -> {status} slot={slot} fences={fence.FenceCount}");
 
             if (status != SurfaceFlinger.Status.Success)
             {
@@ -198,7 +200,7 @@ namespace Ryujinx.HLE.HOS.Services.Vi.RootService.ApplicationDisplayService
 
             SurfaceFlinger.Status status = _shared.Present(context, slot, crop, transform, swapInterval, fence);
 
-            Logger.Notice.Print(LogClass.ServiceVi, $"[fbshare] present slot={slot} crop=({crop.Left},{crop.Top},{crop.Right},{crop.Bottom}) transform={transform} swap={swapInterval} fences={fence.FenceCount} f0=({fence.NvFences[0].Id},{fence.NvFences[0].Value}) raw={System.Convert.ToHexString(context.RequestData.BaseStream is System.IO.MemoryStream ms ? ms.ToArray() : System.Array.Empty<byte>())} -> {status}");
+            if (_trace) Logger.Notice.Print(LogClass.ServiceVi, $"[fbshare] present slot={slot} crop=({crop.Left},{crop.Top},{crop.Right},{crop.Bottom}) transform={transform} swap={swapInterval} fences={fence.FenceCount} f0=({fence.NvFences[0].Id},{fence.NvFences[0].Value}) raw={System.Convert.ToHexString(context.RequestData.BaseStream is System.IO.MemoryStream ms ? ms.ToArray() : System.Array.Empty<byte>())} -> {status}");
 
             if (status != SurfaceFlinger.Status.Success)
             {

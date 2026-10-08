@@ -39,6 +39,66 @@ namespace Ryujinx.HLE.HOS.Services.Vi
 
         private bool _connected;
         private long _previousRenderLayer;
+        private ulong _poolAddress;
+        private KProcess _process;
+        private int _lastPresentedSlot = -1;
+
+        // The three captures applets hand each other (last application, last foreground,
+        // caller applet): the picture an applet shows blurred behind its own window. They sit
+        // in the pool after the four frame buffers.
+        private const int FirstCaptureSlot = 4;
+        private static readonly byte[][] _captures = new byte[3][];
+
+        // Keeps the last frame of `pid` as capture number `index`.
+        public static void Capture(ulong pid, int index)
+        {
+            SystemSharedBuffer session = Of(pid);
+
+            if (session == null || session._lastPresentedSlot < 0 || (uint)index >= _captures.Length)
+            {
+                return;
+            }
+
+            try
+            {
+                ulong address = session._poolAddress + (ulong)session._lastPresentedSlot * SlotSize;
+
+                // A tracked read: the GPU writes the frame back to guest memory first.
+                _captures[index] = session._process.CpuMemory.GetSpan(address, (int)SlotSize, true).ToArray();
+
+                int filled = 0;
+
+                for (int i = 0; i < _captures[index].Length; i += 4096)
+                {
+                    filled += _captures[index][i] != 0 ? 1 : 0;
+                }
+
+                Logger.Notice.Print(LogClass.ServiceVi, $"[capture] {index} from process {pid}, slot {session._lastPresentedSlot} at 0x{address:X}: {filled} of {_captures[index].Length / 4096} samples not black");
+            }
+            catch (System.Exception e)
+            {
+                Logger.Warning?.Print(LogClass.ServiceVi, $"Shared frame buffers: capture {index} of process {pid} failed ({e.Message}).");
+            }
+        }
+
+        // Puts capture number `index` in the pool of `pid`; returns its slot there.
+        public static int PlaceCapture(ServiceCtx context, ulong pid, int index)
+        {
+            SystemSharedBuffer session = EnsureSession(context, pid);
+
+            if (session == null || (uint)index >= _captures.Length)
+            {
+                return -1;
+            }
+
+            int slot = FirstCaptureSlot + index;
+            // A capture nobody took yet: the most recent one stands in for it.
+            byte[] pixels = _captures[index] ?? _captures[2] ?? _captures[1] ?? _captures[0] ?? new byte[SlotSize];
+
+            session._process.CpuMemory.Write(session._poolAddress + (ulong)slot * SlotSize, pixels);
+
+            return slot;
+        }
 
         public ulong Pid { get; private set; }
         public long LayerId { get; private set; }
@@ -105,6 +165,8 @@ namespace Ryujinx.HLE.HOS.Services.Vi
                 session = new SystemSharedBuffer
                 {
                     Pid = pid,
+                    _poolAddress = address,
+                    _process = applet,
                     NvMapHandle = NvMapDeviceFile.CreateSharedHandle(address, PoolSize),
                 };
 
@@ -304,6 +366,8 @@ namespace Ryujinx.HLE.HOS.Services.Vi
             {
                 crop = new Rect(Width, Height);
             }
+
+            _lastPresentedSlot = slot;
 
             IGraphicBufferProducer.QueueBufferInput input = new()
             {

@@ -86,6 +86,20 @@ namespace Ryujinx.Input.HLE
             if (!_clock.IsRunning)
             {
                 _clock.Start();
+
+                // Lets the driving script line its own clock up with this one.
+                string mark = Environment.GetEnvironmentVariable("NEXTENDO_INPUT_MARK");
+
+                if (!string.IsNullOrEmpty(mark))
+                {
+                    try
+                    {
+                        System.IO.File.WriteAllText(mark, "0");
+                    }
+                    catch (Exception)
+                    {
+                    }
+                }
             }
 
             double now = _clock.Elapsed.TotalSeconds;

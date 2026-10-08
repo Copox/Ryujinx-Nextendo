@@ -52,7 +52,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService
         // GetDisplayController() -> object<nn::am::service::IDisplayController>
         public ResultCode GetDisplayController(ServiceCtx context)
         {
-            MakeObject(context, new IDisplayController(context));
+            MakeObject(context, new IDisplayController(context, _pid));
 
             return ResultCode.Success;
         }
