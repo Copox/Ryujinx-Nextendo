@@ -1,3 +1,4 @@
+using Ryujinx.Common;
 using Ryujinx.Common.Logging;
 
 namespace Ryujinx.HLE.HOS.Services.Vi.RootService.ApplicationDisplayService
@@ -73,6 +74,155 @@ namespace Ryujinx.HLE.HOS.Services.Vi.RootService.ApplicationDisplayService
             context.ResponseData.Write(0);
 
             Logger.Stub?.PrintStub(LogClass.ServiceVi);
+
+            return ResultCode.Success;
+        }
+        // [Nextendo, HOME Menu work] nn::vi::fbshare, see SystemSharedBuffer.
+
+        private int _acquirableEventHandle;
+
+        [CommandCmif(8225)] // 4.0.0+
+        // GetSharedBufferMemoryHandleId(u64 bufferId, nn::applet::AppletResourceUserId) -> (s32 nvmapHandle, u64 size, buffer<SharedMemoryPoolLayout, 0x16>)
+        public ResultCode GetSharedBufferMemoryHandleId(ServiceCtx context)
+        {
+            if (!SystemSharedBuffer.EnsureSession(context))
+            {
+                return ResultCode.InvalidValue;
+            }
+
+            SystemSharedBuffer.WriteLayout(context, context.Request.ReceiveBuff[0].Position);
+
+            context.ResponseData.Write(SystemSharedBuffer.NvMapHandle);
+            context.ResponseData.Write(0);
+            context.ResponseData.Write((ulong)SystemSharedBuffer.PoolSize);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(8250)] // 4.0.0+
+        // OpenSharedLayer(u64 layerId)
+        public ResultCode OpenSharedLayer(ServiceCtx context)
+        {
+            return SystemSharedBuffer.EnsureSession(context) ? ResultCode.Success : ResultCode.InvalidValue;
+        }
+
+        [CommandCmif(8251)] // 4.0.0+
+        // CloseSharedLayer(u64 layerId)
+        public ResultCode CloseSharedLayer(ServiceCtx context)
+        {
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(8252)] // 4.0.0+
+        // ConnectSharedLayer(u64 layerId)
+        public ResultCode ConnectSharedLayer(ServiceCtx context)
+        {
+            SystemSharedBuffer.Connect(context);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(8253)] // 4.0.0+
+        // DisconnectSharedLayer(u64 layerId)
+        public ResultCode DisconnectSharedLayer(ServiceCtx context)
+        {
+            SystemSharedBuffer.Disconnect(context);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(8254)] // 4.0.0+
+        // AcquireSharedFrameBuffer(u64 layerId) -> (android::Fence, s32[4] slots, s64 targetSlot)
+        public ResultCode AcquireSharedFrameBuffer(ServiceCtx context)
+        {
+            SurfaceFlinger.Status status = SystemSharedBuffer.Acquire(context, out int slot, out SurfaceFlinger.AndroidFence fence);
+
+            if (status != SurfaceFlinger.Status.Success)
+            {
+                Logger.Warning?.Print(LogClass.ServiceVi, $"AcquireSharedFrameBuffer: {status}");
+
+                return ResultCode.InvalidValue;
+            }
+
+            context.ResponseData.WriteStruct(fence);
+            context.ResponseData.Write(0);
+            context.ResponseData.Write(1);
+            context.ResponseData.Write(2);
+            context.ResponseData.Write(3);
+            context.ResponseData.Write(0);
+            context.ResponseData.Write((long)slot);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(8255)] // 4.0.0+
+        // PresentSharedFrameBuffer(android::Fence, nn::vi::CropRegion, u32 transform, s32 swapInterval, u64 layerId, s64 slot)
+        public ResultCode PresentSharedFrameBuffer(ServiceCtx context)
+        {
+            SurfaceFlinger.AndroidFence fence = context.RequestData.ReadStruct<SurfaceFlinger.AndroidFence>();
+
+            SurfaceFlinger.Rect crop = new()
+            {
+                Left = context.RequestData.ReadInt32(),
+                Top = context.RequestData.ReadInt32(),
+                Right = context.RequestData.ReadInt32(),
+                Bottom = context.RequestData.ReadInt32(),
+            };
+
+            uint transform = context.RequestData.ReadUInt32();
+            int swapInterval = context.RequestData.ReadInt32();
+
+            context.RequestData.ReadInt32(); // Alignment.
+            context.RequestData.ReadUInt64(); // Layer id.
+
+            int slot = (int)context.RequestData.ReadInt64();
+
+            SurfaceFlinger.Status status = SystemSharedBuffer.Present(context, slot, crop, transform, swapInterval, fence);
+
+            if (status != SurfaceFlinger.Status.Success)
+            {
+                Logger.Warning?.Print(LogClass.ServiceVi, $"PresentSharedFrameBuffer(slot {slot}): {status}");
+            }
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(8256)] // 4.0.0+
+        // GetSharedFrameBufferAcquirableEvent(u64 layerId) -> handle<copy>
+        public ResultCode GetSharedFrameBufferAcquirableEvent(ServiceCtx context)
+        {
+            if (!SystemSharedBuffer.EnsureSession(context))
+            {
+                return ResultCode.InvalidValue;
+            }
+
+            if (_acquirableEventHandle == 0)
+            {
+                if (context.Process.HandleTable.GenerateHandle(SystemSharedBuffer.AcquirableEvent(context), out _acquirableEventHandle) != Ryujinx.Horizon.Common.Result.Success)
+                {
+                    throw new System.InvalidOperationException("Out of handles!");
+                }
+            }
+
+            context.Response.HandleDesc = Ryujinx.HLE.HOS.Ipc.IpcHandleDesc.MakeCopy(_acquirableEventHandle);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(8257)] // 4.0.0+
+        // FillSharedFrameBufferColor(...)
+        public ResultCode FillSharedFrameBufferColor(ServiceCtx context)
+        {
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(8258)] // 5.0.0+
+        // CancelSharedFrameBuffer(u64 layerId, s64 slot)
+        public ResultCode CancelSharedFrameBuffer(ServiceCtx context)
+        {
+            context.RequestData.ReadUInt64();
+
+            SystemSharedBuffer.Cancel(context, (int)context.RequestData.ReadInt64());
 
             return ResultCode.Success;
         }

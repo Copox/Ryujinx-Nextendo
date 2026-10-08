@@ -247,6 +247,26 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvMap
             return _maps.Delete(handle) != null;
         }
 
+        // [Nextendo, HOME Menu work] A handle for memory the system already mapped in the guest
+        // (the shared frame buffers of system applets), as if the guest had created and
+        // allocated it itself.
+        public static int CreateSharedHandle(ulong address, uint size)
+        {
+            NvMapHandle map = new(size)
+            {
+                Address = address,
+                Align = 0x1000,
+                Kind = 0,
+                Allocated = true,
+            };
+
+            // One reference for the system, on top of the creation one: the guest closing its
+            // own handle must not free the pool.
+            map.IncrementRefCount();
+
+            return _maps.Add(map);
+        }
+
         public static void IncrementMapRefCount(ulong pid, int handle)
         {
             GetMapFromHandle(pid, handle)?.IncrementRefCount();

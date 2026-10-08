@@ -15,6 +15,11 @@ namespace Ryujinx.HLE.HOS.Services.SurfaceFlinger
         [FieldOffset(0xb0)]
         private NvGraphicBufferSurface Surface2;
 
+        public void SetFirst(NvGraphicBufferSurface surface)
+        {
+            Surface0 = surface;
+        }
+
         public readonly NvGraphicBufferSurface this[int index]
         {
             get
