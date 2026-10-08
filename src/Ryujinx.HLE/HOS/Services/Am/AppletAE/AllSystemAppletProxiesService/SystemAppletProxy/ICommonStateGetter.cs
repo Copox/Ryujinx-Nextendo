@@ -335,5 +335,31 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
                 }
             }
         }
+        [CommandCmif(30)]
+        // GetHomeButtonReaderLockAccessor() -> object<nn::am::service::ILockAccessor>
+        public ResultCode GetHomeButtonReaderLockAccessor(ServiceCtx context)
+        {
+            MakeObject(context, new ILockAccessor(context));
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(31)] // 2.0.0+
+        // GetReaderLockAccessorEx(u32) -> object<nn::am::service::ILockAccessor>
+        public ResultCode GetReaderLockAccessorEx(ServiceCtx context)
+        {
+            MakeObject(context, new ILockAccessor(context));
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(32)] // 7.0.0+
+        // GetWriterLockAccessorEx(u32) -> object<nn::am::service::ILockAccessor>
+        public ResultCode GetWriterLockAccessorEx(ServiceCtx context)
+        {
+            MakeObject(context, new ILockAccessor(context));
+
+            return ResultCode.Success;
+        }
     }
 }
