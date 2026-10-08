@@ -166,6 +166,11 @@ namespace Ryujinx.HLE.HOS.Services
                     string serviceName = (service is not DummyService dummyService) ? service.GetType().FullName : dummyService.ServiceName;
 
                     Logger.Warning?.Print(LogClass.KernelIpc, $"Missing service {serviceName}: {commandId} ignored");
+
+                    // [Nextendo, HOME Menu work] An ignored command used to answer with no data at
+                    // all: the caller then read whatever the previous reply left in the buffer as
+                    // its output (a count, a size, a flag). Answer zeros instead.
+                    context.ResponseData.Write(new byte[0x40]);
                 }
 
                 if (_isDomain)

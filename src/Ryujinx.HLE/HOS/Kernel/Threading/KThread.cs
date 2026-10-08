@@ -1287,6 +1287,178 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
         public void PrintGuestRegisterPrintout()
         {
             Logger.Info?.Print(LogClass.Cpu, $"Guest CPU registers:\n{GetGuestRegisterPrintout()}\n");
+            PrintGuestPointerDump();
+        }
+
+        // [Nextendo, HOME Menu work] NEXTENDO_IPC_TRACE=1: also dump the memory each register
+        // points to (and one level further for X19 to X28), to read guest structures post mortem.
+        private void PrintGuestPointerDump()
+        {
+            if (System.Environment.GetEnvironmentVariable("NEXTENDO_IPC_TRACE") != "1")
+            {
+                return;
+            }
+
+            System.Text.StringBuilder sb = new();
+
+            for (int r = 0; r <= 28; r++)
+            {
+                ulong v = Context.GetX(r);
+
+                if (!TryReadQwords(v, 16, out ulong[] q))
+                {
+                    continue;
+                }
+
+                sb.AppendLine($"X{r:D2}=0x{v:X} -> {string.Join(" ", System.Array.ConvertAll(q, x => x.ToString("X")))}");
+
+                if (r >= 19)
+                {
+                    for (int k = 0; k < q.Length; k++)
+                    {
+                        if (q[k] != 0 && TryReadQwords(q[k], 10, out ulong[] q2))
+                        {
+                            sb.AppendLine($"    [+0x{k * 8:X}]=0x{q[k]:X} -> {string.Join(" ", System.Array.ConvertAll(q2, x => x.ToString("X")))}");
+                        }
+                    }
+                }
+            }
+
+
+            // The stack, and for each pointer found there what it points to (two levels): scene
+            // and heap parameters live in the caller's frame.
+            ulong sp = Context.GetX(31);
+
+            if (TryReadQwords(sp, 40, out ulong[] st))
+            {
+                sb.AppendLine($"SP=0x{sp:X}");
+
+                for (int k = 0; k < st.Length; k++)
+                {
+                    if (st[k] == 0 || !TryReadQwords(st[k], 12, out ulong[] q1))
+                    {
+                        sb.AppendLine($"  [sp+0x{k * 8:X}]=0x{st[k]:X}");
+
+                        continue;
+                    }
+
+                    sb.AppendLine($"  [sp+0x{k * 8:X}]=0x{st[k]:X} -> {string.Join(" ", System.Array.ConvertAll(q1, x => x.ToString("X")))}");
+
+                    for (int j = 0; j < q1.Length; j++)
+                    {
+                        if (q1[j] != 0 && TryReadQwords(q1[j], 12, out ulong[] q2))
+                        {
+                            sb.AppendLine($"      [+0x{j * 8:X}]=0x{q1[j]:X} -> {string.Join(" ", System.Array.ConvertAll(q2, x => x.ToString("X")))}");
+                        }
+                    }
+                }
+            }
+
+
+            // sead heap tree (qlaunch): a register holding a heap object (object+0x30 points to
+            // itself) gives the way in; climb to the root through +0x40, then list every heap
+            // with its name (+0x28), size (+0x38) and children (list node at +0x48, link at +0x60).
+            for (int r = 0; r <= 28; r++)
+            {
+                ulong h = Context.GetX(r);
+
+                if (TryReadQwords(h, 12, out ulong[] hq) && hq[6] == h && hq[7] != 0)
+                {
+                    for (int up = 0; up < 8 && TryReadQwords(h, 12, out hq) && hq[8] != 0 && TryReadQwords(hq[8], 12, out ulong[] pq) && pq[6] == hq[8]; up++)
+                    {
+                        h = hq[8];
+                    }
+
+                    sb.AppendLine("[heaps]");
+                    DumpSeadHeap(sb, h, 0);
+
+                    break;
+                }
+            }
+
+            Logger.Notice.Print(LogClass.Cpu, "[dump] guest pointers:" + System.Environment.NewLine + sb);
+        }
+
+        private void DumpSeadHeap(System.Text.StringBuilder sb, ulong heap, int depth)
+        {
+            if (depth > 6 || !TryReadQwords(heap, 13, out ulong[] q))
+            {
+                return;
+            }
+
+            string name = "?";
+
+            try
+            {
+                System.Text.StringBuilder n = new();
+
+                for (ulong i = 0; i < 40 && Owner.CpuMemory.IsMapped(q[5] + i); i++)
+                {
+                    byte c = Owner.CpuMemory.Read<byte>(q[5] + i);
+
+                    if (c == 0)
+                    {
+                        break;
+                    }
+
+                    n.Append((char)c);
+                }
+
+                name = n.ToString();
+            }
+            catch { }
+
+            int children = (int)(q[11] & 0xFFFFFFFF);
+
+            sb.AppendLine($"{new string(' ', depth * 2)}{name} @0x{heap:X} size=0x{q[7]:X} ({q[7] / 1048576.0:F1} MiB) children={children}");
+
+            // Children: circular list whose head node sits at heap+0x48; each child links
+            // through the node at child+0x60 (prev at +0, next at +8).
+            ulong head = heap + 0x48;
+            ulong node = q[10];
+
+            for (int k = 0; k < 64 && node != 0 && node != head; k++)
+            {
+                DumpSeadHeap(sb, node - 0x60, depth + 1);
+
+                if (!TryReadQwords(node, 2, out ulong[] link))
+                {
+                    break;
+                }
+
+                node = link[1];
+            }
+        }
+
+        private bool TryReadQwords(ulong address, int count, out ulong[] values)
+        {
+            values = new ulong[count];
+
+            if (address < 0x8000000 || (address & 7) != 0)
+            {
+                return false;
+            }
+
+            try
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    ulong a = address + (ulong)(i * 8);
+
+                    if (!Owner.CpuMemory.IsMapped(a))
+                    {
+                        return false;
+                    }
+
+                    values[i] = Owner.CpuMemory.Read<ulong>(a);
+                }
+
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         public void AddCpuTime(long ticks)
