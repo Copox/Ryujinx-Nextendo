@@ -685,6 +685,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
                 }
 
                 mainThread.SetEntryArguments(0, mainThreadHandle);
+                mainThread.WriteHandleToThreadLocalRegion(mainThreadHandle);
 
                 ProcessState oldState = State;
                 ProcessState newState = State != ProcessState.Created

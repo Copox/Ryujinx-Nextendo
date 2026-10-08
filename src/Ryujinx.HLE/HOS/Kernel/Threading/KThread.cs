@@ -76,6 +76,18 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
 
         public ulong TlsAddress => _tlsAddress;
 
+        // [Nextendo, HOME Menu work] SDK 22 mutexes (qlaunch 22.5.0) compare the lock word with
+        // the u32 at ThreadLocalRegion+0x110 and never write that field themselves: it has to be
+        // the thread's own handle, put there when the handle is created. Left at zero, an
+        // unlocked mutex (0) reads as "already held by this thread" and the SDK aborts.
+        public void WriteHandleToThreadLocalRegion(int handle)
+        {
+            if (_tlsAddress != 0)
+            {
+                Owner.CpuMemory.Write(_tlsAddress + 0x110, handle);
+            }
+        }
+
         public KSynchronizationObject[] WaitSyncObjects { get; }
         public int[] WaitSyncHandles { get; }
 

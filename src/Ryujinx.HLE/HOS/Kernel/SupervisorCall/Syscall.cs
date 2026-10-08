@@ -2552,6 +2552,11 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
                 KProcess process = KernelStatic.GetCurrentProcess();
 
                 result = process.HandleTable.GenerateHandle(thread, out handle);
+
+                if (result == Result.Success)
+                {
+                    thread.WriteHandleToThreadLocalRegion(handle);
+                }
             }
             else
             {
