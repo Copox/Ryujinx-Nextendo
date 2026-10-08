@@ -200,9 +200,9 @@ namespace Ryujinx.Ava.Common
             // [Nextendo] Preuve d'application (client_id enregistré), distincte du jeton joueur
             // ci-dessus : voir NextendoAppSecrets pour pourquoi les deux ne peuvent pas partager
             // un en-tête. Nom d'en-tête à garder synchronisé avec apiGuard côté serveur.
-            if (!string.IsNullOrEmpty(NextendoAppSecrets.Id))
+            if (!string.IsNullOrEmpty(NextendoAppIdentity.Id))
             {
-                http.DefaultRequestHeaders.Add("X-Nextendo-Client-Id", NextendoAppSecrets.Id);
+                http.DefaultRequestHeaders.Add("X-Nextendo-Client-Id", NextendoAppIdentity.Id);
             }
 
             return http;
@@ -216,9 +216,9 @@ namespace Ryujinx.Ava.Common
         /// </summary>
         public static void AddAppHeader(HttpClient http)
         {
-            if (!string.IsNullOrEmpty(NextendoAppSecrets.Id))
+            if (!string.IsNullOrEmpty(NextendoAppIdentity.Id))
             {
-                http.DefaultRequestHeaders.Add("X-Nextendo-Client-Id", NextendoAppSecrets.Id);
+                http.DefaultRequestHeaders.Add("X-Nextendo-Client-Id", NextendoAppIdentity.Id);
             }
         }
 
@@ -1058,9 +1058,9 @@ namespace Ryujinx.Ava.Common
         private static HttpClient CreateAvatarHttp()
         {
             HttpClient c = new() { Timeout = TimeSpan.FromSeconds(10) };
-            if (!string.IsNullOrEmpty(NextendoAppSecrets.Id))
+            if (!string.IsNullOrEmpty(NextendoAppIdentity.Id))
             {
-                c.DefaultRequestHeaders.Add("X-Nextendo-Client-Id", NextendoAppSecrets.Id);
+                c.DefaultRequestHeaders.Add("X-Nextendo-Client-Id", NextendoAppIdentity.Id);
             }
             return c;
         }
@@ -1172,7 +1172,7 @@ namespace Ryujinx.Ava.Common
             }
 
             string redirectUri = $"http://127.0.0.1:{port}/callback";
-            string clientId = string.IsNullOrEmpty(NextendoAppSecrets.Id) ? "unregistered" : NextendoAppSecrets.Id;
+            string clientId = string.IsNullOrEmpty(NextendoAppIdentity.Id) ? "unregistered" : NextendoAppIdentity.Id;
             string authorizeUrl =
                 $"{BaseUrl()}/api/oauth/authorize?response_type=code&client_id={Uri.EscapeDataString(clientId)}" +
                 $"&redirect_uri={Uri.EscapeDataString(redirectUri)}&scope=identity+friends+sauvegardes+history+presence&app=ryujinx" +
