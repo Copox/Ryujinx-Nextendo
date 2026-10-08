@@ -61,6 +61,16 @@ namespace Ryujinx.HLE.HOS.Services.News
     class INewsService : IpcService
     {
         public INewsService() { }
+        [CommandCmif(30500)] // 20.0.0+
+        // (buffer) -> object, an event holder: Get() -> handle<copy>
+        public ResultCode Unknown30500(ServiceCtx context)
+        {
+            // The HOME Menu's news page keeps the returned interface and calls into it: a bare
+            // success leaves it with a null pointer.
+            MakeObject(context, new INewsEventHolder(context));
+
+            return ResultCode.Success;
+        }
     }
 
     class INewsDataService : IpcService

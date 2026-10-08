@@ -119,6 +119,13 @@ namespace Ryujinx.Horizon.Bcat.Ipc
             {
                 service = new DeliveryCacheStorageService(ref libHacService.Ref, BcatSeed.RootForTitle(applicationId.Id));
             }
+            else if (applicationId.Id is >= 0x0100000000000000 and <= 0x0100000000001FFF)
+            {
+                // [Nextendo, HOME Menu work] A system title's cache, asked for by the HOME Menu.
+                service = new EmptyDeliveryCacheStorageService();
+
+                return Result.Success;
+            }
             else
             {
                 service = null;
