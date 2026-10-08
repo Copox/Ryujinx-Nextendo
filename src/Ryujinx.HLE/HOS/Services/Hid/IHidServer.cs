@@ -8,6 +8,7 @@ using Ryujinx.HLE.HOS.Services.Hid.Types.SharedMemory.Npad;
 using Ryujinx.Horizon.Common;
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace Ryujinx.HLE.HOS.Services.Hid
@@ -15,6 +16,8 @@ namespace Ryujinx.HLE.HOS.Services.Hid
     [Service("hid")]
     class IHidServer : IpcService
     {
+        private const ulong SixAxisSensorCalibrationParameterSize = 0x744;
+
         private readonly KEvent _xpadIdEvent;
         private readonly KEvent _palmaOperationCompleteEvent;
 
@@ -27,6 +30,7 @@ namespace Ryujinx.HLE.HOS.Services.Hid
         private bool _usbFullKeyControllerEnabled;
         private readonly bool _isFirmwareUpdateAvailableForSixAxisSensor;
         private bool _isSixAxisSensorUnalteredPassthroughEnabled;
+        private readonly Dictionary<int, byte[]> _sixAxisSensorCalibrationParameters = new();
 
         private NpadHandheldActivationMode _npadHandheldActivationMode;
         private GyroscopeZeroDriftMode _gyroscopeZeroDriftMode;
@@ -675,6 +679,26 @@ namespace Ryujinx.HLE.HOS.Services.Hid
             return ResultCode.Success;
         }
 
+        [CommandCmif(86)]
+        public ResultCode StoreSixAxisSensorCalibrationParameter(ServiceCtx context)
+        {
+            int sixAxisSensorHandle = context.RequestData.ReadInt32();
+            context.RequestData.BaseStream.Position += 4;
+            long appletResourceUserId = context.RequestData.ReadInt64();
+
+            (ulong inputPosition, ulong inputSize) = context.Request.GetBufferType0x21();
+
+            byte[] calibrationParameter = new byte[SixAxisSensorCalibrationParameterSize];
+
+            context.Memory.Read(inputPosition, calibrationParameter.AsSpan(0, (int)Math.Min(inputSize, SixAxisSensorCalibrationParameterSize)));
+
+            _sixAxisSensorCalibrationParameters[GetSixAxisSensorDeviceKey(sixAxisSensorHandle)] = calibrationParameter;
+
+            Logger.Stub?.PrintStub(LogClass.ServiceHid, new { appletResourceUserId, sixAxisSensorHandle });
+
+            return ResultCode.Success;
+        }
+
         [CommandCmif(87)] // 13.0.0+
         // LoadSixAxisSensorCalibrationParameter(nn::applet::AppletResourceUserId, nn::hid::SixAxisSensorHandle, u64 unknown)
         public ResultCode LoadSixAxisSensorCalibrationParameter(ServiceCtx context)
@@ -683,11 +707,27 @@ namespace Ryujinx.HLE.HOS.Services.Hid
             context.RequestData.BaseStream.Position += 4; // Padding
             long appletResourceUserId = context.RequestData.ReadInt64();
 
-            // TODO: CalibrationParameter have to be determined.
+            (ulong outputPosition, ulong outputSize) = context.Request.GetBufferType0x22();
+
+            ulong size = Math.Min(outputSize, SixAxisSensorCalibrationParameterSize);
+
+            if (_sixAxisSensorCalibrationParameters.TryGetValue(GetSixAxisSensorDeviceKey(sixAxisSensorHandle), out byte[] calibrationParameter))
+            {
+                context.Memory.Write(outputPosition, calibrationParameter.AsSpan(0, (int)size));
+            }
+            else
+            {
+                context.Memory.Fill(outputPosition, size, 0);
+            }
 
             Logger.Stub?.PrintStub(LogClass.ServiceHid, new { appletResourceUserId, sixAxisSensorHandle });
 
             return ResultCode.Success;
+        }
+
+        private static int GetSixAxisSensorDeviceKey(int sixAxisSensorHandle)
+        {
+            return sixAxisSensorHandle & 0xFFFF00;
         }
 
         [CommandCmif(88)] // 13.0.0+
@@ -698,7 +738,12 @@ namespace Ryujinx.HLE.HOS.Services.Hid
             context.RequestData.BaseStream.Position += 4; // Padding
             long appletResourceUserId = context.RequestData.ReadInt64();
 
-            // TODO: IcInformation have to be determined.
+            (ulong outputPosition, ulong outputSize) = context.Request.GetBufferType0x22();
+
+            if (outputSize >= (ulong)Unsafe.SizeOf<SixAxisSensorIcInformation>())
+            {
+                context.Memory.Write(outputPosition, SixAxisSensorIcInformation.Create());
+            }
 
             Logger.Stub?.PrintStub(LogClass.ServiceHid, new { appletResourceUserId, sixAxisSensorHandle });
 
