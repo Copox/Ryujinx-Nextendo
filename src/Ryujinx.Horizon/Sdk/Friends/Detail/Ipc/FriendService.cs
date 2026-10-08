@@ -45,6 +45,30 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             return string.IsNullOrEmpty(bound) || string.Equals(bound, userId.ToString(), StringComparison.OrdinalIgnoreCase);
         }
 
+        // The friend record of SDK 20+ (0x220 bytes), as the HOME Menu's friend page reads it.
+        // Worked out by writing known bytes and watching the page: the head is the old record
+        // (user id, account id at 0x10, name at 0x18), the presence block sits at 0xE8 (its
+        // status at 0x100), and the flags close the record: 0x219 favourite, 0x21A new,
+        // 0x21F valid. Without the last one the tile stays an anonymous "?".
+        private const int FriendRecordV2Size = 0x220;
+
+        private static void WriteNextendoFriendV2(Span<byte> record, ulong netId, NextendoFriends.Entry entry)
+        {
+            PresenceStatus status = entry.Status <= 0
+                ? PresenceStatus.Offline
+                : (entry.AppField is { Length: > 0 } ? PresenceStatus.OnlinePlay : PresenceStatus.Online);
+
+            FriendImpl old = MakeNextendoFriend(netId, entry.Name, status, entry.AppField, sameApp: false);
+            ReadOnlySpan<byte> oldBytes = MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref old, 1));
+
+            record.Clear();
+
+            oldBytes[..0x40].CopyTo(record);                 // ids and name
+            oldBytes.Slice(0x40, 0xE0).CopyTo(record[0xE8..]); // presence
+            record.Slice(0xE8 + 0x10, 8).Clear();            // no "last online" date is known
+            record[0x21F] = 1;
+        }
+
         private static FriendImpl MakeNextendoFriend(ulong netId, string nick, PresenceStatus status, byte[] appField = null, bool sameApp = true)
         {
             Array33<byte> nameArr = default;
@@ -760,35 +784,11 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                     var entry = friends[offset + i];
                     ulong lid = wantNsa && entry.Nsa != 0 ? entry.Nsa : entry.Pid;
                     PresenceStatus st = entry.Status > 0 ? PresenceStatus.OnlinePlay : PresenceStatus.Offline;
-                    FriendImpl made = MakeNextendoFriend(lid, entry.Name, st, entry.AppField,
-                        sameApp: entry.Status > 0);
-
-                    const int stride = 0x220; // the V2 record: the old one and 0x20 bytes more
                     Span<byte> raw = MemoryMarshal.AsBytes(friendList);
 
-                    if ((i + 1) * stride <= raw.Length)
+                    if ((i + 1) * FriendRecordV2Size <= raw.Length)
                     {
-                        raw.Slice(i * stride, stride).Clear();
-                        MemoryMarshal.AsBytes(MemoryMarshal.CreateSpan(ref made, 1)).CopyTo(raw.Slice(i * stride));
-
-                        if (Environment.GetEnvironmentVariable("NEXTENDO_FRIEND_V2_PROBE") == "2")
-                        {
-                            // Letters that change every 8 bytes, two-letter code: the text shown names the offset.
-                            for (int k = 0; k < stride; k++)
-                            {
-                                int slot = k >> 3;
-                                raw[i * stride + k] = (byte)((k & 7) < 4 ? 'A' + (slot / 26) : 'a' + (slot % 26));
-                            }
-                        }
-
-                        if (Environment.GetEnvironmentVariable("NEXTENDO_FRIEND_V2_PROBE") == "1")
-                        {
-                            // Every 8-byte slot holds its own offset: whatever the caller reads back names the field.
-                            for (int k = 0; k < stride; k += 8)
-                            {
-                                BitConverter.TryWriteBytes(raw.Slice(i * stride + k, 8), 0x5000_0000UL + (ulong)(i << 16) + (ulong)k);
-                            }
-                        }
+                        WriteNextendoFriendV2(raw.Slice(i * FriendRecordV2Size, FriendRecordV2Size), lid, entry);
                     }
                 }
                 count = n;
@@ -971,12 +971,11 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             Uid userId,
             [Buffer(HipcBufferFlags.In | HipcBufferFlags.Pointer)] ReadOnlySpan<NetworkServiceAccountId> friendIds)
         {
-            const int RecordSize = 0x220;
+            const int RecordSize = FriendRecordV2Size;
 
             records.Clear();
 
             IReadOnlyList<NextendoFriends.Entry> friends = IsNextendoProfile(userId) ? NextendoFriends.Get() : [];
-            int probe = int.TryParse(Environment.GetEnvironmentVariable("NEXTENDO_FRIEND_V2_PROBE"), out int p) ? p : 0;
             int filled = 0;
 
             for (int i = 0; i < friendIds.Length && (i + 1) * RecordSize <= records.Length; i++)
@@ -990,78 +989,7 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                         continue;
                     }
 
-                    PresenceStatus status = entry.Status > 0 ? PresenceStatus.OnlinePlay : PresenceStatus.Offline;
-                    FriendImpl made = MakeNextendoFriend(wanted, entry.Name, status, entry.AppField, sameApp: false);
-                    Span<byte> record = records.Slice(i * RecordSize, RecordSize);
-
-                    MemoryMarshal.AsBytes(MemoryMarshal.CreateSpan(ref made, 1)).CopyTo(record);
-
-                    // The V2 record ends with its flags (found by probing the HOME Menu's friend
-                    // page): 0x219 favourite, 0x21A new, 0x21F valid. Nextendo has no favourites.
-                    if (probe >= 1000)
-                    {
-                        // Bit k of (probe - 1000) sets byte 0x218 + k, for every friend.
-                        for (int k = 0; k < 8; k++)
-                        {
-                            record[0x218 + k] = (byte)(((probe - 1000) >> k) & 1);
-                        }
-                    }
-                    else
-                    {
-                        record[0x21F] = 1;
-                    }
-
-                    if (probe >= 3000)
-                    {
-                        // Bit b of (probe - 3000) puts 1 in byte 0x50 + b, for every friend.
-                        record.Slice(0x50, 0x10).Clear();
-
-                        for (int b = 0; b < 16; b++)
-                        {
-                            record[0x50 + b] = (byte)(((probe - 3000) >> b) & 1);
-                        }
-                    }
-
-                    if (probe is >= 10 and < 100)
-                    {
-                        // Tail of the record (0x200..0x21F): tile number i gets byte (probe - 10) * 8 + i % 8 set.
-                        record[0x200 + (probe - 10) * 8 + (i % 8)] = 1;
-                    }
-
-                    if (probe == 4)
-                    {
-                        // Columns of the grid (four tiles a row): 0 as is, 1 without the byte at 0x128,
-                        // 2 without the last-online time, 3 without either.
-                        if ((i & 1) != 0)
-                        {
-                            record[0x128] = 0;
-                        }
-
-                        if ((i & 2) != 0)
-                        {
-                            record.Slice(0x40 + 0x10, 0x18).Clear();
-                        }
-                    }
-
-                    if (probe == 3)
-                    {
-                        // Which byte is which flag: friend number i gets byte 0x120 + i set, and nothing else there.
-                        record.Slice(0x120, 0x100).Clear();
-
-                        if (i < 0x100)
-                        {
-                            record[0x120 + i] = 1;
-                        }
-                    }
-
-                    if (probe == 2)
-                    {
-                        for (int k = 0; k < RecordSize; k++)
-                        {
-                            int slot = k >> 3;
-                            record[k] = (byte)((k & 7) < 4 ? 'A' + (slot / 26) : 'a' + (slot % 26));
-                        }
-                    }
+                    WriteNextendoFriendV2(records.Slice(i * RecordSize, RecordSize), wanted, entry);
 
                     filled++;
 
