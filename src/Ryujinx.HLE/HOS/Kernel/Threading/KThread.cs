@@ -1412,6 +1412,46 @@ namespace Ryujinx.HLE.HOS.Kernel.Threading
 
             sb.AppendLine($"{new string(' ', depth * 2)}{name} @0x{heap:X} size=0x{q[7]:X} ({q[7] / 1048576.0:F1} MiB) children={children}");
 
+            // Free and used block lists of an ExpHeap (heads at +0xD8 and +0xF0). A block header
+            // is {u16 tag, u16 offset, u32 size, node}: print each block's size.
+            if (name == "RootScene" || name == "TaskRoot")
+            {
+                foreach ((string label, ulong headOffset) in new[] { ("free", 0xD8UL), ("used", 0xF0UL) })
+                {
+                    ulong listHead = heap + headOffset;
+                    ulong total = 0;
+                    int count = 0;
+                    System.Text.StringBuilder sizes = new();
+
+                    if (TryReadQwords(listHead, 3, out ulong[] lh))
+                    {
+                        ulong n = lh[1];
+
+                        for (int k = 0; k < 4096 && n != 0 && n != listHead; k++)
+                        {
+                            if (!TryReadQwords(n - 8, 3, out ulong[] blk))
+                            {
+                                break;
+                            }
+
+                            ulong size = blk[0] >> 32;
+
+                            total += size;
+                            count++;
+
+                            if (size >= 0x40000 && sizes.Length < 600)
+                            {
+                                sizes.Append($" 0x{size:X}@0x{n:X}");
+                            }
+
+                            n = blk[2];
+                        }
+
+                        sb.AppendLine($"{new string(' ', depth * 2)}  [{label}] blocks={count} total=0x{total:X} ({total / 1048576.0:F1} MiB) big:{sizes} raw={lh[0]:X} {lh[1]:X} {lh[2]:X}");
+                    }
+                }
+            }
+
             // Children: circular list whose head node sits at heap+0x48; each child links
             // through the node at child+0x60 (prev at +0, next at +8).
             ulong head = heap + 0x48;
