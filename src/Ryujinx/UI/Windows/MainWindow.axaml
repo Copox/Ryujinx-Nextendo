@@ -133,7 +133,7 @@
                         BorderBrush="Black"
                         BorderThickness="2"
                         BoxShadow="4 4 32 8 #40000000"
-                        CornerRadius="3"
+                        CornerRadius="{Binding LoadIconRadius}"
                         IsVisible="{Binding ShowLoadProgress}">
                         <Image
                             Width="256"

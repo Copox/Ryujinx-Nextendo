@@ -872,6 +872,7 @@ namespace Ryujinx.Ava.UI.Windows
                         {
                             // Its own icon on the loading screen, not the generic NCA cartridge.
                             ViewModel.SelectedIcon = Ryujinx.Common.EmbeddedResources.Read("Ryujinx/Assets.UIImages.Icon_HomeMenu.png");
+                            ViewModel.LoadIconRadius = new Avalonia.CornerRadius(36);
                         }
 
                         if (homeMenuData != null)

@@ -121,6 +121,9 @@ namespace Ryujinx.Ava.UI.ViewModels
         [ObservableProperty] public partial Brush VSyncModeColor { get; set; }
 #nullable enable
         [ObservableProperty] public partial byte[]? SelectedIcon { get; set; }
+
+        // Frame of the icon on the loading screen: square for a game, rounded for the HOME Menu's own icon.
+        [ObservableProperty] public partial Avalonia.CornerRadius LoadIconRadius { get; set; } = new(3);
 #nullable disable
         [ObservableProperty] public partial int StatusBarProgressMaximum { get; set; }
 
@@ -2437,6 +2440,7 @@ namespace Ryujinx.Ava.UI.ViewModels
             RendererHostControl = null;
 
             SelectedIcon = null;
+            LoadIconRadius = new Avalonia.CornerRadius(3);
 
             Dispatcher.UIThread.InvokeAsync(() =>
             {
