@@ -154,7 +154,12 @@ namespace Ryujinx.HLE.HOS.Services
             // Ensure that the sever loop is running.
             InitDone.WaitOne();
 
-            _selfProcess.HandleTable.GenerateHandle(serverSession, out int serverSessionHandle);
+            Ryujinx.Horizon.Common.Result generated = _selfProcess.HandleTable.GenerateHandle(serverSession, out int serverSessionHandle);
+
+            if (generated != Ryujinx.Horizon.Common.Result.Success)
+            {
+                Logger.Error?.Print(LogClass.KernelIpc, $"Server {Name}: no handle left for a new session ({generated}), {_sessions.Count} sessions held.");
+            }
 
             AddSessionObj(serverSessionHandle, obj);
         }
@@ -497,6 +502,11 @@ namespace Ryujinx.HLE.HOS.Services
             else if (request.Type is IpcMessageType.CmifControl or
                      IpcMessageType.CmifControlWithContext)
             {
+                if (System.Environment.GetEnvironmentVariable("NEXTENDO_IPC_TRACE") == "1")
+                {
+                    Logger.Notice.Print(LogClass.KernelIpc, $"[ctl] {Name}: control request on session 0x{serverSessionHandle:X}, {_sessions.Count} sessions");
+                }
+
 #pragma warning disable IDE0059 // Remove unnecessary value assignment
                 uint magic = (uint)_requestDataReader.ReadUInt64();
 #pragma warning restore IDE0059

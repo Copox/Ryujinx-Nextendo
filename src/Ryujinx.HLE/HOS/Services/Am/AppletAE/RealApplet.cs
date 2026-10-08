@@ -129,8 +129,25 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
 
                 HomeMenuStatus.Set("Application:" + title.Name);
 
+                System.Diagnostics.Stopwatch appRunning = System.Diagnostics.Stopwatch.StartNew();
+                bool appDumped = false;
+
                 while (system.KernelContext.Processes.TryGetValue(pid, out KProcess process) && process.State != ProcessState.Exited)
                 {
+                    if (!appDumped && int.TryParse(Environment.GetEnvironmentVariable("NEXTENDO_QL_APPDUMP_MS"), out int appDumpAt) && appRunning.ElapsedMilliseconds > appDumpAt)
+                    {
+                        appDumped = true;
+
+                        try
+                        {
+                            Logger.Notice.Print(LogClass.ServiceAm, "[dump] " + process.Debugger.GetMinidump());
+                        }
+                        catch (Exception e)
+                        {
+                            Logger.Notice.Print(LogClass.ServiceAm, "[dump] failed: " + e.Message);
+                        }
+                    }
+
                     if (application.TerminateRequested)
                     {
                         Terminate(system, process);
