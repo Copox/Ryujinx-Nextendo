@@ -49,6 +49,19 @@ namespace Ryujinx.HLE.HOS.Services.Vi
         private const int FirstCaptureSlot = 4;
         private static readonly byte[][] _captures = new byte[3][];
 
+        /// <summary>
+        /// A new emulation starts: nothing of the previous one holds any more (its processes are
+        /// gone, and the new ones get the same process ids).
+        /// </summary>
+        public static void Reset()
+        {
+            lock (_lock)
+            {
+                _sessions.Clear();
+                System.Array.Clear(_captures);
+            }
+        }
+
         // Keeps the last frame of `pid` as capture number `index`.
         public static void Capture(ulong pid, int index)
         {

@@ -61,6 +61,17 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
 
         private static volatile RunningApplication _application;
 
+        /// <summary>A new emulation starts: the applets and the game of the previous one are gone.</summary>
+        public static void Reset()
+        {
+            _applets.Clear();
+            _systemApplets.Clear();
+            _application = null;
+
+            Ryujinx.Common.Configuration.NextendoGames.Playing = Ryujinx.Common.Configuration.NextendoGames.HomeMenuId;
+            HomeMenuStatus.Set("");
+        }
+
         public static void RegisterSystemApplet(Horizon system, ulong pid)
         {
             if (!_systemApplets.ContainsKey(pid) && Environment.GetEnvironmentVariable("NEXTENDO_QL_NOOWN") != "1")

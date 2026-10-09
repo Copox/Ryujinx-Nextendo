@@ -205,6 +205,12 @@ namespace Ryujinx.HLE.HOS
 
             VsyncEvent = new KEvent(KernelContext);
 
+            // [Nextendo, HOME Menu work] What is kept per process for the HOME Menu belongs to one
+            // emulation: started a second time in the same window, the menu found the records
+            // of the first one under its own process id and the emulator went down.
+            Services.Vi.SystemSharedBuffer.Reset();
+            Services.Am.AppletAE.RealAppletManager.Reset();
+
             // [Nextendo, HOME Menu work] The default avatar of Nextendo, same drawing and same
             // tint per PID as the apps and the site (measures of profile_images/10151.jpg).
             Ryujinx.Common.Configuration.NextendoImages.Silhouette ??= static (pid, side) =>
