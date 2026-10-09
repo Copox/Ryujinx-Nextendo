@@ -849,6 +849,8 @@ namespace Ryujinx.HLE.HOS.Services.Fs
 #pragma warning restore IDE0059
             ulong titleId = context.RequestData.ReadUInt64();
 
+            Logger.Info?.Print(LogClass.ServiceFs, $"[fs] data storage {titleId:X16} asked by process {context.Process.Pid}");
+
             // We do a mitm here to find if the request is for an AOC.
             // This is because AOC can be distributed over multiple containers in the emulator.
             if (context.Device.System.ContentManager.GetAocDataStorage(titleId, out LibHac.Fs.IStorage aocStorage, context.Device.Configuration.FsIntegrityCheckLevel))
