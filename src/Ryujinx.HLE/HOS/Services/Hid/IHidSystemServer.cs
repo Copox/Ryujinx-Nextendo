@@ -94,6 +94,47 @@ namespace Ryujinx.HLE.HOS.Services.Hid
             return ref context.Device.Hid.SharedMemory.Npads[(int)index].InternalState;
         }
 
+        // The "unique pads" (the physical controllers, apart from the players they are assigned
+        // to) are polled many times a second; none is declared, as before, but without the
+        // warning each time.
+        [CommandCmif(321)] // 3.0.0+
+        // GetUniquePadsFromNpad(u32 npad_id) -> (s64 count, buffer<UniquePadId, 0xa>)
+        public ResultCode GetUniquePadsFromNpad(ServiceCtx context)
+        {
+            context.ResponseData.Write(0L);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(703)]
+        // GetUniquePadIds() -> (s64 count, buffer<UniquePadId, 0xa>)
+        public ResultCode GetUniquePadIds(ServiceCtx context)
+        {
+            context.ResponseData.Write(0L);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(315)] // 9.0.0+
+        // GetAppletDetailedUiType(u32 npad_id) -> nn::hid::system::AppletDetailedUiType: the picture
+        // of the controller drawn by the Controllers page.
+        public ResultCode GetAppletDetailedUiType(ServiceCtx context)
+        {
+            uint npadId = context.RequestData.ReadUInt32();
+            NpadStyleTag style = NpadState(context, npadId).StyleSet;
+
+            uint type = (NpadIdType)npadId == NpadIdType.Handheld && style != 0 ? 0x04000000u // Joy-Con on the console
+                : (style & NpadStyleTag.FullKey) != 0 ? 0x0C000000u   // Pro Controller
+                : (style & NpadStyleTag.JoyDual) != 0 ? 0x05000000u   // a pair of Joy-Con
+                : (style & NpadStyleTag.JoyLeft) != 0 ? 0x08000000u   // one left Joy-Con, held sideways
+                : (style & NpadStyleTag.JoyRight) != 0 ? 0x0A000000u  // one right Joy-Con, held sideways
+                : 0u;
+
+            context.ResponseData.Write(type);
+
+            return ResultCode.Success;
+        }
+
         [CommandCmif(316)] // 10.0.0+
         // GetNpadInterfaceType(u32 npad_id) -> u8 (1 Bluetooth, 2 Rail, 3 Usb, 4 Embedded)
         public ResultCode GetNpadInterfaceType(ServiceCtx context)
