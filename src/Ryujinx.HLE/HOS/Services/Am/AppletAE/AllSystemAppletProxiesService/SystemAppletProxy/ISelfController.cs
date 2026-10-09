@@ -54,6 +54,25 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         {
             Logger.Stub?.PrintStub(LogClass.ServiceAm);
 
+            // [Nextendo, HOME Menu work] A homebrew that leaves this way (Switchfin, other borealis
+            // programs) then waits for the system to end it, as a console does. Left alone it
+            // waited forever and the album froze. It is ended once this reply is out, and the
+            // homebrew menu comes back.
+            context.Device.System.KernelContext.Processes.TryGetValue(_pid, out Ryujinx.HLE.HOS.Kernel.Process.KProcess process);
+
+            Logger.Info?.Print(LogClass.ServiceAm, $"[proc] Exit asked by process {_pid} ({process?.Name}), homebrew area 0x{process?.HomebrewArea ?? 0:X}");
+
+            if (process is { HomebrewArea: not 0 })
+            {
+                process.ReadHomebrewNextLoad();
+
+                System.Threading.Tasks.Task.Run(async () =>
+                {
+                    await System.Threading.Tasks.Task.Delay(50);
+                    process.Terminate();
+                });
+            }
+
             return ResultCode.Success;
         }
 
