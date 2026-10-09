@@ -41,6 +41,8 @@ namespace Ryujinx.Common.Configuration
             public string Platform { get; init; }
             public bool Favorite { get; init; }
             public long Since { get; init; }
+            public string FriendCode { get; init; }
+            public long RequestedAt { get; init; }
 
             public Entry(ulong pid, string name, byte[] appField, ulong nsa = 0, int status = 0)
             {
@@ -54,6 +56,124 @@ namespace Ryujinx.Common.Configuration
 
         private static readonly object _lock = new();
         private static List<Entry> _cache = new();
+
+        // [Nextendo, HOME Menu work] The friend requests of the account: received and sent.
+        private static List<Entry> _requests = new();
+        private static List<Entry> _sent = new();
+
+        /// <summary>The friend requests received, as of the last reading of the friend list.</summary>
+        public static IReadOnlyList<Entry> Requests()
+        {
+            Get();
+
+            lock (_lock)
+            {
+                return _requests;
+            }
+        }
+
+        /// <summary>The friend requests sent and not answered yet.</summary>
+        public static IReadOnlyList<Entry> Sent()
+        {
+            Get();
+
+            lock (_lock)
+            {
+                return _sent;
+            }
+        }
+
+        private static List<Entry> ParseRequests(JsonElement root, string property)
+        {
+            List<Entry> found = new();
+
+            if (!root.TryGetProperty(property, out JsonElement arr) || arr.ValueKind != JsonValueKind.Array)
+            {
+                return found;
+            }
+
+            foreach (JsonElement r in arr.EnumerateArray())
+            {
+                ulong pid = r.TryGetProperty("pid", out JsonElement p) && p.ValueKind == JsonValueKind.Number ? p.GetUInt64() : 0;
+                string name = r.TryGetProperty("name", out JsonElement n) ? (n.GetString() ?? "") : "";
+                ulong nsa = 0;
+
+                if (r.TryGetProperty("nsa", out JsonElement nsaEl) && nsaEl.ValueKind == JsonValueKind.String)
+                {
+                    _ = ulong.TryParse(nsaEl.GetString(), System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out nsa);
+                }
+
+                long at = 0;
+
+                if (r.TryGetProperty("vu", out JsonElement atEl) && atEl.ValueKind == JsonValueKind.String &&
+                    DateTimeOffset.TryParse(atEl.GetString(), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out DateTimeOffset when))
+                {
+                    at = when.ToUnixTimeSeconds();
+                }
+
+                if (pid != 0)
+                {
+                    found.Add(new Entry(pid, string.IsNullOrEmpty(name) && r.TryGetProperty("username", out JsonElement u) ? u.GetString() ?? "" : name, null, nsa)
+                    {
+                        FriendCode = r.TryGetProperty("friend_code", out JsonElement fc) ? fc.GetString() ?? "" : "",
+                        RequestedAt = at,
+                    });
+                }
+            }
+
+            return found;
+        }
+
+        /// <summary>Accepts or declines a received friend request; the list is read again after.</summary>
+        public static bool Answer(ulong pid, bool accept)
+        {
+            return Post(accept ? "/api/friends/accept" : "/api/friends/decline", $"{{\"pid\":{pid}}}");
+        }
+
+        /// <summary>Sends a friend request to the owner of a friend code ("SW-xxxx-xxxx-xxxx").</summary>
+        public static bool SendRequest(string friendCode)
+        {
+            return Post("/api/friends", $"{{\"friend_code\":{JsonSerializer.Serialize(friendCode)}}}");
+        }
+
+        /// <summary>Cancels a friend request sent.</summary>
+        public static bool CancelRequest(ulong pid)
+        {
+            return Post("/api/friends/remove", $"{{\"pid\":{pid}}}");
+        }
+
+        private static bool Post(string path, string json)
+        {
+            string baseUrl = NextendoEndpoint.BaseUrl();
+
+            if (string.IsNullOrEmpty(NextendoAccount.NexToken) || string.IsNullOrEmpty(baseUrl))
+            {
+                return false;
+            }
+
+            try
+            {
+                using HttpRequestMessage req = new(HttpMethod.Post, baseUrl.TrimEnd('/') + path)
+                {
+                    Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json"),
+                };
+                req.Headers.Add("Authorization", "Bearer " + NextendoAccount.NexToken);
+
+                using HttpResponseMessage resp = _http.SendAsync(req).GetAwaiter().GetResult();
+
+                // The lists change: read again at the next look.
+                lock (_lock)
+                {
+                    _lastFetchMs = 0;
+                }
+
+                return resp.IsSuccessStatusCode;
+            }
+            catch
+            {
+                return false;
+            }
+        }
         private static long _lastFetchMs;
         private static int _refreshing;
 
@@ -418,9 +538,14 @@ namespace Ryujinx.Common.Configuration
                     }
                 }
 
+                List<Entry> requests = ParseRequests(doc.RootElement, "requests");
+                List<Entry> sent = ParseRequests(doc.RootElement, "sent");
+
                 lock (_lock)
                 {
                     _cache = list;
+                    _requests = requests;
+                    _sent = sent;
                     _lastFetchMs = Environment.TickCount64;
                 }
             }

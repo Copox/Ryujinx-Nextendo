@@ -867,6 +867,15 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                         BitConverter.TryWriteBytes(info.Slice(0x570, 8), entry.AppId);
                         BitConverter.TryWriteBytes(info.Slice(0x578, 8), entry.AppId);
                         Logger.Info?.Print(LogClass.ServiceFriend, $"[Nextendo] friend 0x{friendId.Id:X} plays {entry.AppId:X16} ({entry.Game}) on {entry.Platform}");
+
+                        // Probe (development): "at=value" bytes set for a friend who plays.
+                        if (Environment.GetEnvironmentVariable("NEXTENDO_DETAIL_SET") is string set)
+                        {
+                            foreach (string part in set.Split(','))
+                            {
+                                info[Convert.ToInt32(part.Split('=')[0], 16)] = Convert.ToByte(part.Split('=')[1], 16);
+                            }
+                        }
                     }
 
                     // "Friends since", in Unix seconds (found at 0x5D0 by probing).
@@ -1021,8 +1030,9 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
         [CmifCommand(20200)]
         public Result GetReceivedFriendRequestCount(out int count, out int count2, Uid userId)
         {
-            count = 0;
-            count2 = 0;
+            // [Nextendo, HOME Menu work] The requests received by the Nextendo account.
+            count = IsNextendoProfile(userId) ? NextendoFriends.Requests().Count : 0;
+            count2 = count;
 
             Logger.Stub?.PrintStub(LogClass.ServiceFriend, new { userId });
 
@@ -1042,6 +1052,110 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             Logger.Stub?.PrintStub(LogClass.ServiceFriend, new { userId, arg3, arg4 });
 
             return Result.Success;
+        }
+
+        [CmifCommand(20203)] // 22.0.0+
+        public Result GetFriendRequestReceivedNotificationCount(out int count, Uid userId)
+        {
+            count = IsNextendoProfile(userId) ? NextendoFriends.Requests().Count : 0;
+
+            return Result.Success;
+        }
+
+        // [Nextendo, HOME Menu work] The list of friend requests (SDK 20+): received or sent,
+        // by the type asked. The layout of a record is being worked out: the probe writes known
+        // values for the page to show.
+        [CmifCommand(20202)]
+        public Result GetFriendRequestListV2(
+            out int count,
+            [Buffer(HipcBufferFlags.Out | HipcBufferFlags.MapAlias)] Span<byte> requestList,
+            Uid userId,
+            int offset,
+            int type)
+        {
+            count = 0;
+            requestList.Clear();
+
+            IReadOnlyList<NextendoFriends.Entry> requests = !IsNextendoProfile(userId) ? []
+                : type == 0 ? NextendoFriends.Sent() : NextendoFriends.Requests();
+
+            int size = int.TryParse(Environment.GetEnvironmentVariable("NEXTENDO_FRQ_SIZE"), System.Globalization.NumberStyles.HexNumber, null, out int s) ? s : FriendRequestV2Size;
+
+            for (int i = offset; i < requests.Count && (count + 1) * size <= requestList.Length; i++)
+            {
+                WriteFriendRequestV2(requestList.Slice(count * size, size), requests[i]);
+                count++;
+            }
+
+            Logger.Info?.Print(LogClass.ServiceFriend, $"[Nextendo] GetFriendRequestListV2 type={type} offset={offset} buffer=0x{requestList.Length:X} -> {count} request(s)");
+
+            return Result.Success;
+        }
+
+        private const int FriendRequestV2Size = 0x200; // 0x200 each: the SDK sizes the buffer as count << 9
+
+        private static void WriteFriendRequestV2(Span<byte> record, NextendoFriends.Entry entry)
+        {
+            if (Environment.GetEnvironmentVariable("NEXTENDO_FRQ_PROBE") == "letters")
+            {
+                for (int k = 0; k < record.Length; k++)
+                {
+                    int slot = k >> 3;
+                    record[k] = (byte)((k & 7) < 4 ? 'A' + (slot / 26) : 'a' + (slot % 26));
+                }
+
+                return;
+            }
+
+            if (Environment.GetEnvironmentVariable("NEXTENDO_FRQ_PROBE") == "slots")
+            {
+                for (int slot = 0; slot < record.Length / 8; slot++)
+                {
+                    BitConverter.TryWriteBytes(record.Slice(slot * 8, 8), 0x5100UL + (ulong)slot);
+                }
+
+                return;
+            }
+
+            if (Environment.GetEnvironmentVariable("NEXTENDO_FRQ_PROBE") == "ones")
+            {
+                record.Fill(1);
+            }
+
+            // Found by probing the received list: the request id at 0, the account the request
+            // comes from (or goes to) at 0x18: the page asks its profile (GetProfileExtraListV2).
+            BitConverter.TryWriteBytes(record.Slice(0x00, 8), entry.Pid);
+            BitConverter.TryWriteBytes(record.Slice(0x18, 8), entry.Nsa != 0 ? entry.Nsa : entry.Pid);
+
+            // The nickname at 0x20 (found the same way: the tile shows the text there).
+            byte[] nick = System.Text.Encoding.UTF8.GetBytes(entry.Name);
+            nick.AsSpan(0, Math.Min(nick.Length, 0x20)).CopyTo(record.Slice(0x20, 0x21));
+
+            // The address of the picture at 0x48: the page downloads it itself.
+            byte[] picture = System.Text.Encoding.ASCII.GetBytes($"{NextendoEndpoint.Canonical.TrimEnd('/')}/api/avatar?pid={entry.Pid}");
+            picture.AsSpan(0, Math.Min(picture.Length, 0x9F)).CopyTo(record.Slice(0x48, 0xA0));
+
+            if (Environment.GetEnvironmentVariable("NEXTENDO_FRQ_URLS") is not null)
+            {
+                // From 0x48, every 0x20 bytes: an address naming its offset.
+                for (int at = 0x48; at + 0x20 <= record.Length; at += 0x20)
+                {
+                    byte[] url = System.Text.Encoding.ASCII.GetBytes($"https://a{at:X3}.x/p.jpg");
+                    record.Slice(at, 0x20).Clear();
+                    url.CopyTo(record.Slice(at));
+                }
+            }
+
+            if (Environment.GetEnvironmentVariable("NEXTENDO_FRQ_CODES") is not null)
+            {
+                for (int slot = 4; slot < record.Length / 8; slot++)
+                {
+                    Span<byte> at = record.Slice(slot * 8, 8);
+                    at.Clear();
+                    at[0] = (byte)('A' + slot / 26);
+                    at[1] = (byte)('a' + slot % 26);
+                }
+            }
         }
 
         [CmifCommand(20300)]
@@ -1143,6 +1257,107 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             string friendIdList = string.Join(", ", friendIds.ToArray());
 
             Logger.Stub?.PrintStub(LogClass.ServiceFriend, new { userId, friendIdList });
+
+            return Result.Success;
+        }
+
+        // [Nextendo, HOME Menu work] The profiles of accounts that are not (yet) friends: the
+        // senders of friend requests, the people met. Looked up among the requests, then the
+        // friends. Each record (its size given by the buffer) is laid out like the head of a
+        // friend record: ids, then the nickname, and the "valid" flag in its last byte.
+        [CmifCommand(20502)] // 19.0.0+
+        public Result GetProfileExtraListV2(
+            [Buffer(HipcBufferFlags.Out | HipcBufferFlags.MapAlias)] Span<byte> extraList,
+            Uid userId,
+            [Buffer(HipcBufferFlags.In | HipcBufferFlags.Pointer)] ReadOnlySpan<NetworkServiceAccountId> accountIds)
+        {
+            extraList.Clear();
+
+            int size = accountIds.Length > 0 ? extraList.Length / accountIds.Length : 0;
+            int filled = 0;
+
+            if (int.TryParse(Environment.GetEnvironmentVariable("NEXTENDO_PEX_SIZE"), System.Globalization.NumberStyles.HexNumber, null, out int forced))
+            {
+                size = forced;
+            }
+
+            for (int i = 0; size >= 0x41 && i < accountIds.Length && (i + 1) * size <= extraList.Length; i++)
+            {
+                ulong wanted = accountIds[i].Id;
+                NextendoFriends.Entry entry = default;
+                bool found = false;
+
+                foreach (IReadOnlyList<NextendoFriends.Entry> list in new[] { NextendoFriends.Requests(), NextendoFriends.Sent(), NextendoFriends.Get() })
+                {
+                    foreach (NextendoFriends.Entry candidate in list)
+                    {
+                        if (candidate.Pid == wanted || (candidate.Nsa != 0 && candidate.Nsa == wanted))
+                        {
+                            entry = candidate;
+                            found = true;
+                            break;
+                        }
+                    }
+
+                    if (found)
+                    {
+                        break;
+                    }
+                }
+
+                if (!found)
+                {
+                    continue;
+                }
+
+                Span<byte> record = extraList.Slice(i * size, size);
+                FriendImpl head = MakeNextendoFriend(wanted, entry.Name, PresenceStatus.Offline, sameApp: false);
+
+                MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref head, 1))[..0x40].CopyTo(record);
+                record[size >= 0x491 ? 0x490 : size - 1] = 1; // "valid", found by bisecting the received list (record of 0x4A8)
+
+                if (Environment.GetEnvironmentVariable("NEXTENDO_PEX_PROBE") is string probe)
+                {
+                    int from = probe == "letters" ? 0 : 0x40, to = size;
+
+                    if (probe.StartsWith("ones:"))
+                    {
+                        from = Convert.ToInt32(probe[5..].Split('-')[0], 16);
+                        to = Convert.ToInt32(probe[5..].Split('-')[1], 16);
+                        probe = "ones";
+                    }
+
+                    for (int k = from; k < to; k++)
+                    {
+                        int slot = k >> 3;
+                        record[k] = probe == "ones" ? (byte)1 : (byte)((k & 7) < 4 ? 'A' + (slot / 26) : 'a' + (slot % 26));
+                    }
+                }
+
+                if (Environment.GetEnvironmentVariable("NEXTENDO_PEX_CODES") is not null)
+                {
+                    // Every 8 bytes from 0x40: a two-letter code naming the slot, then a zero.
+                    for (int slot = 8; slot < size / 8; slot++)
+                    {
+                        Span<byte> at = record.Slice(slot * 8, 8);
+                        at.Clear();
+                        at[0] = (byte)('A' + slot / 26);
+                        at[1] = (byte)('a' + slot % 26);
+                    }
+                }
+
+                if (Environment.GetEnvironmentVariable("NEXTENDO_PEX_SET") is string set)
+                {
+                    foreach (string part in set.Split(','))
+                    {
+                        record[Convert.ToInt32(part.Split('=')[0], 16)] = Convert.ToByte(part.Split('=')[1], 16);
+                    }
+                }
+
+                filled++;
+            }
+
+            Logger.Info?.Print(LogClass.ServiceFriend, $"[Nextendo] GetProfileExtraListV2 -> {accountIds.Length} ids (first 0x{(accountIds.Length > 0 ? accountIds[0].Id : 0):X}), buffer 0x{extraList.Length:X}, record 0x{size:X}, {filled} filled");
 
             return Result.Success;
         }
@@ -1445,7 +1660,7 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
         [CmifCommand(30202)]
         public Result CancelFriendRequest(Uid userId, RequestId requestId)
         {
-            Logger.Stub?.PrintStub(LogClass.ServiceFriend, new { userId, requestId });
+            Logger.Info?.Print(LogClass.ServiceFriend, $"[Nextendo] cancel friend request to {requestId.Id}: {(IsNextendoProfile(userId) && NextendoFriends.CancelRequest(requestId.Id) ? "done" : "failed")}");
 
             return Result.Success;
         }
@@ -1453,7 +1668,7 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
         [CmifCommand(30203)]
         public Result AcceptFriendRequest(Uid userId, RequestId requestId)
         {
-            Logger.Stub?.PrintStub(LogClass.ServiceFriend, new { userId, requestId });
+            Logger.Info?.Print(LogClass.ServiceFriend, $"[Nextendo] accept friend request from {requestId.Id}: {(IsNextendoProfile(userId) && NextendoFriends.Answer(requestId.Id, accept: true) ? "done" : "failed")}");
 
             return Result.Success;
         }
@@ -1461,7 +1676,7 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
         [CmifCommand(30204)]
         public Result RejectFriendRequest(Uid userId, RequestId requestId)
         {
-            Logger.Stub?.PrintStub(LogClass.ServiceFriend, new { userId, requestId });
+            Logger.Info?.Print(LogClass.ServiceFriend, $"[Nextendo] decline friend request from {requestId.Id}: {(IsNextendoProfile(userId) && NextendoFriends.Answer(requestId.Id, accept: false) ? "done" : "failed")}");
 
             return Result.Success;
         }

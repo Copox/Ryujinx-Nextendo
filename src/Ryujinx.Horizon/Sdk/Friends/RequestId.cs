@@ -5,5 +5,7 @@ namespace Ryujinx.Horizon.Sdk.Friends
     [StructLayout(LayoutKind.Sequential, Size = 0x8, Pack = 0x8)]
     struct RequestId
     {
+        // [Nextendo] The account (PID) the request comes from or goes to.
+        public ulong Id;
     }
 }
