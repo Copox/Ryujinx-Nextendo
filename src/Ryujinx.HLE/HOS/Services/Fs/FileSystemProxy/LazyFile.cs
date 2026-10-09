@@ -28,8 +28,35 @@ namespace Ryujinx.HLE.HOS.Services.Fs.FileSystemProxy
             }
         }
 
+        // [Nextendo, HOME Menu work] A mod file is read whole into memory, and its handle closed:
+        // kept open, the file could not be removed while the program runs (NXThemes Installer
+        // failed to uninstall the theme of the running HOME Menu: "cannot remove: I/O error").
+        private byte[] _content;
+
         protected override Result DoRead(out long bytesRead, long offset, Span<byte> destination, in ReadOption option)
         {
+            if (_content == null && _fileInfo.Exists && _fileInfo.Length <= 64 * 1024 * 1024)
+            {
+                try
+                {
+                    _content = File.ReadAllBytes(_fileInfo.FullName);
+                }
+                catch (IOException)
+                {
+                    _content = null;
+                }
+            }
+
+            if (_content != null)
+            {
+                int count = (int)Math.Clamp(_content.Length - offset, 0, destination.Length);
+
+                _content.AsSpan((int)Math.Min(offset, _content.Length), count).CopyTo(destination);
+                bytesRead = count;
+
+                return Result.Success;
+            }
+
             PrepareFile();
 
             return _fileReference.Get!.Read(out bytesRead, offset, destination);
