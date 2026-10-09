@@ -90,8 +90,59 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
 
                 Logger.Notice.Print(LogClass.ServiceAm, $"[home] system applet {pid} gets its own message queue");
 
+                bool first = _systemApplets.IsEmpty;
+
                 _systemApplets[pid] = state;
+
+                // [Nextendo, HOME Menu work] With the HOME Menu, the overlay applet that draws the
+                // notifications of the system (experimental: NEXTENDO_OVERLAY=1).
+                if (first && Environment.GetEnvironmentVariable("NEXTENDO_OVERLAY") == "1")
+                {
+                    StartOverlay(system.Device);
+                }
             }
+        }
+
+        /// <summary>The process of the overlay applet (overlayDisp), when it runs.</summary>
+        public static ulong OverlayPid { get; private set; }
+
+        public static bool IsOverlay(ulong pid) => pid != 0 && pid == OverlayPid;
+
+        // The overlay applet has a message queue of its own but not the focus: the buttons stay
+        // with the HOME Menu and the game.
+        public static void RegisterOverlayApplet(Horizon system, ulong pid)
+        {
+            if (!_systemApplets.ContainsKey(pid))
+            {
+                AppletStateMgr state = new(system);
+
+                state.SetFocus(false);
+                _systemApplets[pid] = state;
+
+                Logger.Notice.Print(LogClass.ServiceAm, $"[overlay] overlay applet {pid} gets its own message queue, without the focus");
+            }
+        }
+
+        private static void StartOverlay(Switch device)
+        {
+            string path = PathOf(device, AppletId.OverlayDisplay);
+
+            if (path == null)
+            {
+                Logger.Warning?.Print(LogClass.ServiceAm, "[overlay] overlayDisp is not in the firmware");
+
+                return;
+            }
+
+            new Thread(() =>
+            {
+                Thread.Sleep(int.TryParse(Environment.GetEnvironmentVariable("NEXTENDO_OVERLAY_DELAY"), out int delay) ? delay : 12000);
+
+                ulong pid = device.Processes.LoadApplet(path, id => OverlayPid = id);
+
+                Logger.Notice.Print(LogClass.ServiceAm, $"[overlay] overlayDisp started as process {pid}");
+            })
+            { IsBackground = true, Name = "HLE.RealApplet.Overlay" }.Start();
         }
 
         public static RunningApplication StartApplication(Switch device, HomeMenuTitle title, ulong callerPid, Action onExited)
@@ -317,6 +368,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
         {
             return appletId switch
             {
+                AppletId.OverlayDisplay => 0x010000000000100C,
                 AppletId.Auth => 0x0100000000001001,
                 AppletId.Cabinet => 0x0100000000001002,
                 AppletId.Controller => 0x0100000000001003,

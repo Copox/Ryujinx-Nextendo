@@ -191,7 +191,12 @@ namespace Ryujinx.HLE.HOS.Services.Vi
                 session._previousRenderLayer = surfaceFlinger.RenderLayerId;
                 session.LayerId = layerId;
 
-                surfaceFlinger.SetRenderLayer(layerId);
+                // [Nextendo, HOME Menu work] The overlay applet draws above the others: its
+                // layer never becomes the one on screen.
+                if (!Ryujinx.HLE.HOS.Services.Am.AppletAE.RealAppletManager.IsOverlay(pid))
+                {
+                    surfaceFlinger.SetRenderLayer(layerId);
+                }
 
                 // The applet is told that queue slots 0 to 3 are pool slots 0 to 3 (see
                 // AcquireSharedFrameBuffer): one graphic buffer per slot, each at its own offset.

@@ -45,6 +45,13 @@ namespace Ryujinx.HLE.HOS
             @"(https?://)?([a-z0-9-]+\.)*(nintendo|nintendoswitch)\.(com\.cn|co\.jp|com|net|jp)(/[^\s<""]*)?",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
+        private const string Kept = @"(?!\s*(Switch|eShop|3DS|2DS|DS(?![a-z])|Entertainment|64|Game\s?Boy|GameCube|Wii|Labo|Ring|Super\s?(NES|Nintendo)|\s+$))";
+        private static readonly Regex _brand = new("Nintendo" + Kept, RegexOptions.Compiled);
+        private static readonly Regex _brandUpper = new("NINTENDO" + Kept, RegexOptions.Compiled);
+        private static readonly Regex _katakana = new(@"ニンテンドー(?!\s*(スイッチ|3DS|イーショップ|$))", RegexOptions.Compiled);
+        private static readonly Regex _kanji = new(@"任天堂(?!\s*(Switch|eShop|$))", RegexOptions.Compiled);
+        private static readonly Regex _hangul = new(@"닌텐도(?!\s*(스위치|Switch|e숍|eShop|$))", RegexOptions.Compiled);
+
         public static bool Enabled => Environment.GetEnvironmentVariable("NEXTENDO_BRANDING") != "0";
 
         public static IStorage Appliquer(ulong programId, IStorage baseStorage)
@@ -133,12 +140,16 @@ namespace Ryujinx.HLE.HOS
             text = text.Replace("Nintendo Switch Online", website)
                        .Replace("Nintendo Switch&nbsp;Online", website);
             text = _address.Replace(text, m => (m.Groups[1].Success ? m.Groups[1].Value : "") + "nextendo.network");
-            text = text.Replace("Nintendo Co., Ltd.", "Nextendo Network")
-                       .Replace("Nintendo", "Nextendo")
-                       .Replace("NINTENDO", "NEXTENDO")
-                       .Replace("ニンテンドー", "ネクステンドー")
-                       .Replace("任天堂", "Nextendo")
-                       .Replace("닌텐도", "넥스텐도");
+            text = text.Replace("Nintendo Co., Ltd.", "Nextendo Network");
+
+            // The names of Nintendo's consoles and shop stay (a "Nextendo Switch" means nothing);
+            // the account, the online service, the support site become Nextendo's. A "Nintendo"
+            // at the end of a run is followed by a formatting tag holding "Switch 2": kept too.
+            text = _brand.Replace(text, "Nextendo");
+            text = _brandUpper.Replace(text, "NEXTENDO");
+            text = _katakana.Replace(text, "ネクステンドー");
+            text = _kanji.Replace(text, "Nextendo");
+            text = _hangul.Replace(text, "넥스텐도");
 
             return text;
         }

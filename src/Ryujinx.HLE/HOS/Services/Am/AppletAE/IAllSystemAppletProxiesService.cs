@@ -30,6 +30,18 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
             return ResultCode.Success;
         }
 
+        [CommandCmif(300)]
+        // OpenOverlayAppletProxy(u64, pid, handle<copy>) -> object<nn::am::service::IOverlayAppletProxy>
+        public ResultCode OpenOverlayAppletProxy(ServiceCtx context)
+        {
+            // [Nextendo, HOME Menu work] The overlay applet (overlayDisp): a system applet of its own.
+            RealAppletManager.RegisterOverlayApplet(context.Device.System, context.Request.HandleDesc.PId);
+
+            MakeObject(context, new IOverlayAppletProxy(context.Request.HandleDesc.PId));
+
+            return ResultCode.Success;
+        }
+
         [CommandCmif(450)] // 19.0.0+
         // GetSystemProcessCommonFunctions() -> object<nn::am::service::ISystemProcessCommonFunctions>
         public ResultCode GetSystemProcessCommonFunctions(ServiceCtx context)
