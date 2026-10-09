@@ -916,6 +916,22 @@ namespace Ryujinx.Ava.UI.Windows
             _hiddenUntilHomeMenu = true;
             SetHiddenWhileLoading(true);
 
+            // The window style is set again when the window shows or changes state (a maximised
+            // window does): the hiding is applied again until the menu is there.
+            Avalonia.Threading.DispatcherTimer keep = new() { Interval = TimeSpan.FromMilliseconds(50) };
+            keep.Tick += (_, _) =>
+            {
+                if (!_hiddenUntilHomeMenu)
+                {
+                    keep.Stop();
+
+                    return;
+                }
+
+                SetHiddenWhileLoading(true);
+            };
+            keep.Start();
+
             // Never left invisible: shown after two minutes whatever happens.
             _ = Task.Delay(TimeSpan.FromMinutes(2)).ContinueWith(_ => RevealAfterBackgroundLoad());
         }

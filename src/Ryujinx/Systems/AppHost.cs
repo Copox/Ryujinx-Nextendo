@@ -1177,6 +1177,10 @@ namespace Ryujinx.Ava.Systems
                                 _renderingStarted = true;
                                 _viewModel.SwitchToRenderer(false);
                                 InitStatus();
+
+                                // [Nextendo] The window hidden while the HOME Menu loaded shows
+                                // with the first frame, not with the loading screen.
+                                _viewModel.Window?.RevealAfterBackgroundLoad();
                             }
 
                             Device.PresentFrame(() =>
