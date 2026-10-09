@@ -158,6 +158,20 @@ Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.Servi
         }
     }
 
+    // nn::ns::detail::IAsyncResult of a request that is already over.
+    class IAsyncResult : IpcService
+    {
+        public IAsyncResult() { }
+
+        [CommandCmif(0)]
+        // Get()
+        public ResultCode Get(ServiceCtx context) => ResultCode.Success;
+
+        [CommandCmif(1)]
+        // Cancel()
+        public ResultCode Cancel(ServiceCtx context) => ResultCode.Success;
+    }
+
     class IECommerceInterface : IpcService
     {
         public IECommerceInterface() { }

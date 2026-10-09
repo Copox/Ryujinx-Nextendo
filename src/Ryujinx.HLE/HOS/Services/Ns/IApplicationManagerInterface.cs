@@ -136,5 +136,21 @@ namespace Ryujinx.HLE.HOS.Services.Ns
 
             return ResultCode.Success;
         }
+        private StubEvent _controlDataDownloadEvent;
+
+        [CommandCmif(412)] // 20.0.0+
+        // RequestDownloadApplicationControlData(u8, nn::ncm::ApplicationId, u64) -> (handle<copy>, object<nn::ns::detail::IAsyncResult>)
+        public ResultCode RequestDownloadApplicationControlData(ServiceCtx context)
+        {
+            // Nothing is downloaded: what is known of a title is already served by the control
+            // data interface. The request completes at once.
+            _controlDataDownloadEvent ??= new StubEvent(context);
+            _controlDataDownloadEvent.Signal();
+            _controlDataDownloadEvent.ReplyWithHandle(context);
+
+            MakeObject(context, new IAsyncResult());
+
+            return ResultCode.Success;
+        }
     }
 }

@@ -12,6 +12,8 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
         Result Cancel();
         Result GetFriendListIds(out int count, Span<NetworkServiceAccountId> friendIds, Uid userId, int offset, SizedFriendFilter filter, ulong pidPlaceholder, ulong pid);
         Result GetFriendList(out int count, Span<FriendImpl> friendList, Uid userId, int offset, SizedFriendFilter filter, ulong pidPlaceholder, ulong pid);
+        Result GetFriendDetailedInfoV2(out FriendDetailedInfoImpl detailedInfo, Uid userId, NetworkServiceAccountId friendId);
+        Result GetFriendDetailListV2(Span<byte> records, Uid userId, ReadOnlySpan<NetworkServiceAccountId> friendIds);
         Result GetFriendListForViewerV2(out int count, Span<FriendImpl> friendList, Uid userId, int offset, SizedFriendFilter filter);
         Result UpdateFriendInfo(Span<FriendImpl> info, Uid userId, ReadOnlySpan<NetworkServiceAccountId> friendIds, ulong pidPlaceholder, ulong pid);
         Result GetFriendProfileImage(out int size, Uid userId, NetworkServiceAccountId friendId, Span<byte> profileImage);

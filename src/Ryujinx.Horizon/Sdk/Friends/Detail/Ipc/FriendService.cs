@@ -754,6 +754,66 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             return Result.Success;
         }
 
+        // [Nextendo, HOME Menu work] The page of one friend (SDK 20+): asked when a tile is opened.
+        [CmifCommand(20107)]
+        public Result GetFriendDetailedInfoV2(
+            [Buffer(HipcBufferFlags.Out | HipcBufferFlags.Pointer, 0x800)] out FriendDetailedInfoImpl detailedInfo,
+            Uid userId,
+            NetworkServiceAccountId friendId)
+        {
+            detailedInfo = default;
+
+            Span<byte> info = MemoryMarshal.AsBytes(MemoryMarshal.CreateSpan(ref detailedInfo, 1));
+            int probe = int.TryParse(Environment.GetEnvironmentVariable("NEXTENDO_FRIEND_DETAIL_PROBE"), out int p) ? p : 0;
+
+            if (probe == 2)
+            {
+                // Letters that change every 8 bytes, two-letter code: the text shown names the offset.
+                for (int k = 0; k < info.Length; k++)
+                {
+                    int slot = k >> 3;
+                    info[k] = (byte)((k & 7) < 4 ? 'A' + (slot / 26) : 'a' + (slot % 26));
+                }
+            }
+
+            if (probe == 0 && IsNextendoProfile(userId))
+            {
+                // What is known so far of this record: the head is the friend record's (ids at 0
+                // and 0x10, name at 0x18), the address of the picture is at 0x40, and games sit in
+                // 0x30-byte entries from 0xE0, each led by a title id. The first one is the game
+                // shown at the top of the page.
+                foreach (NextendoFriends.Entry entry in NextendoFriends.Get())
+                {
+                    if (entry.Pid != friendId.Id && (entry.Nsa == 0 || entry.Nsa != friendId.Id))
+                    {
+                        continue;
+                    }
+
+                    FriendImpl head = MakeNextendoFriend(friendId.Id, entry.Name, PresenceStatus.Offline);
+
+                    MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref head, 1))[..0x40].CopyTo(info);
+
+                    if (entry.Status > 0 && entry.AppId != 0)
+                    {
+                        BitConverter.TryWriteBytes(info.Slice(0xE0, 8), entry.AppId);
+                    }
+
+                    break;
+                }
+            }
+
+            if (probe == 3)
+            {
+                // Two real titles in the first two game slots, everything else empty.
+                BitConverter.TryWriteBytes(info.Slice(0xE0, 8), 0x01009B500007C000UL);
+                BitConverter.TryWriteBytes(info.Slice(0x110, 8), 0x01006BD001E06000UL);
+            }
+
+            Logger.Info?.Print(LogClass.ServiceFriend, $"[Nextendo] GetFriendDetailedInfoV2 friend 0x{friendId.Id:X}");
+
+            return Result.Success;
+        }
+
         [CmifCommand(20108)]
         public Result GetFriendListForViewerV2(
             out int count,
@@ -1006,6 +1066,14 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
         public Result GetUserPresenceViewV2([Buffer(HipcBufferFlags.Out | HipcBufferFlags.Pointer, 0xE0)] out UserPresenceViewImpl userPresenceView, Uid userId)
         {
             userPresenceView = default;
+
+            // The signed-in Nextendo profile is online; any other local profile is not.
+            if (IsNextendoProfile(userId) && NextendoAccount.IsLinked)
+            {
+                int at = int.TryParse(Environment.GetEnvironmentVariable("NEXTENDO_OWN_PRESENCE_AT"), System.Globalization.NumberStyles.HexNumber, null, out int given) ? given : 0x18;
+
+                MemoryMarshal.AsBytes(MemoryMarshal.CreateSpan(ref userPresenceView, 1))[at] = (byte)PresenceStatus.Online;
+            }
 
             Logger.Stub?.PrintStub(LogClass.ServiceFriend, new { userId });
 

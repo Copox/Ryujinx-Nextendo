@@ -33,6 +33,15 @@ namespace Ryujinx.Common.Configuration
             // the friend as in a JOINABLE private battle. Empty when the friend isn't in a room.
             public readonly byte[] AppField;
 
+            // What the HOME Menu's friend page shows: the game being played (title id), the
+            // platform it is played on, whether the friend is a favourite, and since when
+            // (Unix seconds) the two accounts are friends.
+            public ulong AppId { get; init; }
+            public string Game { get; init; }
+            public string Platform { get; init; }
+            public bool Favorite { get; init; }
+            public long Since { get; init; }
+
             public Entry(ulong pid, string name, byte[] appField, ulong nsa = 0, int status = 0)
             {
                 Pid = pid;
@@ -347,9 +356,50 @@ namespace Ryujinx.Common.Configuration
                             _ = ulong.TryParse(nsaEl.GetString(), System.Globalization.NumberStyles.HexNumber,
                                 System.Globalization.CultureInfo.InvariantCulture, out nsa);
                         }
+                        ulong appId = 0;
+                        string game = "";
+                        string platform = "";
+
+                        if (f.TryGetProperty("presence", out JsonElement played) && played.ValueKind == JsonValueKind.Object)
+                        {
+                            if (played.TryGetProperty("app_id", out JsonElement idEl) && idEl.ValueKind == JsonValueKind.String)
+                            {
+                                _ = ulong.TryParse(idEl.GetString(), System.Globalization.NumberStyles.HexNumber,
+                                    System.Globalization.CultureInfo.InvariantCulture, out appId);
+                            }
+
+                            game = played.TryGetProperty("jeu", out JsonElement gameEl) && gameEl.ValueKind == JsonValueKind.String ? gameEl.GetString() ?? "" : "";
+                            platform = played.TryGetProperty("plateforme", out JsonElement pfEl) && pfEl.ValueKind == JsonValueKind.String ? pfEl.GetString() ?? "" : "";
+
+                            byte[] icon = null;
+
+                            if (played.TryGetProperty("icone", out JsonElement iconEl) && iconEl.ValueKind == JsonValueKind.String && !string.IsNullOrEmpty(iconEl.GetString()))
+                            {
+                                try { icon = Convert.FromBase64String(iconEl.GetString()); } catch { icon = null; }
+                            }
+
+                            NextendoGames.Remember(appId, game, icon);
+                        }
+
+                        bool favorite = f.TryGetProperty("favorite", out JsonElement favEl) && favEl.ValueKind == JsonValueKind.True;
+                        long since = 0;
+
+                        if (f.TryGetProperty("created_at", out JsonElement sinceEl) && sinceEl.ValueKind == JsonValueKind.String &&
+                            DateTimeOffset.TryParse(sinceEl.GetString(), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out DateTimeOffset when))
+                        {
+                            since = when.ToUnixTimeSeconds();
+                        }
+
                         if (pid != 0)
                         {
-                            list.Add(new Entry(pid, name, appField, nsa, status));
+                            list.Add(new Entry(pid, name, appField, nsa, status)
+                            {
+                                AppId = appId,
+                                Game = game,
+                                Platform = platform,
+                                Favorite = favorite,
+                                Since = since,
+                            });
                         }
                     }
                 }

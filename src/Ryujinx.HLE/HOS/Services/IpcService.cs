@@ -274,7 +274,10 @@ namespace Ryujinx.HLE.HOS.Services
 
                 obj.Server.AddSessionObj(serverSessionHandle, obj);
 
-                context.Response.HandleDesc = IpcHandleDesc.MakeMove(clientSessionHandle);
+                // A command may return an event next to the object: keep the handles already set.
+                context.Response.HandleDesc = context.Response.HandleDesc?.ToCopy is { Length: > 0 } copies
+                    ? new IpcHandleDesc(copies, [clientSessionHandle])
+                    : IpcHandleDesc.MakeMove(clientSessionHandle);
             }
         }
 
