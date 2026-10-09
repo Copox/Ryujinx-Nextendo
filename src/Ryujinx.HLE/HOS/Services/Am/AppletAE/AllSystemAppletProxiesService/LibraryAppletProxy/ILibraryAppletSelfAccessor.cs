@@ -70,7 +70,8 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Lib
         {
             if (_real != null)
             {
-                if (!_real.Normal.TryPop(out byte[] data))
+                // What the applet gave back before it wound comes first.
+                if (!_real.Unpopped.TryPop(out byte[] data) && !_real.Normal.TryPop(out data))
                 {
                     return ResultCode.NotAvailable;
                 }
@@ -92,6 +93,23 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Lib
             return ResultCode.Success;
         }
         
+        [CommandCmif(30)]
+        // UnpopInData(object<nn::am::service::IStorage>): an in-data given back, to be read
+        // again (the applet does it before it winds, and reads it when it starts again).
+        public ResultCode UnpopInData(ServiceCtx context)
+        {
+            IStorage data = GetObject<IStorage>(context, 0);
+
+            if (_real == null || data == null)
+            {
+                return ResultCode.NullObject;
+            }
+
+            _real.Unpopped.Push(data.Data);
+
+            return ResultCode.Success;
+        }
+
         [CommandCmif(1)]
         // PushOutData(object<nn::am::service::IStorage>)
         public ResultCode PushOutData(ServiceCtx context)

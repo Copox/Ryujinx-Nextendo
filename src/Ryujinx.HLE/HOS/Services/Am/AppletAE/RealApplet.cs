@@ -36,6 +36,14 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
         public volatile bool Exited;
         public bool FocusGiven;
         public Action OnExited;
+
+        // Winding (see IProcessWindingController): the in-data the applet gave back, the context
+        // it kept, the applet it wants started in its place, and that applet once it is over.
+        public System.Collections.Concurrent.ConcurrentStack<byte[]> Unpopped = new();
+        public System.Collections.Concurrent.ConcurrentStack<byte[]> WindContext = new();
+        public object Reserved;
+        public object Calling;
+        public volatile bool WindRequested;
     }
 
     // A game started from the HOME Menu.
@@ -514,6 +522,48 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
                     Thread.Sleep(30);
                 }
 
+                // [Nextendo, HOME Menu work] Winding: the reserved applet runs in the place of
+                // this one, and when it is over this one starts again, told why.
+                if (applet.WindRequested && !applet.Exited && !system.Stopping &&
+                    applet.Reserved is AllSystemAppletProxiesService.LibraryAppletCreator.ILibraryAppletAccessor reserved)
+                {
+                    applet.WindRequested = false;
+                    applet.Reserved = null;
+
+                    Logger.Notice.Print(LogClass.ServiceAm, $"Applet {applet.AppletId}: process {pid} winds to the reserved applet.");
+
+                    system.KernelContext.Processes.TryGetValue(pid, out KProcess wound);
+                    ReleaseMemory(system, wound);
+                    Vi.SystemSharedBuffer.Release(device, pid);
+                    _applets.TryRemove(pid, out _);
+                    device.Processes.ClearProcess(pid);
+
+                    RealApplet other = reserved.StartInPlaceOf(device, applet.CallerPid);
+
+                    while (other != null && !other.Exited && !system.Stopping)
+                    {
+                        Thread.Sleep(30);
+                    }
+
+                    if (system.Stopping)
+                    {
+                        break;
+                    }
+
+                    Logger.Notice.Print(LogClass.ServiceAm, $"Applet {applet.AppletId}: the reserved applet is over, starting again.");
+
+                    applet.Calling = reserved;
+                    applet.State = new AppletStateMgr(system);
+                    applet.FocusGiven = false;
+
+                    if (!applet.Unpopped.IsEmpty)
+                    {
+                        applet.PopInDataEvent.ReadableEvent.Signal();
+                    }
+
+                    continue;
+                }
+
                 // The emulation itself is stopping: nothing to start next, nothing to give back.
                 if (!homebrew || applet.Exited || system.Stopping)
                 {
@@ -605,6 +655,23 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
                 : System.IO.Path.GetFileName(hostPath ?? "");
 
             return "\"sdmc:/" + relative + "\"";
+        }
+
+        // [Nextendo, HOME Menu work] The applet winds (WindAndDoReserved): its process ends at
+        // once, and its loop (see Start) starts the reserved applet, then this one again.
+        public static void Wind(Switch device, RealApplet applet)
+        {
+            applet.WindRequested = true;
+
+            if (device.System.KernelContext.Processes.TryGetValue(applet.Pid, out KProcess process))
+            {
+                new Thread(() =>
+                {
+                    Thread.Sleep(50); // the reply goes out first
+                    Terminate(device.System, process);
+                })
+                { IsBackground = true, Name = "HLE.RealApplet.Wind" }.Start();
+            }
         }
 
         // The applet said it is done (ExitProcessAndReturn): it then sleeps until it is killed.

@@ -79,6 +79,42 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Lib
             Logger.Info?.Print(LogClass.ServiceAm, $"Applet '{appletId}' created.");
         }
 
+        // [Nextendo, HOME Menu work] Winding: the applet this accessor was made for is started
+        // by the system, in the place of the one that asked for it (which ended meanwhile).
+        public RealApplet StartInPlaceOf(Switch device, ulong callerPid)
+        {
+            if (_real == null)
+            {
+                return null;
+            }
+
+            _real.CallerPid = callerPid;
+
+            RealAppletManager.Start(device, _real, _realPath);
+
+            return _real;
+        }
+
+        // The accessor handed again to the applet that wound, in its new process: the handles
+        // given to the previous one are not valid there.
+        public void ReuseFor()
+        {
+            _stateChangedEventHandle = 0;
+            _normalOutDataEventHandle = 0;
+            _interactiveOutDataEventHandle = 0;
+            _unknown170EventHandle = 0;
+
+            if (_real != null && _real.Exited)
+            {
+                _stateChangedEvent.ReadableEvent.Signal();
+            }
+
+            if (_normalSession.Length > 0)
+            {
+                _normalOutDataEvent.WritableEvent.Signal();
+            }
+        }
+
         private void OnAppletStateChanged(object sender, EventArgs e)
         {
             _stateChangedEvent.WritableEvent.Signal();

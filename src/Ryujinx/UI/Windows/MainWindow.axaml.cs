@@ -489,6 +489,52 @@ namespace Ryujinx.Ava.UI.Windows
 
             UiHandler = new AvaHostUIHandler(this);
 
+            // [Nextendo, HOME Menu work] A nickname or icon changed from the user page of the HOME
+            // Menu goes to the Nextendo account first (the account is the source of truth): the
+            // same rule as the profile editor of the emulator.
+            Ryujinx.Common.Configuration.NextendoProfileEdits.Push = (userId, name, image) =>
+            {
+                if (!Ryujinx.Common.Configuration.NextendoAccount.IsLinked ||
+                    !string.Equals(userId, Ryujinx.Common.Configuration.NextendoAccount.ProfileUserId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true; // a local profile only
+                }
+
+                if (name != null)
+                {
+                    Task<(bool ok, string message)> renamed = Task.Run(() => Ryujinx.Ava.Common.NextendoApi.SetUsernameAsync(name));
+
+                    if (!renamed.Wait(TimeSpan.FromSeconds(10)) || !renamed.Result.ok)
+                    {
+                        Logger.Warning?.Print(LogClass.Application, $"[Nextendo] nickname from the HOME Menu refused: {(renamed.IsCompleted ? renamed.Result.message : "no answer")}");
+
+                        return false;
+                    }
+
+                    Ryujinx.Common.Configuration.NextendoAccount.Save(
+                        Ryujinx.Common.Configuration.NextendoAccount.Pid, name,
+                        Ryujinx.Common.Configuration.NextendoAccount.FriendCode,
+                        Ryujinx.Common.Configuration.NextendoAccount.NexToken,
+                        isGuest: Ryujinx.Common.Configuration.NextendoAccount.IsGuest);
+                }
+
+                if (image != null)
+                {
+                    Task<bool> pictured = Task.Run(() => Ryujinx.Ava.Common.NextendoApi.SetProfileImageAsync(image));
+
+                    if (!pictured.Wait(TimeSpan.FromSeconds(15)) || !pictured.Result)
+                    {
+                        Logger.Warning?.Print(LogClass.Application, "[Nextendo] icon from the HOME Menu refused by the account.");
+
+                        return false;
+                    }
+                }
+
+                Logger.Info?.Print(LogClass.Application, $"[Nextendo] profile edited from the HOME Menu sent to the account (name {(name ?? "unchanged")}, icon {(image != null ? "new" : "unchanged")}).");
+
+                return true;
+            };
+
             ViewModel.Title = RyujinxApp.FormatTitle();
 
             // NOTE: Height of MenuBar and StatusBar is not usable here, since it would still be 0 at this point.

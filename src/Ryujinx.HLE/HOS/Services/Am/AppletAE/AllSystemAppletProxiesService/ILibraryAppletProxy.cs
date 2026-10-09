@@ -61,7 +61,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService
         // GetProcessWindingController() -> object<nn::am::service::IProcessWindingController>
         public ResultCode GetProcessWindingController(ServiceCtx context)
         {
-            MakeObject(context, new IProcessWindingController());
+            MakeObject(context, new IProcessWindingController(_pid));
 
             return ResultCode.Success;
         }
