@@ -73,6 +73,9 @@ namespace Ryujinx.HLE.HOS.Services.News
         {
             // The HOME Menu's news page keeps the returned interface and calls into it: a bare
             // success leaves it with a null pointer.
+            // The transfer memory the download was to go to is not used: let go at once.
+            CloseReceivedHandles(context);
+
             MakeObject(context, new IDownloadContext(context));
 
             return ResultCode.Success;

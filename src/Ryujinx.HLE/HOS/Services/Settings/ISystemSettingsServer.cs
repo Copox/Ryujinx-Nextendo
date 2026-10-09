@@ -124,9 +124,43 @@ namespace Ryujinx.HLE.HOS.Services.Settings
         // GetColorSetId() -> i32
         public ResultCode GetColorSetId(ServiceCtx context)
         {
-            context.ResponseData.Write((int)context.Device.System.State.ThemeColor);
+            context.ResponseData.Write((int)SavedColorSet(context));
 
             return ResultCode.Success;
+        }
+
+        private static bool _colorSetRead;
+
+        // The theme the user chose last; with none chosen yet, Basic Black when a custom HOME Menu
+        // theme is installed (those are made for it: on Basic White their text comes out dark on
+        // a dark background).
+        private static ColorSet SavedColorSet(ServiceCtx context)
+        {
+            if (!_colorSetRead)
+            {
+                _colorSetRead = true;
+
+                try
+                {
+                    string baseDir = Ryujinx.Common.Configuration.AppDataManager.BaseDirPath;
+                    string saved = System.IO.Path.Combine(baseDir, "nextendo_color_set.txt");
+
+                    if (System.IO.File.Exists(saved) && int.TryParse(System.IO.File.ReadAllText(saved).Trim(), out int id))
+                    {
+                        context.Device.System.State.ThemeColor = (ColorSet)id;
+                    }
+                    else if (System.IO.Directory.Exists(System.IO.Path.Combine(baseDir, "sdcard", "atmosphere", "contents", "0100000000001000", "romfs", "lyt")))
+                    {
+                        context.Device.System.State.ThemeColor = ColorSet.BasicBlack;
+                    }
+                }
+                catch (System.Exception)
+                {
+                    // the default stays
+                }
+            }
+
+            return context.Device.System.State.ThemeColor;
         }
 
         [CommandCmif(24)]
@@ -136,6 +170,16 @@ namespace Ryujinx.HLE.HOS.Services.Settings
             int colorSetId = context.RequestData.ReadInt32();
 
             context.Device.System.State.ThemeColor = (ColorSet)colorSetId;
+
+            // [Nextendo, HOME Menu work] The theme chosen in the HOME Menu settings is kept.
+            try
+            {
+                System.IO.File.WriteAllText(System.IO.Path.Combine(Ryujinx.Common.Configuration.AppDataManager.BaseDirPath, "nextendo_color_set.txt"), colorSetId.ToString());
+            }
+            catch (System.Exception)
+            {
+                // kept for this session only
+            }
 
             return ResultCode.Success;
         }

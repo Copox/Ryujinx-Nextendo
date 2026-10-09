@@ -190,6 +190,11 @@ namespace Ryujinx.HLE.HOS.Services
                     // all: the caller then read whatever the previous reply left in the buffer as
                     // its output (a count, a size, a flag). Answer zeros instead.
                     context.ResponseData.Write(new byte[0x40]);
+
+                    // A handle handed with an ignored command (a transfer memory, mostly) is let go:
+                    // kept, it held the memory it covers, and the caller could not give that memory
+                    // back to its heap later (fatal 2001-0106 in the HOME Menu).
+                    CloseReceivedHandles(context);
                 }
 
                 if (_isDomain)
@@ -339,6 +344,19 @@ namespace Ryujinx.HLE.HOS.Services
                 {
                     disposableObj.Dispose();
                 }
+            }
+        }
+
+        public static void CloseReceivedHandles(ServiceCtx context)
+        {
+            if (context.Request.HandleDesc == null)
+            {
+                return;
+            }
+
+            foreach (int handle in context.Request.HandleDesc.ToCopy)
+            {
+                context.Device.System.KernelContext.Syscall.CloseHandle(handle);
             }
         }
 

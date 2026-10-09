@@ -50,6 +50,34 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
         {
             return _managerServer.LoadIdTokenCache(context);
         }
+        [CommandCmif(136)] // 19.0.0+
+        // GetNintendoAccountUserResourceCache() -> (u64 id, buffer<0x800, type 6>)
+        public ResultCode GetNintendoAccountUserResourceCache(ServiceCtx context)
+        {
+            // [Nextendo, HOME Menu work] The Nintendo Account the user page shows in its header
+            // ("Nintendo Account (e-mail)").
+            if (context.Request.ReceiveBuff.Count == 0)
+            {
+                return ResultCode.Success;
+            }
+
+            ulong position = context.Request.ReceiveBuff[0].Position;
+            byte[] cache = new byte[System.Math.Min(0x800UL, context.Request.ReceiveBuff[0].Size)];
+
+            if (System.Environment.GetEnvironmentVariable("NEXTENDO_NA_PROBE") == "1")
+            {
+                for (int at = 0; at + 0x10 <= cache.Length; at += 0x10)
+                {
+                    System.Text.Encoding.ASCII.GetBytes($"o{at:X3}@x.fr").CopyTo(cache, at);
+                }
+            }
+
+            context.Memory.Write(position, cache);
+            context.ResponseData.Write(0UL);
+
+            return ResultCode.Success;
+        }
+
         [CommandCmif(200)]
         // IsRegistered() -> bool
         public ResultCode IsRegistered(ServiceCtx context)
