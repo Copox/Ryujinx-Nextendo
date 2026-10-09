@@ -788,6 +788,66 @@ namespace Ryujinx.Ava.UI.Windows
             }
         }
 
+        /// <summary>
+        /// [Nextendo] Starts the HOME Menu of the installed firmware (system title 0100000000001000),
+        /// with the games of the library as the titles installed on that console.
+        /// </summary>
+        public void LaunchHomeMenu()
+        {
+            // The menu draws through the shared frame buffers of the system applets.
+            Environment.SetEnvironmentVariable("NEXTENDO_SHARED_FB", "1");
+
+            Ryujinx.Ava.Utilities.AppletMetadata homeMenu = new(ViewModel.ContentManager, "HOME Menu", 0x0100000000001000);
+            Logger.Notice.Print(LogClass.Application, $"[home-menu] resolving qlaunch, content path={homeMenu.GetContentPath(ViewModel.ContentManager)}");
+            if (homeMenu.CanStart(out ApplicationData homeMenuData, out LibHac.Common.BlitStruct<LibHac.Ns.ApplicationControlProperty> homeMenuNacp))
+            {
+                // Its own icon on the loading screen, not the generic NCA cartridge.
+                ViewModel.SelectedIcon = Ryujinx.Common.EmbeddedResources.Read("Ryujinx/Assets.UIImages.Icon_HomeMenu.png");
+                ViewModel.LoadIconRadius = new Avalonia.CornerRadius(36);
+
+                // The menu itself as a title: what the user's own page shows as
+                // "playing" while no game runs.
+                Ryujinx.Common.Configuration.NextendoGames.Remember(
+                    Ryujinx.Common.Configuration.NextendoGames.HomeMenuId, "Menu HOME", ViewModel.SelectedIcon);
+            }
+
+            // The games of the library are the titles "installed" on that console.
+            // A direct launch skips the library scan: the HOME Menu needs it.
+            if (!_applicationsLoadedOnce)
+            {
+                LoadApplications();
+            }
+
+            Ryujinx.HLE.HOS.HomeMenuLibrary.SetProvider(() =>
+            {
+                List<Ryujinx.HLE.HOS.HomeMenuTitle> titles = [];
+
+                foreach (ApplicationData app in ViewModel.Applications.ToArray())
+                {
+                    if (app.Id < 0x0100000000010000 || string.IsNullOrEmpty(app.Path) || titles.Exists(t => t.Id == app.Id))
+                    {
+                        continue;
+                    }
+
+                    titles.Add(new Ryujinx.HLE.HOS.HomeMenuTitle
+                    {
+                        Id = app.Id,
+                        Name = app.Name,
+                        Path = app.Path,
+                        Icon = app.Icon,
+                        Nacp = app.HasControlHolder ? app.ControlHolder.ByteSpan.ToArray() : null,
+                    });
+                }
+
+                return titles;
+            });
+
+            if (homeMenuData != null)
+                _ = ViewModel.LoadApplication(homeMenuData, _startFullscreen, homeMenuNacp);
+            else
+                Logger.Error?.Print(LogClass.Application, "HOME Menu: qlaunch not found in the installed firmware.");
+        }
+
         private async Task CheckLaunchState()
         {
             // [Nextendo] First-launch quick-start (fresh install) and the "what's new" popup (first
@@ -872,55 +932,7 @@ namespace Ryujinx.Ava.UI.Windows
                     // Development entry point only: there is no menu item for it.
                     if (_launchPath == "@home-menu")
                     {
-                        Ryujinx.Ava.Utilities.AppletMetadata homeMenu = new(ViewModel.ContentManager, "HOME Menu", 0x0100000000001000);
-                        Logger.Notice.Print(LogClass.Application, $"[home-menu] resolving qlaunch, content path={homeMenu.GetContentPath(ViewModel.ContentManager)}");
-                        if (homeMenu.CanStart(out ApplicationData homeMenuData, out LibHac.Common.BlitStruct<LibHac.Ns.ApplicationControlProperty> homeMenuNacp))
-                        {
-                            // Its own icon on the loading screen, not the generic NCA cartridge.
-                            ViewModel.SelectedIcon = Ryujinx.Common.EmbeddedResources.Read("Ryujinx/Assets.UIImages.Icon_HomeMenu.png");
-                            ViewModel.LoadIconRadius = new Avalonia.CornerRadius(36);
-
-                            // The menu itself as a title: what the user's own page shows as
-                            // "playing" while no game runs.
-                            Ryujinx.Common.Configuration.NextendoGames.Remember(
-                                Ryujinx.Common.Configuration.NextendoGames.HomeMenuId, "Menu HOME", ViewModel.SelectedIcon);
-                        }
-
-                        // The games of the library are the titles "installed" on that console.
-                        // A direct launch skips the library scan: the HOME Menu needs it.
-                        if (!_applicationsLoadedOnce)
-                        {
-                            LoadApplications();
-                        }
-
-                        Ryujinx.HLE.HOS.HomeMenuLibrary.SetProvider(() =>
-                        {
-                            List<Ryujinx.HLE.HOS.HomeMenuTitle> titles = [];
-
-                            foreach (ApplicationData app in ViewModel.Applications.ToArray())
-                            {
-                                if (app.Id < 0x0100000000010000 || string.IsNullOrEmpty(app.Path) || titles.Exists(t => t.Id == app.Id))
-                                {
-                                    continue;
-                                }
-
-                                titles.Add(new Ryujinx.HLE.HOS.HomeMenuTitle
-                                {
-                                    Id = app.Id,
-                                    Name = app.Name,
-                                    Path = app.Path,
-                                    Icon = app.Icon,
-                                    Nacp = app.HasControlHolder ? app.ControlHolder.ByteSpan.ToArray() : null,
-                                });
-                            }
-
-                            return titles;
-                        });
-
-                        if (homeMenuData != null)
-                            _ = ViewModel.LoadApplication(homeMenuData, _startFullscreen, homeMenuNacp);
-                        else
-                            Logger.Error?.Print(LogClass.Application, "HOME Menu: qlaunch not found in the installed firmware.");
+                        LaunchHomeMenu();
                     }
                     else if (ApplicationLibrary.TryGetApplicationsFromFile(_launchPath, out List<ApplicationData> applications))
                     {

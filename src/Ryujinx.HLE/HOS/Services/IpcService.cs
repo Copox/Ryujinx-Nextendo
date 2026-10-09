@@ -329,6 +329,19 @@ namespace Ryujinx.HLE.HOS.Services
             _parent = parent._parent;
         }
 
+        // [Nextendo] The objects opened through this session, released when the session closes
+        // (and only them: DestroyAtExit is for the end of the emulation and may stop servers).
+        public void ReleaseDomainObjects()
+        {
+            foreach (object domainObject in new System.Collections.Generic.List<object>(_domainObjects.Values))
+            {
+                if (domainObject != this && domainObject is IDisposable disposableObj)
+                {
+                    disposableObj.Dispose();
+                }
+            }
+        }
+
         public virtual void DestroyAtExit()
         {
             foreach (object domainObject in _domainObjects.Values)

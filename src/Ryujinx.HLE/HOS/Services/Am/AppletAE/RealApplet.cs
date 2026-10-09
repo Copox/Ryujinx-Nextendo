@@ -436,7 +436,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
 
                 Logger.Notice.Print(LogClass.ServiceAm, $"Applet {applet.AppletId} started as process {pid} (caller {applet.CallerPid}, mode {applet.Mode}).");
 
-                HomeMenuStatus.Set(applet.AppletId.ToString());
+                HomeMenuStatus.Set(homebrew ? "Homebrew:" + System.IO.Path.GetFileNameWithoutExtension(path) : applet.AppletId.ToString());
 
                 // The caller leaves the foreground. The applet is told it has it once it shows
                 // its first frame (see OnFirstFrame): told at once, it reads the news while it
@@ -583,6 +583,13 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
             if (system.KernelContext.Processes.TryGetValue(pid, out KProcess process) && process.State != ProcessState.Exited)
             {
                 Terminate(system, process);
+            }
+
+            // What the applet held goes back to its pool: the pool is small, and after a few
+            // applets the HOME Menu itself could not grow its heap any more (it froze).
+            if (system.KernelContext.Processes.TryGetValue(pid, out KProcess over))
+            {
+                ReleaseMemory(system, over);
             }
 
             _applets.TryRemove(pid, out _);

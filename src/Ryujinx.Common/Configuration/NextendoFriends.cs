@@ -508,6 +508,9 @@ namespace Ryujinx.Common.Configuration
             }
         }
 
+        /// <summary>True while a page is asking the history of every friend in a row.</summary>
+        public static bool Sweeping { get; private set; }
+
         public static IReadOnlyList<Played> History(ulong pid, int timeoutMs)
         {
             // A page that walks the whole friend list (three friends or more within three
@@ -534,6 +537,7 @@ namespace Ryujinx.Common.Configuration
                 }
 
                 sweep = asked.Count >= 3;
+                Sweeping = sweep;
             }
 
             if (sweep && !string.IsNullOrEmpty(NextendoAccount.NexToken))

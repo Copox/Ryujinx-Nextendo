@@ -208,6 +208,7 @@
                     <MenuItem
                         Name="MiiEditorMenuItem" Header="{ext:Locale MenuBar_Actions_MiiEditorButton}" Icon="{ext:Icon fa-solid fa-face-grin-wide}" />
                     <MenuItem Name="XCITrimmerMenuItem" Header="{ext:Locale MenuBar_Actions_XCITrimmerButton}" Icon="{ext:Icon fa-solid fa-scissors}" />
+                    <MenuItem Name="HomeMenuMenuItem" Header="HOME Menu" Icon="{ext:Icon fa-solid fa-house}" />
                 </MenuItem>
                 <Separator />
             </MenuItem>

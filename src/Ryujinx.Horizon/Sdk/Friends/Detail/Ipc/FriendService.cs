@@ -813,6 +813,13 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
 
                     FriendImpl head = MakeNextendoFriend(friendId.Id, entry.Name, PresenceStatus.Offline);
 
+                    // One friend asked alone is a friend page being opened (a page that walks the
+                    // whole list asks them all in a row).
+                    if (!NextendoFriends.Sweeping)
+                    {
+                        NextendoActivity.Set("Friend:" + entry.Name);
+                    }
+
                     MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref head, 1))[..0x40].CopyTo(info);
 
                     // The play history: up to twenty entries of 0x30 bytes, laid out like the
@@ -1169,6 +1176,11 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
 
             records.Clear();
 
+            if (IsNextendoProfile(userId))
+            {
+                NextendoActivity.Set("FriendList");
+            }
+
             IReadOnlyList<NextendoFriends.Entry> friends = IsNextendoProfile(userId) ? NextendoFriends.Get() : [];
             int filled = 0;
 
@@ -1277,6 +1289,8 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
 
             if (IsNextendoProfile(userId) && NextendoAccount.IsLinked)
             {
+                NextendoActivity.Set("AddFriend");
+
                 // The user's own settings: who they are, then their friend code as text.
                 MemoryMarshal.Write(setting, in userId);
 

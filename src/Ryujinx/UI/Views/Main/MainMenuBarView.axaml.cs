@@ -50,6 +50,7 @@ namespace Ryujinx.Ava.UI.Views.Main
             StopEmulationMenuItem.Command = Commands.Create(() => ViewModel.AppHost?.ShowExitPrompt().OrCompleted());
             RestartEmulationMenuItem.Command = Commands.Create(() => ViewModel.RestartEmulation());
             XCITrimmerMenuItem.Command = Commands.Create(XciTrimmerView.Show);
+            HomeMenuMenuItem.Command = Commands.Create(() => Window?.LaunchHomeMenu());
             NextendoLoginMenuItem.Command = Commands.Create(OpenNextendoAccount);
             NextendoFriendsMenuItem.Command = Commands.Create(NextendoFriendsWindow.Open);
             // Deux entrees, une seule fenetre : elle s ouvre sur l onglet demande.

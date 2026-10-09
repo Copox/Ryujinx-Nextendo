@@ -73,7 +73,63 @@ namespace Ryujinx.HLE.HOS.Services.News
         {
             // The HOME Menu's news page keeps the returned interface and calls into it: a bare
             // success leaves it with a null pointer.
-            MakeObject(context, new INewsEventHolder(context));
+            MakeObject(context, new IDownloadContext(context));
+
+            return ResultCode.Success;
+        }
+    }
+
+    // [Nextendo, HOME Menu work] A download the news page starts by itself (channel list,
+    // pictures of a channel). Nothing is downloaded here: the context reports at once that it
+    // is over with nothing in it, which the page shows as "could not load". Left without an answer,
+    // the page waited for it for ever and the whole menu froze.
+    class IDownloadContext : IpcService
+    {
+        private readonly Ryujinx.HLE.HOS.Kernel.Threading.KEvent _done;
+        private int _doneHandle;
+
+        public IDownloadContext(ServiceCtx context)
+        {
+            _done = new Ryujinx.HLE.HOS.Kernel.Threading.KEvent(context.Device.System.KernelContext);
+            _done.WritableEvent.Signal();
+        }
+
+        [CommandCmif(0)]
+        // Get() -> handle<copy>
+        public ResultCode Get(ServiceCtx context)
+        {
+            if (_doneHandle == 0 &&
+                context.Process.HandleTable.GenerateHandle(_done.ReadableEvent, out _doneHandle) != Ryujinx.Horizon.Common.Result.Success)
+            {
+                throw new System.InvalidOperationException("Out of handles!");
+            }
+
+            context.Response.HandleDesc = Ryujinx.HLE.HOS.Ipc.IpcHandleDesc.MakeCopy(_doneHandle);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(1)]
+        // Cancel()
+        public ResultCode Cancel(ServiceCtx context)
+        {
+            _done.WritableEvent.Signal();
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(2)]
+        // GetResult(): over, with nothing downloaded (GetSize says 0). An error here made the menu abort.
+        public ResultCode GetResult(ServiceCtx context)
+        {
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(3)]
+        // GetSize() -> u64
+        public ResultCode GetSize(ServiceCtx context)
+        {
+            context.ResponseData.Write(0L);
 
             return ResultCode.Success;
         }
@@ -91,6 +147,8 @@ namespace Ryujinx.HLE.HOS.Services.News
             string file = NextendoNews.ArticlePath(newsId);
 
             _data = newsId.Length > 0 && System.IO.File.Exists(file) ? System.IO.File.ReadAllBytes(file) : System.Array.Empty<byte>();
+
+            Ryujinx.Common.Configuration.NextendoActivity.Set("News");
 
             Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.Service, $"[news] open \"{newsId}\" -> {_data.Length} bytes");
 

@@ -412,6 +412,17 @@ namespace Ryujinx.HLE.HOS.Services
 
             if (RemoveSessionObj(serverSessionHandle, out IpcService session))
             {
+                // [Nextendo] The objects opened through that session go with it (a save data file
+                // system left open by a killed applet stayed locked for the next one).
+                try
+                {
+                    session.ReleaseDomainObjects();
+                }
+                catch (Exception e)
+                {
+                    Logger.Warning?.Print(LogClass.KernelIpc, $"Server {Name}: objects of a closed session not released ({e.Message}).");
+                }
+
                 (session as IDisposable)?.Dispose();
             }
         }

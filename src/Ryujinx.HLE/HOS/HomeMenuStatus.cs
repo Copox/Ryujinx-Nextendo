@@ -18,6 +18,9 @@ namespace Ryujinx.HLE.HOS
             {
                 Applet = applet;
 
+                // Another screen: what was looked at inside the previous one no longer holds.
+                Ryujinx.Common.Configuration.NextendoActivity.Set("");
+
                 try
                 {
                     Changed?.Invoke();

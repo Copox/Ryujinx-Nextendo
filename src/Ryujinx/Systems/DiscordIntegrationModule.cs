@@ -91,6 +91,7 @@ namespace Ryujinx.Ava.Systems
             // de jeu ne l'annonce à ce moment-là.
             NextendoCourseWatcher.Change += SurChangementDeSalon;
             Ryujinx.HLE.HOS.HomeMenuStatus.Changed += SurChangementDeSalon;
+            NextendoActivity.Changed += SurChangementDeSalon;
         }
 
         /// <summary>[Nextendo] The HOME Menu is not a game: it gets its own wording.</summary>
@@ -100,7 +101,20 @@ namespace Ryujinx.Ava.Systems
         /// <summary>Second line while on the HOME Menu: the screen the player is on.</summary>
         private static string EcranMenuHome() => Ryujinx.HLE.HOS.HomeMenuStatus.Applet switch
         {
-            "MyPage" => "On their user page",
+            string game when game.StartsWith("Application:", StringComparison.Ordinal) => "Playing " + game["Application:".Length..],
+            "Homebrew:hbmenu" => "Browsing the homebrew menu",
+            string homebrew when homebrew.StartsWith("Homebrew:", StringComparison.Ordinal) => "Running " + homebrew["Homebrew:".Length..] + " (homebrew)",
+            "MyPage" => NextendoActivity.Detail switch
+            {
+                string friend when friend.StartsWith("Friend:", StringComparison.Ordinal) => "Looking at " + friend["Friend:".Length..] + "'s page",
+                "FriendList" => "Browsing the friend list",
+                "AddFriend" => "Adding a friend",
+                _ => "On their user page",
+            },
+            "Settings" => "In System Settings",
+            "Error" => "Reading an error message",
+            "" when NextendoActivity.Detail == "NewsArticle" => "Reading Nextendo News",
+            "" when NextendoActivity.Detail == "News" => "Browsing Nextendo News",
             "PhotoViewer" => "Browsing the album",
             "Controller" => "Setting up controllers",
             "SoftwareKeyboard" => "Typing",
