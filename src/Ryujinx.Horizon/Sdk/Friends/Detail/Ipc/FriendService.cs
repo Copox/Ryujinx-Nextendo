@@ -1283,6 +1283,12 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                 int codeAt = int.TryParse(Environment.GetEnvironmentVariable("NEXTENDO_FRIEND_CODE_AT"), System.Globalization.NumberStyles.HexNumber, null, out int given) ? given : 0x20;
                 string code = NextendoAccount.FriendCode ?? "";
 
+                // The menu writes "SW-" itself in front of the code.
+                if (code.StartsWith("SW-", StringComparison.OrdinalIgnoreCase))
+                {
+                    code = code[3..];
+                }
+
                 if (Environment.GetEnvironmentVariable("NEXTENDO_USER_SETTING_PROBE") == "1")
                 {
                     // Text that names its own offset every 16 bytes: what the page shows tells where it reads.
