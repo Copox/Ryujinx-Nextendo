@@ -202,6 +202,36 @@ namespace Ryujinx.HLE.HOS
 
             VsyncEvent = new KEvent(KernelContext);
 
+            // [Nextendo, HOME Menu work] The default avatar of Nextendo, same drawing and same
+            // tint per PID as the apps and the site (measures of profile_images/10151.jpg).
+            Ryujinx.Common.Configuration.NextendoImages.Silhouette ??= static (pid, side) =>
+            {
+                double shift = pid == 0 ? 0 : (unchecked((uint)pid * 2654435761u) % 360) / 360.0;
+
+                SkiaSharp.SKColor Tint(double h, double s, double v) =>
+                    SkiaSharp.SKColor.FromHsv((float)(((h + shift) % 1.0) * 360.0), (float)(s * 100), (float)(v * 100));
+
+                float c = side;
+
+                using SkiaSharp.SKBitmap bitmap = new(side, side, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Opaque);
+                using SkiaSharp.SKCanvas canvas = new(bitmap);
+                using SkiaSharp.SKPaint paint = new() { IsAntialias = true };
+
+                paint.Shader = SkiaSharp.SKShader.CreateLinearGradient(
+                    new SkiaSharp.SKPoint(0, 0), new SkiaSharp.SKPoint(c, c),
+                    new[] { Tint(0.213, 0.60, 0.80), Tint(0.290, 0.72, 0.55) }, null, SkiaSharp.SKShaderTileMode.Clamp);
+                canvas.DrawRect(0, 0, c, c, paint);
+                paint.Shader = null;
+                paint.Color = new SkiaSharp.SKColor(255, 255, 255, 47); // white at 18.5 %
+                canvas.DrawCircle(c * 127.5f / 256f, c * 101.5f / 256f, c * 46f / 256f, paint);
+                canvas.DrawOval(c * 127.5f / 256f, c * 208f / 256f, c * 66.5f / 256f, c * 54f / 256f, paint);
+                canvas.Flush();
+
+                using SkiaSharp.SKData encoded = bitmap.Encode(SkiaSharp.SKEncodedImageFormat.Jpeg, 92);
+
+                return encoded?.ToArray();
+            };
+
             // [Nextendo, HOME Menu work] Pictures from Nextendo, in the form the console software reads.
             Ryujinx.Common.Configuration.NextendoImages.SquareJpeg ??= static (image, side) =>
             {

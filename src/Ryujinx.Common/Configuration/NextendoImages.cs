@@ -12,6 +12,25 @@ namespace Ryujinx.Common.Configuration
     {
         public static Func<byte[], int, byte[]> SquareJpeg { get; set; }
 
+        /// <summary>
+        /// The picture of a player who never chose one: the default avatar of the account
+        /// server (head and shoulders on a diagonal gradient), tinted from the PID exactly as
+        /// the Nextendo apps and the site do. Takes (pid, side), returns a JPEG.
+        /// </summary>
+        public static Func<ulong, int, byte[]> Silhouette { get; set; }
+
+        public static byte[] Default(ulong pid, int side)
+        {
+            try
+            {
+                return Silhouette?.Invoke(pid, side);
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
         public static byte[] Fit(byte[] image, int side)
         {
             if (image == null || image.Length == 0 || SquareJpeg == null)

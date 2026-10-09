@@ -24,6 +24,42 @@ namespace Ryujinx.Common.Configuration
             _games.AddOrUpdate(titleId, new Game(name, icon), (_, known) => new Game(name, icon ?? known.Icon));
         }
 
-        public static bool TryGet(ulong titleId, out Game game) => _games.TryGetValue(titleId, out game);
+        private static readonly System.Net.Http.HttpClient _http = new() { Timeout = System.TimeSpan.FromSeconds(3) };
+
+        public static bool TryGet(ulong titleId, out Game game)
+        {
+            if (!_games.TryGetValue(titleId, out game))
+            {
+                return false;
+            }
+
+            // A history entry may come without its icon (the player's own record never had
+            // one): the shared catalogue of the account server has it, by title id.
+            if (game.Icon == null)
+            {
+                byte[] icon = System.Array.Empty<byte>();
+
+                try
+                {
+                    string url = NextendoEndpoint.BaseUrl().TrimEnd('/') + "/api/game-icon/" + titleId.ToString("X16");
+                    byte[] body = _http.GetByteArrayAsync(url).GetAwaiter().GetResult();
+
+                    if (body.Length > 2 && body[0] == 0xFF && body[1] == 0xD8)
+                    {
+                        icon = body;
+                    }
+                }
+                catch (System.Exception)
+                {
+                    // out of reach: asked again next time
+                    return true;
+                }
+
+                game = new Game(game.Name, icon);
+                _games[titleId] = game;
+            }
+
+            return true;
+        }
     }
 }

@@ -56,7 +56,7 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
         {
             PresenceStatus status = entry.Status <= 0
                 ? PresenceStatus.Offline
-                : (entry.AppField is { Length: > 0 } ? PresenceStatus.OnlinePlay : PresenceStatus.Online);
+                : (entry.AppField is { Length: > 0 } || entry.AppId != 0 ? PresenceStatus.OnlinePlay : PresenceStatus.Online);
 
             FriendImpl old = MakeNextendoFriend(netId, entry.Name, status, entry.AppField, sameApp: false);
             ReadOnlySpan<byte> oldBytes = MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref old, 1));
@@ -68,10 +68,26 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             record.Slice(0xE8 + 0x10, 8).Clear();            // no "last online" date is known
             record[0x21F] = 1;
 
-            // Trial: where the game being played is read.
-            if (entry.Status > 0 && entry.AppId != 0 && int.TryParse(Environment.GetEnvironmentVariable("NEXTENDO_FRIEND_APP_AT"), System.Globalization.NumberStyles.HexNumber, null, out int appAt))
+            if (Environment.GetEnvironmentVariable("NEXTENDO_FRIEND_DETAIL_PROBE") is "7" or "8")
             {
-                BitConverter.TryWriteBytes(record.Slice(appAt, 8), entry.AppId);
+                bool wide = Environment.GetEnvironmentVariable("NEXTENDO_FRIEND_DETAIL_PROBE") == "8";
+
+                for (int slot = (wide ? 0x40 : 0x1C8) / 8; slot < 0x218 / 8; slot++)
+                {
+                    if (slot * 8 is >= 0xE8 and < 0x108)
+                    {
+                        continue;
+                    }
+
+                    BitConverter.TryWriteBytes(record.Slice(slot * 8, 8), 0x0100E00000000000UL + ((ulong)slot << 16));
+                }
+            }
+
+            // The game being played, right before the presence (found by probing: the friend
+            // page asks the title card of the id at 0xE0 for its top line).
+            if (entry.Status > 0 && entry.AppId != 0)
+            {
+                BitConverter.TryWriteBytes(record.Slice(0xE0, 8), entry.AppId);
             }
         }
 
@@ -782,7 +798,7 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                 }
             }
 
-            if (probe == 0 && IsNextendoProfile(userId))
+            if ((probe == 0 || probe == 7 || probe == 8) && IsNextendoProfile(userId))
             {
                 // What is known so far of this record: the head is the friend record's (ids at 0
                 // and 0x10, name at 0x18), the address of the picture is at 0x40, and games sit in
@@ -829,6 +845,15 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                         BitConverter.TryWriteBytes(slot.Slice(0x28, 8), played[g].LastPlayed);
                     }
 
+                    // The game being played now, for the top line of the page: its id sits at
+                    // 0x570 (found by probing: the menu asks the title card of what is there).
+                    if (entry.Status > 0 && entry.AppId != 0)
+                    {
+                        BitConverter.TryWriteBytes(info.Slice(0x570, 8), entry.AppId);
+                        BitConverter.TryWriteBytes(info.Slice(0x578, 8), entry.AppId);
+                        Logger.Info?.Print(LogClass.ServiceFriend, $"[Nextendo] friend 0x{friendId.Id:X} plays {entry.AppId:X16} ({entry.Game}) on {entry.Platform}");
+                    }
+
                     // "Friends since", in Unix seconds (found at 0x5D0 by probing).
                     if (entry.Since > 0)
                     {
@@ -849,6 +874,19 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                 }
             }
 
+            if (probe == 7)
+            {
+                // A title-like id of its own in every slot nothing is known about: the id the
+                // menu then asks the title card of names the slot of the game being played.
+                for (int slot = 0x4A0 / 8; slot < info.Length / 8; slot++)
+                {
+                    if (slot != 0x5D0 / 8)
+                    {
+                        BitConverter.TryWriteBytes(info.Slice(slot * 8, 8), 0x0100D00000000000UL + ((ulong)slot << 16));
+                    }
+                }
+            }
+
             if (probe == 3)
             {
                 // Two real titles in the first two game slots, everything else empty.
@@ -861,8 +899,11 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             return Result.Success;
         }
 
-        // [Nextendo, HOME Menu work] What a friend is doing right now (SDK 20+): asked by the
-        // friend page for its top line, the game being played.
+        // [Nextendo, HOME Menu work] LoadFriendSettingV2 (22.0.0+): the settings kept for a
+        // friend (best friend, memo), asked by the friend page. The reply has to be exactly
+        // 0x80 bytes; its fields are not known yet, an empty one reads as "no setting".
+        // (The method keeps its first name: this command was first taken for the presence.
+        // The game being played is in the list record, see WriteNextendoFriendV2.)
         [CmifCommand(20111)]
         public Result GetFriendPresenceV2(
             [Buffer(HipcBufferFlags.Out | HipcBufferFlags.Pointer, FriendPresenceV2Impl.Size)] out FriendPresenceV2Impl presence,

@@ -61,6 +61,8 @@ namespace Ryujinx.HLE.HOS.Services.Ns
             bool decoded = ((options >> 8) & 0xFF) != 0;
             ulong applicationId = context.RequestData.ReadUInt64();
 
+            Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.Service, $"[home] title card asked: {applicationId:X16} options={options:X} capacity=0x{context.Request.ReceiveBuff[0].Size:X} cmd={context.RequestData.BaseStream.Length}");
+
             ulong position = context.Request.ReceiveBuff[0].Position;
             ulong capacity = context.Request.ReceiveBuff[0].Size;
 

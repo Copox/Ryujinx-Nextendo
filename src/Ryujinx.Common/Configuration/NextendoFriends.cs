@@ -177,6 +177,11 @@ namespace Ryujinx.Common.Configuration
                             data = NextendoImages.Fit(body, 256);
                         }
                     }
+                    else if (resp.StatusCode == System.Net.HttpStatusCode.NotFound)
+                    {
+                        // No picture chosen: the default avatar, in this player's tint.
+                        data = NextendoImages.Default(pid, 256) ?? data;
+                    }
                 }
                 catch
                 {
@@ -489,6 +494,13 @@ namespace Ryujinx.Common.Configuration
                 }
 
                 list.Sort((a, b) => b.LastPlayed.CompareTo(a.LastPlayed));
+
+                // Icons the history does not carry are fetched ahead, all at once, while the page opens.
+                foreach (Played game in list.GetRange(0, Math.Min(20, list.Count)))
+                {
+                    ulong id = game.TitleId;
+                    System.Threading.Tasks.Task.Run(() => NextendoGames.TryGet(id, out _));
+                }
             }
             catch
             {
