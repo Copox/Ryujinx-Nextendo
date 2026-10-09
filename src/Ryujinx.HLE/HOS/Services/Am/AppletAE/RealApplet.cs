@@ -472,7 +472,8 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
                     Thread.Sleep(30);
                 }
 
-                if (!homebrew || applet.Exited)
+                // The emulation itself is stopping: nothing to start next, nothing to give back.
+                if (!homebrew || applet.Exited || system.Stopping)
                 {
                     break;
                 }
@@ -605,7 +606,9 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
         // What a program that ended still holds goes back to the pool, for the next one.
         private static void ReleaseMemory(Horizon system, KProcess process)
         {
-            if (process == null)
+            // Not while the emulation is being stopped: the address spaces are being freed by
+            // the stop itself, and touching them at the same time crashed the emulator.
+            if (process == null || system.Stopping || !system.KernelContext.Running)
             {
                 return;
             }

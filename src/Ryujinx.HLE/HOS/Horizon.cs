@@ -118,6 +118,9 @@ namespace Ryujinx.HLE.HOS
 
         private bool _isDisposed;
 
+        /// <summary>True from the moment the emulation is being stopped (or restarted).</summary>
+        internal bool Stopping => _isDisposed;
+
         public bool EnablePtc { get; set; }
 
         public IntegrityCheckLevel FsIntegrityCheckLevel { get; set; }
