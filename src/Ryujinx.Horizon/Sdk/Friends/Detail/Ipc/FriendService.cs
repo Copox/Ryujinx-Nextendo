@@ -780,8 +780,8 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             {
                 // What is known so far of this record: the head is the friend record's (ids at 0
                 // and 0x10, name at 0x18), the address of the picture is at 0x40, and games sit in
-                // 0x30-byte entries from 0xE0, each led by a title id. The first one is the game
-                // shown at the top of the page.
+                // up to twenty 0x30-byte entries from 0xE0 (the play history), each led by a title id.
+                // The account server only tells what is played now: that game opens the list.
                 foreach (NextendoFriends.Entry entry in NextendoFriends.Get())
                 {
                     if (entry.Pid != friendId.Id && (entry.Nsa == 0 || entry.Nsa != friendId.Id))
@@ -798,7 +798,23 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                         BitConverter.TryWriteBytes(info.Slice(0xE0, 8), entry.AppId);
                     }
 
+                    // "Friends since", in Unix seconds (found at 0x5D0 by probing).
+                    if (entry.Since > 0)
+                    {
+                        BitConverter.TryWriteBytes(info.Slice(0x5D0, 8), entry.Since);
+                    }
+
                     break;
+                }
+            }
+
+            if (probe == 6)
+            {
+                // Every 8-byte slot holds a date of its own (2001-01-01 plus one day per slot): the
+                // "friends since" date shown gives the slot.
+                for (int slot = 0x40 / 8; slot < info.Length / 8; slot++)
+                {
+                    BitConverter.TryWriteBytes(info.Slice(slot * 8, 8), 978307200L + slot * 86400L);
                 }
             }
 
@@ -810,6 +826,44 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             }
 
             Logger.Info?.Print(LogClass.ServiceFriend, $"[Nextendo] GetFriendDetailedInfoV2 friend 0x{friendId.Id:X}");
+
+            return Result.Success;
+        }
+
+        // [Nextendo, HOME Menu work] What a friend is doing right now (SDK 20+): asked by the
+        // friend page for its top line, the game being played.
+        [CmifCommand(20111)]
+        public Result GetFriendPresenceV2(
+            [Buffer(HipcBufferFlags.Out | HipcBufferFlags.Pointer, FriendPresenceV2Impl.Size)] out FriendPresenceV2Impl presence,
+            Uid userId,
+            NetworkServiceAccountId friendId)
+        {
+            presence = default;
+
+            Span<byte> view = MemoryMarshal.AsBytes(MemoryMarshal.CreateSpan(ref presence, 1));
+
+            if (Environment.GetEnvironmentVariable("NEXTENDO_FRIEND_DETAIL_PROBE") == "2")
+            {
+                for (int k = 0; k < view.Length; k++)
+                {
+                    int slot = k >> 3;
+                    view[k] = (byte)((k & 7) < 4 ? 'N' + (slot / 26) : 'a' + (slot % 26));
+                }
+            }
+
+            if (int.TryParse(Environment.GetEnvironmentVariable("NEXTENDO_FRIEND_PRESENCE_PROBE"), out int statusAt))
+            {
+                // A title-like id in every 8-byte slot, and "playing" (2) in the byte under test.
+                for (int slot = 0; slot < view.Length / 8; slot++)
+                {
+                    BitConverter.TryWriteBytes(view.Slice(slot * 8, 8), 0x0100AB0000000000UL + (ulong)(slot << 16));
+                }
+
+                view.Slice(statusAt & ~7, 8).Clear();
+                view[statusAt] = 2;
+            }
+
+            Logger.Info?.Print(LogClass.ServiceFriend, $"[Nextendo] GetFriendPresenceV2 friend 0x{friendId.Id:X}");
 
             return Result.Success;
         }

@@ -123,6 +123,14 @@ namespace Ryujinx.HLE.HOS.Services.Ns
 
             // The buffer for a title that is not on the console is smaller: the picture is
             // compressed again until it fits.
+            if (decoded && icon != null)
+            {
+                // Asked this way (the friend page, for a game that is not on the console), the
+                // picture is drawn in a 174x174 frame and has to come at that size, under 64 KiB:
+                // at 256 or 128 the page says the loading failed.
+                icon = ResizeIcon(icon, 174);
+            }
+
             if (icon != null && System.Environment.GetEnvironmentVariable("NEXTENDO_FORCE_REENCODE") == "1")
             {
                 icon = ShrinkIcon(icon, 60000); // test: are re-encoded pictures readable by the menu?
@@ -170,6 +178,29 @@ namespace Ryujinx.HLE.HOS.Services.Ns
             System.BitConverter.TryWriteBytes(new System.Span<byte>(nacp, 0x302C, 4), 0xFFFFu);
 
             return nacp;
+        }
+
+        // The picture as a JPEG of `side` pixels a side.
+        private static byte[] ResizeIcon(byte[] image, int side)
+        {
+            try
+            {
+                using SkiaSharp.SKBitmap source = SkiaSharp.SKBitmap.Decode(image);
+
+                if (source == null)
+                {
+                    return null;
+                }
+
+                using SkiaSharp.SKBitmap scaled = source.Resize(new SkiaSharp.SKImageInfo(side, side), SkiaSharp.SKFilterQuality.High);
+                using SkiaSharp.SKData encoded = scaled?.Encode(SkiaSharp.SKEncodedImageFormat.Jpeg, 90);
+
+                return encoded?.ToArray();
+            }
+            catch (System.Exception)
+            {
+                return null;
+            }
         }
 
         private static byte[] ShrinkIcon(byte[] image, int maxBytes)
