@@ -1054,6 +1054,7 @@ namespace Ryujinx.HLE.HOS.Services.Ldn.UserServiceCreator
         }
 
         [CommandCmif(400)]
+        [CommandCmif(404)] // [Nextendo] what the system side of the service (ldn:s) calls to start, from the HOME Menu user page
         // InitializeOld(pid)
         public ResultCode InitializeOld(ServiceCtx context)
         {
