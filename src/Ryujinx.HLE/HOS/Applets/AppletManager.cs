@@ -41,6 +41,8 @@ namespace Ryujinx.HLE.HOS.Applets
                     return new CabinetApplet(system);
                 case AppletId.MyPage:
                     return new MyPageApplet(system);
+                case AppletId.Lhub:
+                    return new Nso.NsoApplet(system);
             }
 
             Logger.Warning?.Print(LogClass.Application, $"Applet {applet} not implemented!");

@@ -23,5 +23,6 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
         LibAppletWhitelisted = 0x18,
         LibAppletAuth = 0x19,
         MyPage = 0x1A,
+        Lhub = 0x35, // the Nintendo Switch Online entry of the HOME Menu
     }
 }
