@@ -2307,6 +2307,14 @@ namespace Ryujinx.Ava.UI.ViewModels
 
             application.Name ??= AppHost.Device.Processes.ActiveApplication.Name;
             
+            // [Nextendo] The HOME Menu keeps its own picture on the loading screen however it is
+            // started (menu entry, command line, or a restart of the emulation).
+            if (application.Id == 0x0100000000001000)
+            {
+                SelectedIcon = Ryujinx.Common.EmbeddedResources.Read("Ryujinx/Assets.UIImages.Icon_HomeMenu.png");
+                LoadIconRadius = new Avalonia.CornerRadius(36);
+            }
+
             SelectedIcon ??= ApplicationLibrary.GetApplicationIcon(application.Path,
                 ConfigurationState.Instance.System.Language, application.Id);
 
