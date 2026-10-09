@@ -2367,6 +2367,9 @@ namespace Ryujinx.Ava.UI.ViewModels
                 SetMainContent(RendererHostControl);
 
                 RendererHostControl.Focus();
+
+                // [Nextendo] The window hidden while the HOME Menu loaded shows with its first frame.
+                Window?.RevealAfterBackgroundLoad();
             });
 
         public static void UpdateGameMetadata(string titleId, TimeSpan playTime) 
@@ -2440,6 +2443,8 @@ namespace Ryujinx.Ava.UI.ViewModels
                 ShowLoadProgress = false;
                 IsLoadingIndeterminate = false;
                 CanUpdate = true;
+
+                Window?.RevealAfterBackgroundLoad();
                 Cursor = Cursor.Default;
 
                 SetMainContent(null);

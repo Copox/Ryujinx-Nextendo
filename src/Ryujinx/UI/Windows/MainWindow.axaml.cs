@@ -479,6 +479,14 @@ namespace Ryujinx.Ava.UI.Windows
             InitializeComponent();
             Load();
 
+            // [Nextendo, HOME Menu work] The HOME Menu starting with the emulator, loaded in the
+            // background: the window stays invisible until the menu draws its first frame.
+            if (!_deferLoad && Ryujinx.Common.Configuration.NextendoHomeMenuSettings.AutoStart &&
+                Ryujinx.Common.Configuration.NextendoHomeMenuSettings.LoadInBackground)
+            {
+                HideUntilHomeMenu();
+            }
+
             UiHandler = new AvaHostUIHandler(this);
 
             ViewModel.Title = RyujinxApp.FormatTitle();
@@ -804,6 +812,8 @@ namespace Ryujinx.Ava.UI.Windows
             {
                 Logger.Error?.Print(LogClass.Application, "HOME Menu: qlaunch not found in the installed firmware.");
 
+                RevealAfterBackgroundLoad();
+
                 _ = Ryujinx.Ava.UI.Helpers.ContentDialogHelper.CreateWarningDialog(
                     "HOME Menu",
                     "The HOME Menu comes with the system firmware. Install a firmware first (Actions > Install Firmware).");
@@ -855,9 +865,75 @@ namespace Ryujinx.Ava.UI.Windows
             });
 
             if (homeMenuData != null)
-                _ = ViewModel.LoadApplication(homeMenuData, _startFullscreen, homeMenuNacp);
+                _ = ViewModel.LoadApplication(homeMenuData, _startFullscreen || Ryujinx.Common.Configuration.NextendoHomeMenuSettings.Fullscreen, homeMenuNacp);
             else
                 Logger.Error?.Print(LogClass.Application, "HOME Menu: qlaunch not found in the installed firmware.");
+        }
+
+        private bool _hiddenUntilHomeMenu;
+
+        [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
+        private static extern nint GetWindowLongPtr(nint hWnd, int index);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
+        private static extern nint SetWindowLongPtr(nint hWnd, int index, nint value);
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool SetLayeredWindowAttributes(nint hWnd, uint key, byte alpha, uint flags);
+
+        private const int GwlExStyle = -20;
+        private const nint WsExLayered = 0x80000;
+        private const nint WsExToolWindow = 0x80;
+
+        // Windows: the window is made fully transparent and kept off the taskbar from the start,
+        // so nothing of it shows before the menu. Elsewhere, its content is made transparent.
+        private void SetHiddenWhileLoading(bool hidden)
+        {
+            nint handle = OperatingSystem.IsWindows() ? (TryGetPlatformHandle()?.Handle ?? 0) : 0;
+
+            Opacity = hidden ? 0 : 1;
+
+            if (handle == 0)
+            {
+                return;
+            }
+
+            nint style = GetWindowLongPtr(handle, GwlExStyle);
+
+            if (hidden)
+            {
+                SetWindowLongPtr(handle, GwlExStyle, style | WsExLayered | WsExToolWindow);
+                SetLayeredWindowAttributes(handle, 0, 0, 2); // LWA_ALPHA
+            }
+            else
+            {
+                SetWindowLongPtr(handle, GwlExStyle, style & ~(WsExLayered | WsExToolWindow));
+            }
+        }
+
+        private void HideUntilHomeMenu()
+        {
+            _hiddenUntilHomeMenu = true;
+            SetHiddenWhileLoading(true);
+
+            // Never left invisible: shown after two minutes whatever happens.
+            _ = Task.Delay(TimeSpan.FromMinutes(2)).ContinueWith(_ => RevealAfterBackgroundLoad());
+        }
+
+        /// <summary>[Nextendo] Shows the window hidden while the HOME Menu loaded.</summary>
+        public void RevealAfterBackgroundLoad()
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (!_hiddenUntilHomeMenu)
+                {
+                    return;
+                }
+
+                _hiddenUntilHomeMenu = false;
+                SetHiddenWhileLoading(false);
+                Activate();
+            });
         }
 
         private async Task CheckLaunchState()
@@ -872,6 +948,8 @@ namespace Ryujinx.Ava.UI.Windows
 
             if (firstRun || showPatchNotes)
             {
+                RevealAfterBackgroundLoad();
+
                 await Dispatcher.UIThread.InvokeAsync(async () =>
                 {
                     try
@@ -935,6 +1013,12 @@ namespace Ryujinx.Ava.UI.Windows
             Logger.Notice.Print(LogClass.Application, "[home-menu] startup popups done");
             if (!ShowKeyErrorOnLoad)
             {
+                // [Nextendo, HOME Menu work] "Start the HOME Menu with the emulator".
+                if (!_deferLoad && Ryujinx.Common.Configuration.NextendoHomeMenuSettings.AutoStart)
+                {
+                    await Dispatcher.UIThread.InvokeAsync(LaunchHomeMenu);
+                }
+
                 if (_deferLoad)
                 {
                     _deferLoad = false;
@@ -1072,6 +1156,12 @@ namespace Ryujinx.Ava.UI.Windows
         protected override void OnOpened(EventArgs e)
         {
             base.OnOpened(e);
+
+            // The window style is set again on show: the hiding is applied once it is there.
+            if (_hiddenUntilHomeMenu)
+            {
+                SetHiddenWhileLoading(true);
+            }
 
             Initialize();
 

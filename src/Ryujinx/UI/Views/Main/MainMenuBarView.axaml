@@ -221,6 +221,10 @@
                     Header="{ext:Locale Dialog_Nextendo_NextendoAccountMenuHeader}"
                     Icon="{ext:Icon fa-solid fa-user-astronaut}" />
                 <MenuItem
+                    Name="NextendoHomeMenuSettingsMenuItem"
+                    Header="qLaunch"
+                    Icon="{ext:Icon fa-solid fa-house}" />
+                <MenuItem
                     Name="NextendoFriendsMenuItem"
                     Header="{ext:Locale Dialog_Nextendo_MenuBarFriends}"
                     InputGesture="Ctrl+F"

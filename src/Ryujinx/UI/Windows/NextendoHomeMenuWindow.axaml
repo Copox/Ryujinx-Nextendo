@@ -1,0 +1,60 @@
+<!-- [Nextendo, HOME Menu work] Les réglages du menu HOME (qLaunch) : démarrage avec l'émulateur,
+     chargement en arrière-plan, plein écran, menu homebrew de l'album, thème. -->
+<window:StyleableAppWindow xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:window="clr-namespace:Ryujinx.Ava.UI.Windows"
+             mc:Ignorable="d"
+             Width="520"
+             Height="560"
+             MinWidth="440"
+             MinHeight="480"
+             x:Class="Ryujinx.Ava.UI.Windows.NextendoHomeMenuWindow">
+    <ScrollViewer>
+        <StackPanel Margin="18" Spacing="14">
+            <TextBlock Classes="h1" Text="qLaunch" />
+            <TextBlock TextWrapping="Wrap" Opacity="0.75" FontSize="12"
+                       Text="Le vrai menu HOME de la Switch, tiré du firmware installé." />
+
+            <StackPanel Spacing="6">
+                <TextBlock FontWeight="SemiBold" Text="Démarrage" />
+                <CheckBox Name="AutoStartCheck" Content="Lancer le menu HOME au démarrage de l'émulateur" />
+                <CheckBox Name="BackgroundCheck" Margin="24,0,0,0"
+                          Content="Le charger en arrière-plan (la fenêtre s'affiche avec le menu, sans l'écran de chargement)" />
+                <CheckBox Name="FullscreenCheck" Content="Ouvrir le menu HOME en plein écran" />
+            </StackPanel>
+
+            <StackPanel Spacing="6">
+                <TextBlock FontWeight="SemiBold" Text="Menu homebrew de l'album" />
+                <RadioButton Name="SphairaRadio" GroupName="AlbumMenu" Content="Sphaira" />
+                <RadioButton Name="HbmenuRadio" GroupName="AlbumMenu" Content="hbmenu classique" />
+                <TextBlock Name="AlbumHint" TextWrapping="Wrap" Opacity="0.7" FontSize="12" />
+            </StackPanel>
+
+            <StackPanel Spacing="6">
+                <TextBlock FontWeight="SemiBold" Text="Thème de couleur" />
+                <RadioButton Name="ThemeAutoRadio" GroupName="Theme" Content="Automatique (noir avec un thème personnalisé)" />
+                <RadioButton Name="ThemeWhiteRadio" GroupName="Theme" Content="Blanc basique" />
+                <RadioButton Name="ThemeBlackRadio" GroupName="Theme" Content="Noir basique" />
+                <TextBlock TextWrapping="Wrap" Opacity="0.7" FontSize="12"
+                           Text="S'applique au prochain démarrage du menu HOME." />
+            </StackPanel>
+
+            <StackPanel Spacing="6">
+                <TextBlock FontWeight="SemiBold" Text="Carte SD" />
+                <WrapPanel>
+                    <Button Name="OpenSdButton" Margin="0,0,8,8" Content="Ouvrir la carte SD" />
+                    <Button Name="OpenThemesButton" Margin="0,0,8,8" Content="Ouvrir les thèmes installés" />
+                    <Button Name="ResetThemeButton" Margin="0,0,8,8" Content="Retirer le thème installé" />
+                </WrapPanel>
+                <TextBlock Name="StatusText" TextWrapping="Wrap" FontSize="12" IsVisible="False" />
+            </StackPanel>
+
+            <Grid ColumnDefinitions="*,Auto,Auto">
+                <Button Grid.Column="1" Name="LaunchButton" Margin="0,0,8,0" Content="Lancer le menu HOME" />
+                <Button Grid.Column="2" Name="CloseButton" Classes="accent" Content="Fermer" />
+            </Grid>
+        </StackPanel>
+    </ScrollViewer>
+</window:StyleableAppWindow>
