@@ -7,12 +7,13 @@
              xmlns:window="clr-namespace:Ryujinx.Ava.UI.Windows"
              mc:Ignorable="d"
              Width="520"
-             Height="560"
+             Height="640"
              MinWidth="440"
              MinHeight="480"
              x:Class="Ryujinx.Ava.UI.Windows.NextendoHomeMenuWindow">
-    <ScrollViewer>
-        <StackPanel Margin="18" Spacing="14">
+    <Grid RowDefinitions="*,Auto">
+    <ScrollViewer Grid.Row="0">
+        <StackPanel Margin="18,18,18,8" Spacing="14">
             <TextBlock Classes="h1" Text="qLaunch" />
             <TextBlock TextWrapping="Wrap" Opacity="0.75" FontSize="12"
                        Text="Le vrai menu HOME de la Switch, tiré du firmware installé." />
@@ -50,11 +51,15 @@
                 </WrapPanel>
                 <TextBlock Name="StatusText" TextWrapping="Wrap" FontSize="12" IsVisible="False" />
             </StackPanel>
-
-            <Grid ColumnDefinitions="*,Auto,Auto">
-                <Button Grid.Column="1" Name="LaunchButton" Margin="0,0,8,0" Content="Lancer le menu HOME" />
-                <Button Grid.Column="2" Name="CloseButton" Classes="accent" Content="Fermer" />
-            </Grid>
         </StackPanel>
     </ScrollViewer>
+
+    <!-- Toujours visibles, hors de la zone qui defile. -->
+    <Border Grid.Row="1" Padding="18,10" BorderThickness="0,1,0,0" BorderBrush="#30FFFFFF">
+        <Grid ColumnDefinitions="*,Auto,Auto">
+            <Button Grid.Column="1" Name="LaunchButton" Margin="0,0,8,0" Classes="accent" Content="Lancer le menu HOME" />
+            <Button Grid.Column="2" Name="CloseButton" Content="Fermer" />
+        </Grid>
+    </Border>
+    </Grid>
 </window:StyleableAppWindow>
