@@ -67,6 +67,12 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             oldBytes.Slice(0x40, 0xE0).CopyTo(record[0xE8..]); // presence
             record.Slice(0xE8 + 0x10, 8).Clear();            // no "last online" date is known
             record[0x21F] = 1;
+
+            // Trial: where the game being played is read.
+            if (entry.Status > 0 && entry.AppId != 0 && int.TryParse(Environment.GetEnvironmentVariable("NEXTENDO_FRIEND_APP_AT"), System.Globalization.NumberStyles.HexNumber, null, out int appAt))
+            {
+                BitConverter.TryWriteBytes(record.Slice(appAt, 8), entry.AppId);
+            }
         }
 
         private static FriendImpl MakeNextendoFriend(ulong netId, string nick, PresenceStatus status, byte[] appField = null, bool sameApp = true)
