@@ -340,20 +340,51 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
             }
 
             // [Nextendo] As on a console running Atmosphere: the album opens the homebrew menu
-            // when there is one at the root of the SD card.
-            if (appletId == AppletId.PhotoViewer)
+            // when there is one on the SD card. Sphaira first, unless hbmenu was chosen (setting
+            // "nextendo_album_menu.txt": "sphaira" or "hbmenu"); either one, when the other is
+            // missing.
+            if (appletId == AppletId.PhotoViewer && HomebrewMenuPath() is { } homebrewMenu)
             {
-                string homebrewMenu = System.IO.Path.Combine(VirtualFileSystem.GetSdCardPath(), "hbmenu.nro");
-
-                if (System.IO.File.Exists(homebrewMenu))
-                {
-                    return homebrewMenu;
-                }
+                return homebrewMenu;
             }
 
             string path = device.System.ContentManager.GetInstalledContentPath(programId, StorageId.BuiltInSystem, NcaContentType.Program);
 
             return string.IsNullOrEmpty(path) ? null : VirtualFileSystem.SwitchPathToSystemPath(path);
+        }
+
+        public static string HomebrewMenuPath()
+        {
+            string sd = VirtualFileSystem.GetSdCardPath();
+            string sphaira = System.IO.Path.Combine(sd, "switch", "sphaira", "sphaira.nro");
+            string hbmenu = System.IO.Path.Combine(sd, "hbmenu.nro");
+            string choice = "sphaira";
+
+            try
+            {
+                string setting = System.IO.Path.Combine(Ryujinx.Common.Configuration.AppDataManager.BaseDirPath, "nextendo_album_menu.txt");
+
+                if (System.IO.File.Exists(setting))
+                {
+                    choice = System.IO.File.ReadAllText(setting).Trim().ToLowerInvariant();
+                }
+            }
+            catch (System.Exception)
+            {
+                // the default stays
+            }
+
+            string[] order = choice == "hbmenu" ? [hbmenu, sphaira] : [sphaira, hbmenu];
+
+            foreach (string path in order)
+            {
+                if (System.IO.File.Exists(path))
+                {
+                    return path;
+                }
+            }
+
+            return null;
         }
 
         public static bool TryGet(ulong pid, out RealApplet applet) => _applets.TryGetValue(pid, out applet);
