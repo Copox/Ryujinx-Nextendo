@@ -90,6 +90,9 @@ namespace Ryujinx.HLE.Loaders.Processes.Extensions
                 // ModsInterdits refuse tout pour ce jeu. Ne fait rien par defaut.
                 romFs = NextendoEcranTitre.Appliquer(processResult.ProgramId, romFs);
 
+                // [Nextendo, HOME Menu work] The texts of the system name Nextendo.
+                romFs = NextendoBranding.Appliquer(processResult.ProgramId, romFs);
+
                 device.Configuration.VirtualFileSystem.SetRomFs(processResult.ProcessId, romFs.AsStream(FileAccess.Read));
             }
 
