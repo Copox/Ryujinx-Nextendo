@@ -264,6 +264,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
 
             if (result != Result.Success)
             {
+                Ryujinx.Common.Logging.Logger.Error?.Print(Ryujinx.Common.Logging.LogClass.Kernel, $"[proc] InitializeForProcess failed: {result} code=0x{codeAddress:X} size=0x{codeSize:X} flags={creationInfo.Flags}");
                 CleanUpForError();
 
                 return result;
@@ -284,6 +285,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
 
             if (result != Result.Success)
             {
+                Ryujinx.Common.Logging.Logger.Error?.Print(Ryujinx.Common.Logging.LogClass.Kernel, $"[proc] MapPages(code) failed: {result} code=0x{codeAddress:X} pages={codePagesCount} region={memRegion} free={string.Join(",", System.Linq.Enumerable.Select(KernelContext.MemoryManager.MemoryRegions, r => r.GetFreePages()))}");
                 CleanUpForError();
 
                 return result;
@@ -527,6 +529,91 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
             RandomNumberGenerator.Fill(MemoryMarshal.AsBytes(RandomEntropy.AsSpan()));
         }
 
+        // ---------------------------------------------------------------------------------
+        // [Nextendo] The loader side of the homebrew ABI (switchbrew, "Homebrew ABI").
+        // A program started with HomebrewArguments set receives a list of configuration entries
+        // instead of the bare arguments of a system program; among them two buffers where it
+        // writes, before it exits, the program to start next (how the homebrew menu launches
+        // a homebrew).
+        private const ulong HomebrewAreaSize = 0x1000;
+        private const ulong HomebrewPathOffset = 0x200;     // 0x200 bytes
+        private const ulong HomebrewNextArgvOffset = 0x400; // 0x800 bytes
+        private const ulong HomebrewArgvOffset = 0xC00;     // 0x300 bytes
+        private const ulong HomebrewInfoOffset = 0xF00;
+        private const ulong HomebrewReturnOffset = 0xF80;
+
+        /// <summary>Command line of the homebrew program; non null asks for a homebrew start.</summary>
+        public string HomebrewArguments { get; set; }
+
+        public ulong HomebrewArea { get; private set; }
+
+        /// <summary>What the program asked to be started next, read when it exits.</summary>
+        public string HomebrewNextPath { get; private set; }
+        public string HomebrewNextArguments { get; private set; }
+
+        private void WriteHomebrewEnvironment(int mainThreadHandle)
+        {
+            byte[] area = new byte[HomebrewAreaSize];
+            int at = 0;
+
+            void Entry(uint key, ulong first, ulong second)
+            {
+                BitConverter.TryWriteBytes(area.AsSpan(at, 4), key);
+                BitConverter.TryWriteBytes(area.AsSpan(at + 8, 8), first);
+                BitConverter.TryWriteBytes(area.AsSpan(at + 16, 8), second);
+
+                at += 0x18;
+            }
+
+            byte[] arguments = System.Text.Encoding.UTF8.GetBytes(HomebrewArguments);
+            byte[] info = System.Text.Encoding.ASCII.GetBytes("Nextendo homebrew loader");
+
+            arguments.AsSpan(0, Math.Min(arguments.Length, 0x2FF)).CopyTo(area.AsSpan((int)HomebrewArgvOffset));
+            info.CopyTo(area.AsSpan((int)HomebrewInfoOffset));
+
+            Entry(1, (ulong)(uint)mainThreadHandle, 0);                                         // MainThreadHandle
+            Entry(2, HomebrewArea + HomebrewPathOffset, HomebrewArea + HomebrewNextArgvOffset); // NextLoadPath
+            Entry(5, 0, HomebrewArea + HomebrewArgvOffset);                                     // Argv
+            Entry(6, ulong.MaxValue, ulong.MaxValue);                                           // SyscallAvailableHint
+            Entry(7, 0, 0);                                                                     // AppletType: application
+            Entry(10, 0xFFFF8001, 0);                                                           // ProcessHandle (own process)
+            Entry(11, 0, 0);                                                                    // LastLoadResult
+            Entry(14, (ulong)Random.Shared.NextInt64(), (ulong)Random.Shared.NextInt64());      // RandomSeed
+            Entry(0, HomebrewArea + HomebrewInfoOffset, (ulong)info.Length);                    // EndOfList
+
+            // svc #7 (ExitProcess), then a branch to itself.
+            BitConverter.TryWriteBytes(area.AsSpan((int)HomebrewReturnOffset, 4), 0xD40000E1u);
+            BitConverter.TryWriteBytes(area.AsSpan((int)HomebrewReturnOffset + 4, 4), 0x14000000u);
+
+            CpuMemory.Write(HomebrewArea, area);
+        }
+
+        /// <summary>Reads the "start this next" buffers; called when the program exits.</summary>
+        public void ReadHomebrewNextLoad()
+        {
+            if (HomebrewArea == 0)
+            {
+                return;
+            }
+
+            try
+            {
+                static string Text(ReadOnlySpan<byte> raw)
+                {
+                    int end = raw.IndexOf((byte)0);
+
+                    return System.Text.Encoding.UTF8.GetString(end < 0 ? raw : raw[..end]);
+                }
+
+                HomebrewNextPath = Text(CpuMemory.GetSpan(HomebrewArea + HomebrewPathOffset, 0x200));
+                HomebrewNextArguments = Text(CpuMemory.GetSpan(HomebrewArea + HomebrewNextArgvOffset, 0x800));
+            }
+            catch (Exception)
+            {
+                HomebrewNextPath = null;
+            }
+        }
+
         public Result Start(int mainThreadPriority, ulong stackSize)
         {
             lock (_processLock)
@@ -658,10 +745,20 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
 
                 mainThread = new KThread(KernelContext);
 
+                // [Nextendo] A homebrew program started the way the homebrew loader starts it:
+                // the top of its stack holds the configuration of the loader (see HomebrewArguments).
+                ulong threadStackTop = stackTop;
+
+                if (HomebrewArguments != null && _mainThreadStackSize >= 0x10000)
+                {
+                    threadStackTop -= HomebrewAreaSize;
+                    HomebrewArea = threadStackTop;
+                }
+
                 result = mainThread.Initialize(
                     _entrypoint,
                     0,
-                    stackTop,
+                    threadStackTop,
                     mainThreadPriority,
                     DefaultCpuCore,
                     this,
@@ -684,7 +781,23 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
                     return result;
                 }
 
-                mainThread.SetEntryArguments(0, mainThreadHandle);
+                if (HomebrewArea != 0)
+                {
+                    WriteHomebrewEnvironment(mainThreadHandle);
+
+                    // X0 = the configuration, X1 = -1: "started by a loader".
+                    mainThread.Context.SetX(0, HomebrewArea);
+                    mainThread.Context.SetX(1, ulong.MaxValue);
+
+                    // The program returns to its loader when it is done: to two instructions
+                    // that end the process.
+                    mainThread.Context.SetX(30, HomebrewArea + HomebrewReturnOffset);
+                }
+                else
+                {
+                    mainThread.SetEntryArguments(0, mainThreadHandle);
+                }
+
                 mainThread.WriteHandleToThreadLocalRegion(mainThreadHandle);
 
                 ProcessState oldState = State;

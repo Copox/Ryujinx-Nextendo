@@ -1802,6 +1802,9 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
         [Svc(7)]
         public void ExitProcess()
         {
+            // [Nextendo] A homebrew program says what to start next in the buffers of its loader.
+            KernelStatic.GetCurrentProcess().ReadHomebrewNextLoad();
+
             KernelStatic.GetCurrentProcess().TerminateCurrentProcess();
         }
 

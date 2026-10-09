@@ -18,6 +18,8 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
     // a system applet.
     class RealApplet
     {
+        public bool Homebrew; // a homebrew program (.nro) run in the place of this applet
+
         public ulong Pid;
         public ulong CallerPid;
         public AppletId AppletId;
@@ -187,6 +189,12 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
 
             if (application.Pid != 0)
             {
+                // The memory of the game goes back to the pool: the next game needs it.
+                if (system.KernelContext.Processes.TryGetValue(application.Pid, out KProcess ended) && ended.State == ProcessState.Exited)
+                {
+                    ReleaseMemory(system, ended);
+                }
+
                 device.Processes.ClearProcess(application.Pid);
             }
 
@@ -320,6 +328,18 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
                 return null;
             }
 
+            // [Nextendo] As on a console running Atmosphere: the album opens the homebrew menu
+            // when there is one at the root of the SD card.
+            if (appletId == AppletId.PhotoViewer)
+            {
+                string homebrewMenu = System.IO.Path.Combine(VirtualFileSystem.GetSdCardPath(), "hbmenu.nro");
+
+                if (System.IO.File.Exists(homebrewMenu))
+                {
+                    return homebrewMenu;
+                }
+            }
+
             string path = device.System.ContentManager.GetInstalledContentPath(programId, StorageId.BuiltInSystem, NcaContentType.Program);
 
             return string.IsNullOrEmpty(path) ? null : VirtualFileSystem.SwitchPathToSystemPath(path);
@@ -379,7 +399,30 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
             // client waits on it.
             Thread thread = new(() =>
             {
-                ulong pid = device.Processes.LoadApplet(path, id => { applet.Pid = id; _applets[id] = applet; });
+                // A homebrew menu in the place of the album (see PathOf) is run the way the
+                // homebrew loader runs it: when it exits it names the program to start next,
+                // and when that one exits the menu comes back.
+                bool homebrew = path.EndsWith(".nro", StringComparison.OrdinalIgnoreCase);
+
+                applet.Homebrew = homebrew;
+                string menuPath = path;
+                string arguments = homebrew ? HomebrewCommandLine(path) : null;
+
+                while (true)
+                {
+                ulong pid = 0;
+
+                // The memory of the program that just ended is given back a moment after it
+                // exits: a homebrew that does not fit yet is tried again.
+                for (int attempt = 0; pid == 0 && attempt < (homebrew ? 24 : 1); attempt++)
+                {
+                    if (attempt > 0)
+                    {
+                        Thread.Sleep(250);
+                    }
+
+                    pid = device.Processes.LoadApplet(path, id => { applet.Pid = id; _applets[id] = applet; }, arguments);
+                }
 
                 if (pid == 0)
                 {
@@ -429,6 +472,55 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
                     Thread.Sleep(30);
                 }
 
+                if (!homebrew || applet.Exited)
+                {
+                    break;
+                }
+
+                string next = null, nextArguments = null;
+
+                if (system.KernelContext.Processes.TryGetValue(pid, out KProcess ended) && !string.IsNullOrEmpty(ended.HomebrewNextPath))
+                {
+                    next = HomebrewHostPath(ended.HomebrewNextPath);
+                    nextArguments = string.IsNullOrEmpty(ended.HomebrewNextArguments) ? HomebrewCommandLine(next) : ended.HomebrewNextArguments;
+
+                    if (next == null || !System.IO.File.Exists(next))
+                    {
+                        Logger.Warning?.Print(LogClass.ServiceAm, $"Homebrew: \"{ended.HomebrewNextPath}\" is not on the SD card.");
+
+                        next = null;
+                    }
+                }
+
+                if (next == null && path != menuPath)
+                {
+                    // A homebrew is over: back to the homebrew menu.
+                    next = menuPath;
+                    nextArguments = HomebrewCommandLine(menuPath);
+                }
+
+                if (next == null)
+                {
+                    ReleaseMemory(system, ended);
+
+                    break; // the menu itself was left: back to the HOME Menu
+                }
+
+                Logger.Notice.Print(LogClass.ServiceAm, $"Homebrew: process {pid} is over, starting \"{next}\".");
+
+                ReleaseMemory(system, ended);
+
+                Vi.SystemSharedBuffer.Release(device, pid);
+                _applets.TryRemove(pid, out _);
+                device.Processes.ClearProcess(pid);
+
+                applet.State = new AppletStateMgr(system);
+                applet.FocusGiven = false;
+
+                path = next;
+                arguments = nextArguments;
+                }
+
                 Finish(device, applet);
             })
             {
@@ -437,6 +529,39 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
             };
 
             thread.Start();
+        }
+
+        // "sdmc:/switch/x.nro" -> the file in the folder that is the SD card.
+        private static string HomebrewHostPath(string guestPath)
+        {
+            string relative = guestPath;
+
+            int colon = relative.IndexOf(':');
+
+            if (colon >= 0)
+            {
+                relative = relative[(colon + 1)..];
+            }
+
+            relative = relative.TrimStart('/', '\\');
+
+            if (relative.Contains(".."))
+            {
+                return null;
+            }
+
+            return System.IO.Path.Combine(VirtualFileSystem.GetSdCardPath(), relative.Replace('/', System.IO.Path.DirectorySeparatorChar));
+        }
+
+        // The command line a homebrew gets when the menu gives none: its own path, quoted.
+        private static string HomebrewCommandLine(string hostPath)
+        {
+            string card = VirtualFileSystem.GetSdCardPath();
+            string relative = hostPath != null && hostPath.StartsWith(card, StringComparison.OrdinalIgnoreCase)
+                ? hostPath[card.Length..].Replace('\\', '/').TrimStart('/')
+                : System.IO.Path.GetFileName(hostPath ?? "");
+
+            return "\"sdmc:/" + relative + "\"";
         }
 
         // The applet said it is done (ExitProcessAndReturn): it then sleeps until it is killed.
@@ -462,12 +587,50 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
             _applets.TryRemove(pid, out _);
             device.Processes.ClearProcess(pid);
 
+            if (applet.Homebrew)
+            {
+                // A homebrew draws on a screen of its own: the picture goes back to the caller.
+                device.Processes.SetActive(applet.CallerPid);
+                Vi.SystemSharedBuffer.Show(device, applet.CallerPid);
+            }
+
             applet.Exited = true;
             applet.OnExited?.Invoke();
 
             HomeMenuStatus.Set(TryGet(applet.CallerPid, out RealApplet caller) ? caller.AppletId.ToString() : "");
 
             StateFor(system, applet.CallerPid).SetFocus(true);
+        }
+
+        // What a program that ended still holds goes back to the pool, for the next one.
+        private static void ReleaseMemory(Horizon system, KProcess process)
+        {
+            if (process == null)
+            {
+                return;
+            }
+
+            KProcess helperProcess = new(system.KernelContext);
+            KThread helper = new(system.KernelContext);
+
+            helper.Initialize(0, 0, 0, 3, 0, helperProcess, ThreadType.Kernel, () =>
+            {
+                try
+                {
+                    ulong released = process.MemoryManager.ReleaseOwnedMemory();
+
+                    Logger.Notice.Print(LogClass.ServiceAm, $"Process {process.Pid}: {released / (1024 * 1024)} MiB given back.");
+                }
+                catch (Exception e)
+                {
+                    Logger.Warning?.Print(LogClass.ServiceAm, $"Process {process.Pid}: memory not given back ({e.Message}).");
+                }
+
+                KernelStatic.GetCurrentThread().Exit();
+            });
+
+            helper.Start();
+            helper.HostThread.Join();
         }
 
         private static void Terminate(Horizon system, KProcess process)

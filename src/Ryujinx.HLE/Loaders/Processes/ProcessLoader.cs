@@ -262,8 +262,13 @@ namespace Ryujinx.HLE.Loaders.Processes
 
         // [Nextendo, HOME Menu work] A library applet started by a running system applet: a
         // process next to the active one, which stays the active one.
-        public ulong LoadApplet(string path, System.Action<ulong> beforeStart)
+        public ulong LoadApplet(string path, System.Action<ulong> beforeStart, string homebrewArguments = null)
         {
+            if (Path.GetExtension(path).Equals(".nro", StringComparison.OrdinalIgnoreCase))
+            {
+                return LoadHomebrewApplet(path, beforeStart, homebrewArguments);
+            }
+
             FileStream file = new(path, FileMode.Open, FileAccess.Read);
             Nca nca = new(_device.Configuration.VirtualFileSystem.KeySet, file.AsStorage(false));
 
@@ -272,6 +277,88 @@ namespace Ryujinx.HLE.Loaders.Processes
             if (processResult.ProcessId != 0 && _processesByPid.TryAdd(processResult.ProcessId, processResult))
             {
                 beforeStart?.Invoke(processResult.ProcessId);
+
+                if (processResult.Start(_device))
+                {
+                    return processResult.ProcessId;
+                }
+
+                _processesByPid.TryRemove(processResult.ProcessId, out _);
+            }
+
+            return 0;
+        }
+
+        // [Nextendo] A homebrew program (.nro) started next to the HOME Menu, in the place of
+        // one of its applets (the homebrew menu in the place of the album).
+        private ulong LoadHomebrewApplet(string path, System.Action<ulong> beforeStart, string arguments)
+        {
+            BlitStruct<ApplicationControlProperty> nacpData = new(1);
+            IFileSystem dummyExeFs = null;
+
+            FileStream input = new(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            NroExecutable nro = new(input.AsStorage());
+            Stream romfsStream = null;
+
+            IStorage romFsStorage = nro.OpenNroAssetSection(LibHac.Tools.Ro.NroAssetType.RomFs, false);
+            romFsStorage.GetSize(out long romFsSize).ThrowIfFailure();
+
+            if (romFsSize != 0)
+            {
+                romfsStream = romFsStorage.AsStream();
+            }
+
+            IStorage nacpStorage = nro.OpenNroAssetSection(LibHac.Tools.Ro.NroAssetType.Nacp, false);
+            nacpStorage.GetSize(out long nacpSize).ThrowIfFailure();
+
+            if (nacpSize != 0)
+            {
+                nacpStorage.Read(0, nacpData.ByteSpan);
+            }
+
+            // The description every homebrew runs under, with the 39-bit address space the
+            // homebrew loader has on a console (the default one, 36-bit, has no room for the
+            // memory regions of a large homebrew).
+            byte[] npdm = Ryujinx.Common.EmbeddedResources.Read("Ryujinx.HLE/Homebrew.npdm");
+
+            npdm[0x0C] = (byte)((npdm[0x0C] & ~0x0E) | (3 << 1));
+
+            // Its memory comes from the pool of applications (bits 2 to 5 of the flags of the
+            // access control data name the pool; the description names a smaller one).
+            int acid = BitConverter.ToInt32(npdm, 0x78);
+
+            Logger.Info?.Print(LogClass.Loader, $"Homebrew description: memory pool {(npdm[acid + 0x20C] >> 2) & 0xF} -> 0 (applications)");
+
+            npdm[acid + 0x20C] = (byte)(npdm[acid + 0x20C] & ~0x3C);
+
+            LibHac.Loader.MetaLoader meta = new();
+
+            meta.Load(npdm).ThrowIfFailure();
+
+            ProcessResult processResult = ProcessLoaderHelper.LoadNsos(_device,
+                                                                       _device.System.KernelContext,
+                                                                       meta,
+                                                                       nacpData,
+                                                                       diskCacheEnabled: false,
+                                                                       diskCacheSelector: null,
+                                                                       allowCodeMemoryForJit: true,
+                                                                       Path.GetFileNameWithoutExtension(path),
+                                                                       0x010000000000100D,
+                                                                       0,
+                                                                       null,
+                                                                       nro);
+
+            if (processResult.ProcessId != 0 && _processesByPid.TryAdd(processResult.ProcessId, processResult))
+            {
+                if (romfsStream != null)
+                {
+                    _device.Configuration.VirtualFileSystem.SetRomFs(processResult.ProcessId, romfsStream);
+                }
+
+                beforeStart?.Invoke(processResult.ProcessId);
+
+                // Started the way the homebrew loader does it (see KProcess.HomebrewArguments).
+                _device.System.KernelContext.Processes[processResult.ProcessId].HomebrewArguments = arguments ?? string.Empty;
 
                 if (processResult.Start(_device))
                 {

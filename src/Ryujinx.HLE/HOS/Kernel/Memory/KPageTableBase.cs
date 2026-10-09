@@ -986,6 +986,58 @@ namespace Ryujinx.HLE.HOS.Kernel.Memory
             }
         }
 
+        /// <summary>
+        /// [Nextendo] Gives back to its pool the memory a process that ended still holds (its
+        /// code, heap and stacks). Nothing did: one program ran for the whole session. With
+        /// programs started and ended next to the HOME Menu, the pool emptied after the first.
+        /// </summary>
+        public ulong ReleaseOwnedMemory()
+        {
+            ulong released = 0;
+
+            lock (_blockManager)
+            {
+                System.Collections.Generic.List<(ulong Address, ulong Size)> owned = new();
+
+                ulong address = AddrSpaceStart;
+
+                while (address < AddrSpaceEnd)
+                {
+                    KMemoryInfo info = _blockManager.FindBlock(address).GetInfo();
+
+                    ulong blockAddress = info.Address;
+                    ulong blockSize = info.Size;
+
+                    if (info.State is MemoryState.Heap or MemoryState.CodeStatic or MemoryState.CodeMutable or MemoryState.Stack &&
+                        info.IpcRefCount == 0 && info.DeviceRefCount == 0 && info.Attribute == MemoryAttribute.None)
+                    {
+                        owned.Add((blockAddress, blockSize));
+                    }
+
+                    if (blockSize == 0 || blockAddress + blockSize <= address)
+                    {
+                        break;
+                    }
+
+                    address = blockAddress + blockSize;
+                }
+
+                foreach ((ulong blockAddress, ulong blockSize) in owned)
+                {
+                    ulong pagesCount = blockSize / PageSize;
+
+                    if (Unmap(blockAddress, pagesCount) == Result.Success)
+                    {
+                        _blockManager.InsertBlock(blockAddress, pagesCount, MemoryState.Unmapped);
+
+                        released += blockSize;
+                    }
+                }
+            }
+
+            return released;
+        }
+
         public KMemoryInfo QueryMemory(ulong address)
         {
             if (address >= AddrSpaceStart &&
