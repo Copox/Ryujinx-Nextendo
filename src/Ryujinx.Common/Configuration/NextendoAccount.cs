@@ -163,6 +163,13 @@ namespace Ryujinx.Common.Configuration
                     _profileUserId = "";
                     _miiData = "";
                 }
+                // The local profile this account used before (a session that expired, a
+                // logout): signing in again takes it back, with its saves, as a console asks
+                // to sign in again to the same user rather than making a new one.
+                if (string.IsNullOrEmpty(_profileUserId) && pid != 0)
+                {
+                    _profileUserId = LinkedProfile(pid);
+                }
                 _pid = pid;
                 Username = username ?? "";
                 FriendCode = friendCode ?? "";
@@ -195,8 +202,59 @@ namespace Ryujinx.Common.Configuration
             }
         }
 
+        // pid=profile lines: which local profile each Nextendo account was bound to. Kept apart
+        // from the session, so that losing the session never loses the link.
+        private static string LinksPath => Path.Combine(AppDataManager.BaseDirPath, "nextendo_profile_links.txt");
+
+        private static string LinkedProfile(ulong pid)
+        {
+            try
+            {
+                if (File.Exists(LinksPath))
+                {
+                    foreach (string line in File.ReadAllLines(LinksPath))
+                    {
+                        int eq = line.IndexOf('=');
+                        if (eq > 0 && ulong.TryParse(line[..eq].Trim(), out ulong p) && p == pid)
+                        {
+                            return line[(eq + 1)..].Trim();
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // no link known
+            }
+
+            return "";
+        }
+
+        private static void RememberLinkLocked()
+        {
+            if (_pid == 0 || string.IsNullOrEmpty(_profileUserId) || LinkedProfile(_pid) == _profileUserId)
+            {
+                return;
+            }
+
+            try
+            {
+                System.Collections.Generic.List<string> lines = File.Exists(LinksPath) ? [.. File.ReadAllLines(LinksPath)] : [];
+
+                lines.RemoveAll(l => l.StartsWith(_pid + "=", StringComparison.Ordinal));
+                lines.Add($"{_pid}={_profileUserId}");
+                File.WriteAllLines(LinksPath, lines);
+            }
+            catch
+            {
+                // best effort
+            }
+        }
+
         private static void WriteFileLocked()
         {
+            RememberLinkLocked();
+
             try
             {
                 // ⚠️ Les champs BRUTS, jamais les propriétés. Pid et NexToken se taisent en mode
