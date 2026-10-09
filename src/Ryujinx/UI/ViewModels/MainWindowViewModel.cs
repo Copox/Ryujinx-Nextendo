@@ -246,6 +246,20 @@ namespace Ryujinx.Ava.UI.ViewModels
         {
             Applications = [];
 
+            // [Nextendo, HOME Menu work] A program asks the console to restart or to turn off
+            // (a homebrew's reboot button, the power menu): the emulation restarts or stops.
+            Ryujinx.HLE.HOS.HomeMenuStatus.PowerRequested += reboot => Dispatcher.UIThread.Post(() =>
+            {
+                if (reboot)
+                {
+                    RestartEmulation();
+                }
+                else
+                {
+                    AppHost?.Stop();
+                }
+            });
+
             Applications.ToObservableChangeSet()
                 .Filter(Filter)
                 .Sort(GetComparer())

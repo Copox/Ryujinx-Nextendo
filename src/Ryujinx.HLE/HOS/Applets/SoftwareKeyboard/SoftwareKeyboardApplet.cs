@@ -195,7 +195,13 @@ namespace Ryujinx.HLE.HOS.Applets
                 _keyboardForegroundConfig.StringLengthMax = 100;
             }
 
-            if (_device.UIHandler == null)
+            // [Nextendo, HOME Menu work] Scripted runs answer the keyboard with a set text.
+            if (System.Environment.GetEnvironmentVariable("NEXTENDO_SWKBD_TEXT") is { Length: > 0 } scripted)
+            {
+                _textValue = scripted;
+                _lastResult = KeyboardResult.Accept;
+            }
+            else if (_device.UIHandler == null)
             {
                 Logger.Warning?.Print(LogClass.Application, "GUI Handler is not set. Falling back to default");
 

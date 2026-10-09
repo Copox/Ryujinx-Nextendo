@@ -129,16 +129,18 @@ namespace Ryujinx.HLE.HOS.Services.Settings
             return ResultCode.Success;
         }
 
-        private static bool _colorSetRead;
+        // Read once per emulated system: a restart of the HOME Menu makes a new one, with the
+        // default theme again.
+        private static object _colorSetReadFor;
 
         // The theme the user chose last; with none chosen yet, Basic Black when a custom HOME Menu
         // theme is installed (those are made for it: on Basic White their text comes out dark on
         // a dark background).
         private static ColorSet SavedColorSet(ServiceCtx context)
         {
-            if (!_colorSetRead)
+            if (!ReferenceEquals(_colorSetReadFor, context.Device.System))
             {
-                _colorSetRead = true;
+                _colorSetReadFor = context.Device.System;
 
                 try
                 {

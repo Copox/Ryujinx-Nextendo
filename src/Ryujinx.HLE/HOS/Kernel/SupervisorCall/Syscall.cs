@@ -1938,6 +1938,15 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
                 // TODO: Debug events.
                 currentThread.Owner.TerminateCurrentProcess();
 
+                // [Nextendo, HOME Menu work] A program that is not the game (a homebrew in the
+                // album, a system applet) only ends itself, as on a console: the menu, and
+                // hbmenu after a homebrew, carry on. The game alone still stops the emulation.
+                if (currentThread.Owner.HomebrewArea != 0 ||
+                    _context.Device.Processes.ActiveApplication is not { } game || game.ProcessId != currentThread.Owner.Pid)
+                {
+                    return;
+                }
+
                 throw new GuestBrokeExecutionException();
             }
             else

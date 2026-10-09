@@ -256,10 +256,38 @@ namespace Ryujinx.HLE.HOS.Services.Ssl.SslService
             return ResultCode.WouldBlock;
         }
 
+        // [Nextendo] Data the TLS layer already took off the socket and decrypted: the socket
+        // itself has nothing more to read, yet a read returns it at once. Asked through the
+        // stream's own buffer (no public way to know it).
+        private static readonly System.Reflection.FieldInfo _bufferField =
+            typeof(SslStream).GetField("_buffer", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+        private int Buffered()
+        {
+            try
+            {
+                object buffer = _bufferField?.GetValue(_stream);
+
+                if (buffer is null)
+                {
+                    return 0;
+                }
+
+                System.Type type = buffer.GetType();
+                int decrypted = (int)(type.GetProperty("DecryptedLength")?.GetValue(buffer) ?? 0);
+                int encrypted = (int)(type.GetProperty("EncryptedLength")?.GetValue(buffer) ?? 0);
+
+                return decrypted > 0 ? decrypted : encrypted > 0 ? 1 : 0;
+            }
+            catch
+            {
+                return 0;
+            }
+        }
+
         public int Pending()
         {
-            // Unsupported
-            return 0;
+            return _stream is null ? 0 : Buffered();
         }
 
         private bool TryTranslateWinSockError(bool isBlocking, WsaError error, out ResultCode resultCode)
@@ -283,7 +311,7 @@ namespace Ryujinx.HLE.HOS.Services.Ssl.SslService
 
         public ResultCode Read(out int readCount, Memory<byte> buffer)
         {
-            if (!Socket.Poll(0, SelectMode.SelectRead))
+            if (Buffered() == 0 && !Socket.Poll(0, SelectMode.SelectRead))
             {
                 readCount = -1;
 

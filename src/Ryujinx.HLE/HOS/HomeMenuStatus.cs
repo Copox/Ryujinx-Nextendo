@@ -12,6 +12,21 @@ namespace Ryujinx.HLE.HOS
 
         public static event Action Changed;
 
+        /// <summary>The console is asked to restart (true) or to turn off (false).</summary>
+        public static event Action<bool> PowerRequested;
+
+        public static void RequestPower(bool reboot)
+        {
+            try
+            {
+                PowerRequested?.Invoke(reboot);
+            }
+            catch (Exception)
+            {
+                // the request is lost, nothing else
+            }
+        }
+
         internal static void Set(string applet)
         {
             if (Applet != applet)
