@@ -879,6 +879,11 @@ namespace Ryujinx.Ava.UI.Windows
                             // Its own icon on the loading screen, not the generic NCA cartridge.
                             ViewModel.SelectedIcon = Ryujinx.Common.EmbeddedResources.Read("Ryujinx/Assets.UIImages.Icon_HomeMenu.png");
                             ViewModel.LoadIconRadius = new Avalonia.CornerRadius(36);
+
+                            // The menu itself as a title: what the user's own page shows as
+                            // "playing" while no game runs.
+                            Ryujinx.Common.Configuration.NextendoGames.Remember(
+                                Ryujinx.Common.Configuration.NextendoGames.HomeMenuId, "Menu HOME", ViewModel.SelectedIcon);
                         }
 
                         // The games of the library are the titles "installed" on that console.

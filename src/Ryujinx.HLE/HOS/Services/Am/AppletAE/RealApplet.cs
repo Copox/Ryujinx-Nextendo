@@ -85,6 +85,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
             };
 
             _application = application;
+            Ryujinx.Common.Configuration.NextendoGames.Playing = title.Id;
 
             Thread thread = new(() =>
             {
@@ -181,6 +182,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
             if (_application == application)
             {
                 _application = null;
+                Ryujinx.Common.Configuration.NextendoGames.Playing = Ryujinx.Common.Configuration.NextendoGames.HomeMenuId;
             }
 
             if (application.Pid != 0)

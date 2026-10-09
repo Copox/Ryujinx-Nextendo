@@ -1189,16 +1189,32 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
         }
 
         [CmifCommand(20601)]
-        public Result GetUserPresenceViewV2([Buffer(HipcBufferFlags.Out | HipcBufferFlags.Pointer, 0xE0)] out UserPresenceViewImpl userPresenceView, Uid userId)
+        public Result GetUserPresenceViewV2([Buffer(HipcBufferFlags.Out | HipcBufferFlags.Pointer, UserPresenceViewV2Impl.Size)] out UserPresenceViewV2Impl userPresenceView, Uid userId)
         {
             userPresenceView = default;
+
+            Span<byte> view = MemoryMarshal.AsBytes(MemoryMarshal.CreateSpan(ref userPresenceView, 1));
 
             // The signed-in Nextendo profile is online; any other local profile is not.
             if (IsNextendoProfile(userId) && NextendoAccount.IsLinked)
             {
-                int at = int.TryParse(Environment.GetEnvironmentVariable("NEXTENDO_OWN_PRESENCE_AT"), System.Globalization.NumberStyles.HexNumber, null, out int given) ? given : 0x18;
+                string fill = Environment.GetEnvironmentVariable("NEXTENDO_OWN_PRESENCE_FILL");
 
-                MemoryMarshal.AsBytes(MemoryMarshal.CreateSpan(ref userPresenceView, 1))[at] = (byte)PresenceStatus.Online;
+                if (fill != null)
+                {
+                    string[] range = fill.Split('-');
+                    int from = Convert.ToInt32(range[0], 16), to = Convert.ToInt32(range[1], 16);
+                    byte value = range.Length > 2 ? Convert.ToByte(range[2], 16) : (byte)1;
+
+                    view[from..to].Fill(value);
+                }
+                else
+                {
+                    // Like a friend's record: the application being played first, then the
+                    // presence, whose status is 0x18 further (found by probing).
+                    BitConverter.TryWriteBytes(view[..8], NextendoGames.Playing);
+                    view[0x20] = (byte)PresenceStatus.OnlinePlay;
+                }
             }
 
             Logger.Stub?.PrintStub(LogClass.ServiceFriend, new { userId });

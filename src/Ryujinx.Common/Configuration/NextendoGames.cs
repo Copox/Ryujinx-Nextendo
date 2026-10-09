@@ -12,6 +12,14 @@ namespace Ryujinx.Common.Configuration
     {
         public readonly record struct Game(string Name, byte[] Icon);
 
+        public const ulong HomeMenuId = 0x0100000000001000;
+
+        /// <summary>
+        /// What the user of this console is in right now, when the HOME Menu runs: the game
+        /// started from it, or the menu itself.
+        /// </summary>
+        public static ulong Playing { get; set; } = HomeMenuId;
+
         private static readonly ConcurrentDictionary<ulong, Game> _games = new();
 
         public static void Remember(ulong titleId, string name, byte[] icon)

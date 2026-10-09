@@ -51,7 +51,7 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
         Result GetProfileExtraList(Span<ProfileExtraImpl> extraList, Uid userId, ReadOnlySpan<NetworkServiceAccountId> friendIds);
         Result GetRelationship(out Relationship relationship, Uid userId, NetworkServiceAccountId friendId);
         Result GetUserPresenceView(out UserPresenceViewImpl userPresenceView, Uid userId);
-        Result GetUserPresenceViewV2(out UserPresenceViewImpl userPresenceView, Uid userId);
+        Result GetUserPresenceViewV2(out UserPresenceViewV2Impl userPresenceView, Uid userId);
         Result GetPlayHistoryList(out int count, Span<PlayHistoryImpl> playHistoryList, Uid userId, int arg3);
         Result GetPlayHistoryStatistics(out PlayHistoryStatistics statistics, Uid userId);
         Result LoadUserSetting(out UserSettingImpl userSetting, Uid userId);
