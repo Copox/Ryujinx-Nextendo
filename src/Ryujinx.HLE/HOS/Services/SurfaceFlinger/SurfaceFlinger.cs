@@ -368,6 +368,20 @@ namespace Ryujinx.HLE.HOS.Services.SurfaceFlinger
 
                 Layer layer = GetLayerByIdLocked(RenderLayerId);
 
+                // [Nextendo] A program that is not on screen keeps drawing (a game behind the HOME
+                // Menu): its frames are taken and dropped. Left in its queue, they filled it, the
+                // program waited for a free buffer inside the display server, and that server stopped
+                // answering everybody, the menu included.
+                foreach (KeyValuePair<long, Layer> pair in _layers)
+                {
+                    if (pair.Key != RenderLayerId && pair.Value.Consumer.AcquireBuffer(out BufferItem hidden, 0) == Status.Success)
+                    {
+                        AndroidFence noFence = AndroidFence.NoFence;
+
+                        pair.Value.Consumer.ReleaseBuffer(hidden, ref noFence);
+                    }
+                }
+
                 Status acquireStatus = layer.Consumer.AcquireBuffer(out BufferItem item, 0);
 
                 if (acquireStatus == Status.Success)
