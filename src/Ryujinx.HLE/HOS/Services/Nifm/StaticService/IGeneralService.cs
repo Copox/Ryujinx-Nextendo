@@ -159,15 +159,19 @@ namespace Ryujinx.HLE.HOS.Services.Nifm.StaticService
         // GetInternetConnectionStatus() -> nn::nifm::detail::sf::InternetConnectionStatus
         public ResultCode GetInternetConnectionStatus(ServiceCtx context)
         {
-            if (!NetworkInterface.GetIsNetworkAvailable())
+            // [Nextendo, HOME Menu work] The link of the computer itself: wireless with its
+            // strength, cable, or none (the HOME Menu draws its top right icon from this).
+            HostNetwork.Reading host = HostNetwork.Current;
+
+            if (host.Link == HostNetwork.Link.None)
             {
                 return ResultCode.NoInternetConnection;
             }
 
             InternetConnectionStatus internetConnectionStatus = new()
             {
-                Type = InternetConnectionType.WiFi,
-                WifiStrength = 3,
+                Type = host.Link == HostNetwork.Link.Cable ? InternetConnectionType.Ethernet : InternetConnectionType.WiFi,
+                WifiStrength = host.Bars,
                 State = InternetConnectionState.Connected,
             };
 
@@ -229,10 +233,20 @@ namespace Ryujinx.HLE.HOS.Services.Nifm.StaticService
             }
         }
         [CommandCmif(17)]
+        // IsWirelessCommunicationEnabled() -> bool
+        public ResultCode IsWirelessCommunicationEnabled(ServiceCtx context)
+        {
+            // False is airplane mode: the one of the computer, when it has one.
+            context.ResponseData.Write(!HostNetwork.Current.Airplane);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(20)]
         // IsEthernetCommunicationEnabled() -> bool
         public ResultCode IsEthernetCommunicationEnabled(ServiceCtx context)
         {
-            context.ResponseData.Write(false);
+            context.ResponseData.Write(true);
 
             return ResultCode.Success;
         }
