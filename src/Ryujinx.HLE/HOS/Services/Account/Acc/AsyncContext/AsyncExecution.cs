@@ -15,6 +15,9 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AsyncContext
         public bool IsInitialized { get; private set; }
         public bool IsRunning { get; private set; }
 
+        // [Nextendo] The result GetResult gives once the work is over.
+        public ResultCode Result { get; set; } = ResultCode.Success;
+
         public AsyncExecution(KEvent asyncEvent)
         {
             SystemEvent = asyncEvent;

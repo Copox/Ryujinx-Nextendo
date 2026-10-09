@@ -20,6 +20,8 @@ namespace Ryujinx.HLE.HOS.Applets
                     return new ErrorApplet(system);
                 case AppletId.PlayerSelect:
                     return new PlayerSelectApplet(system);
+                case (AppletId)0x36: // [Nextendo] the sign-in page of a Nintendo Account (recent firmware)
+                    return new NextendoLoginApplet(system);
                 case AppletId.SoftwareKeyboard:
                     return new SoftwareKeyboardApplet(system);
                 case AppletId.LibAppletWeb:

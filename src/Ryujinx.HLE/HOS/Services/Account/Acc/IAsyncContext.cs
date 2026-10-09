@@ -73,7 +73,7 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc
                 return ResultCode.Unknown41;
             }
 
-            return ResultCode.Success;
+            return AsyncExecution.Result;
         }
     }
 }

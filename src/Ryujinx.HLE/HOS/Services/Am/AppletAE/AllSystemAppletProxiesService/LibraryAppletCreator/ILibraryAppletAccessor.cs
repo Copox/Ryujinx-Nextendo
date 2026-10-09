@@ -81,18 +81,30 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Lib
 
         // [Nextendo, HOME Menu work] Winding: the applet this accessor was made for is started
         // by the system, in the place of the one that asked for it (which ended meanwhile).
-        public RealApplet StartInPlaceOf(Switch device, ulong callerPid)
+        // Returns what tells when that applet is over.
+        public Func<bool> StartInPlaceOf(Switch device, ulong callerPid)
         {
             if (_real == null)
             {
-                return null;
+                // An applet of the emulator (the Nextendo sign-in page): over when it says so.
+                if (_applet == null)
+                {
+                    return () => true;
+                }
+
+                bool over = false;
+
+                _applet.AppletStateChanged += (_, _) => over = true;
+                _applet.Start(_normalSession.GetConsumer(), _interactiveSession.GetConsumer());
+
+                return () => over;
             }
 
             _real.CallerPid = callerPid;
 
             RealAppletManager.Start(device, _real, _realPath);
 
-            return _real;
+            return () => _real.Exited;
         }
 
         // The accessor handed again to the applet that wound, in its new process: the handles

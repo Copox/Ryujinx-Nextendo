@@ -538,9 +538,9 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
                     _applets.TryRemove(pid, out _);
                     device.Processes.ClearProcess(pid);
 
-                    RealApplet other = reserved.StartInPlaceOf(device, applet.CallerPid);
+                    Func<bool> otherIsOver = reserved.StartInPlaceOf(device, applet.CallerPid);
 
-                    while (other != null && !other.Exited && !system.Stopping)
+                    while (!otherIsOver() && !system.Stopping)
                     {
                         Thread.Sleep(30);
                     }

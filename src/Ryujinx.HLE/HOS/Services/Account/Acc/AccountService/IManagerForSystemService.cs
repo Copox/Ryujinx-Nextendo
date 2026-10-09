@@ -56,6 +56,9 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
         {
             // [Nextendo, HOME Menu work] The Nintendo Account the user page shows in its header
             // ("Nintendo Account (e-mail)").
+            Ryujinx.Common.Logging.Logger.Info?.Print(Ryujinx.Common.Logging.LogClass.ServiceAcc,
+                $"[acc] 136: recv {context.Request.ReceiveBuff.Count} ({(context.Request.ReceiveBuff.Count > 0 ? context.Request.ReceiveBuff[0].Size : 0):X}), recvlist {context.Request.RecvListBuff.Count} ({(context.Request.RecvListBuff.Count > 0 ? context.Request.RecvListBuff[0].Size : 0):X}), in {context.RequestData.BaseStream.Length} bytes");
+
             if (context.Request.ReceiveBuff.Count == 0)
             {
                 return ResultCode.Success;
@@ -73,7 +76,8 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
             }
 
             context.Memory.Write(position, cache);
-            context.ResponseData.Write(0UL);
+
+            context.ResponseData.Write(System.Environment.GetEnvironmentVariable("NEXTENDO_NA_PROBE") == "1" ? 0x1122334455667788UL : 0UL);
 
             return ResultCode.Success;
         }

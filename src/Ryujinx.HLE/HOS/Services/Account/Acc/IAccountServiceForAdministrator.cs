@@ -7,6 +7,63 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc
     [Service("acc:su", AccountServiceFlag.Administrator)] // Max Sessions: 8
     class IAccountServiceForAdministrator : IpcService
     {
+        // [Nextendo, HOME Menu work] "Link a Nintendo Account" (user import, user creation): the
+        // procedure links the Nextendo account, signed in from the browser.
+        [CommandCmif(211)] // 8.0.0+
+        // CreateProcedureToRegisterUserWithNintendoAccount(u32, handle<copy>) -> object<IOAuthProcedureForUserRegistration>
+        public ResultCode CreateProcedureToRegisterUserWithNintendoAccount(ServiceCtx context)
+        {
+            IpcService.CloseReceivedHandles(context);
+
+            MakeObject(context, new IOAuthProcedureForUserRegistration());
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(212)] // 8.0.0+
+        // ResumeProcedureToRegisterUserWithNintendoAccount(Uuid, u32, handle<copy>) -> object<IOAuthProcedureForUserRegistration>
+        public ResultCode ResumeProcedureToRegisterUserWithNintendoAccount(ServiceCtx context)
+        {
+            return CreateProcedureToRegisterUserWithNintendoAccount(context);
+        }
+
+        [CommandCmif(213)] // 17.0.0+
+        // CreateProcedureToCreateUserWithNintendoAccount(...) -> object<IOAuthProcedureForUserRegistration>
+        public ResultCode CreateProcedureToCreateUserWithNintendoAccount(ServiceCtx context)
+        {
+            return CreateProcedureToRegisterUserWithNintendoAccount(context);
+        }
+
+        [CommandCmif(214)] // 17.0.0+
+        // ResumeProcedureToCreateUserWithNintendoAccount(...) -> object<IOAuthProcedureForUserRegistration>
+        public ResultCode ResumeProcedureToCreateUserWithNintendoAccount(ServiceCtx context)
+        {
+            return CreateProcedureToRegisterUserWithNintendoAccount(context);
+        }
+
+        [CommandCmif(215)] // 17.0.0+
+        // ResumeProcedureToCreateUserWithNintendoAccountAfterApplyResponse(...) -> object<IOAuthProcedureForUserRegistration>
+        public ResultCode ResumeProcedureToCreateUserWithNintendoAccountAfterApplyResponse(ServiceCtx context)
+        {
+            return CreateProcedureToRegisterUserWithNintendoAccount(context);
+        }
+
+        // [Nextendo, HOME Menu work] Asked before the user import (PlayerSelect): the network
+        // service is there, at once.
+        [CommandCmif(230)]
+        // AuthenticateServiceAsync() -> object<nn::account::detail::IAsyncContext>
+        public ResultCode AuthenticateServiceAsync(ServiceCtx context)
+        {
+            Ryujinx.HLE.HOS.Kernel.Threading.KEvent asyncEvent = new(context.Device.System.KernelContext);
+            AsyncContext.AsyncExecution asyncExecution = new(asyncEvent);
+
+            asyncExecution.Initialize(1000, _ => System.Threading.Tasks.Task.CompletedTask);
+
+            MakeObject(context, new IAsyncContext(asyncExecution));
+
+            return ResultCode.Success;
+        }
+
         // [Nextendo, HOME Menu work] The command took this number in 19.0.0.
         [CommandCmif(52)] // 19.0.0+
         // TrySelectUserWithoutInteraction(bool) -> nn::account::Uid

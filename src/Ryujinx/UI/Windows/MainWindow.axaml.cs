@@ -492,6 +492,23 @@ namespace Ryujinx.Ava.UI.Windows
             // [Nextendo, HOME Menu work] A nickname or icon changed from the user page of the HOME
             // Menu goes to the Nextendo account first (the account is the source of truth): the
             // same rule as the profile editor of the emulator.
+            // [Nextendo, HOME Menu work] "Link an account" on the console (user import): the
+            // Nextendo sign-in in the browser, and the picture of the account.
+            Ryujinx.Common.Configuration.NextendoAccountLink.SignIn = () => Ryujinx.Ava.Common.NextendoApi.SignInWithBrowserAsync();
+            Ryujinx.Common.Configuration.NextendoAccountLink.Picture = () =>
+            {
+                try
+                {
+                    using System.Net.Http.HttpClient http = new() { Timeout = TimeSpan.FromSeconds(10) };
+
+                    return http.GetByteArrayAsync($"{Ryujinx.Common.Configuration.NextendoEndpoint.Canonical.TrimEnd('/')}/api/avatar?pid={Ryujinx.Common.Configuration.NextendoAccount.Pid}").GetAwaiter().GetResult();
+                }
+                catch (Exception)
+                {
+                    return null;
+                }
+            };
+
             Ryujinx.Common.Configuration.NextendoProfileEdits.Push = (userId, name, image) =>
             {
                 if (!Ryujinx.Common.Configuration.NextendoAccount.IsLinked ||
