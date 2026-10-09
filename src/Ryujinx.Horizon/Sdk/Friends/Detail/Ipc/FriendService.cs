@@ -843,6 +843,14 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                         BitConverter.TryWriteBytes(slot.Slice(0x18, 4), 1);
                         BitConverter.TryWriteBytes(slot.Slice(0x1C, 4), (int)Math.Min(int.MaxValue, played[g].Seconds / 60));
                         BitConverter.TryWriteBytes(slot.Slice(0x28, 8), played[g].LastPlayed);
+
+                        if (Environment.GetEnvironmentVariable("NEXTENDO_HISTORY_FILL") is string fill)
+                        {
+                            // "from-to" (hex, inside the entry): those bytes are set to 1.
+                            string[] range = fill.Split('-');
+
+                            slot[Convert.ToInt32(range[0], 16)..Convert.ToInt32(range[1], 16)].Fill(1);
+                        }
                     }
 
                     // The game being played now, for the top line of the page: its id sits at
@@ -1264,6 +1272,30 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
         public Result LoadUserSettingV2([Buffer(HipcBufferFlags.Out | HipcBufferFlags.Pointer, 0x800)] out UserSettingImpl userSetting, Uid userId)
         {
             userSetting = default;
+
+            Span<byte> setting = MemoryMarshal.AsBytes(MemoryMarshal.CreateSpan(ref userSetting, 1));
+
+            if (IsNextendoProfile(userId) && NextendoAccount.IsLinked)
+            {
+                // The user's own settings: who they are, then their friend code as text.
+                MemoryMarshal.Write(setting, in userId);
+
+                int codeAt = int.TryParse(Environment.GetEnvironmentVariable("NEXTENDO_FRIEND_CODE_AT"), System.Globalization.NumberStyles.HexNumber, null, out int given) ? given : 0x20;
+                string code = NextendoAccount.FriendCode ?? "";
+
+                if (Environment.GetEnvironmentVariable("NEXTENDO_USER_SETTING_PROBE") == "1")
+                {
+                    // Text that names its own offset every 16 bytes: what the page shows tells where it reads.
+                    for (int at = 0x10; at + 16 <= setting.Length; at += 16)
+                    {
+                        Encoding.ASCII.GetBytes($"SW-{at:X4}-{at:X4}-00").CopyTo(setting.Slice(at, 16));
+                    }
+                }
+                else if (code.Length > 0)
+                {
+                    Encoding.ASCII.GetBytes(code).AsSpan(0, Math.Min(code.Length, 0x1F)).CopyTo(setting.Slice(codeAt, 0x20));
+                }
+            }
 
             Logger.Stub?.PrintStub(LogClass.ServiceFriend, new { userId });
 

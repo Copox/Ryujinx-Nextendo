@@ -427,8 +427,128 @@ namespace Ryujinx.Common.Configuration
         /// kept two minutes. Waits for the server at most <paramref name="timeoutMs"/>: the page
         /// that shows it asks once.
         /// </summary>
+        private static readonly Queue<(long At, ulong Pid)> _historyAsks = new();
+        private static (long At, Dictionary<ulong, List<Played>> ByFriend) _feed;
+        private static readonly object _feedLock = new();
+
+        /// <summary>
+        /// What all friends played lately, in one request (/api/friends/feed): the answer to a
+        /// page that asks the history of every friend in a row.
+        /// </summary>
+        private static Dictionary<ulong, List<Played>> Feed(int timeoutMs)
+        {
+            lock (_feedLock)
+            {
+                if (_feed.ByFriend != null && Environment.TickCount64 - _feed.At < 120_000)
+                {
+                    return _feed.ByFriend;
+                }
+
+                Dictionary<ulong, List<Played>> byFriend = new();
+
+                try
+                {
+                    string baseUrl = NextendoEndpoint.BaseUrl().TrimEnd('/');
+
+                    using System.Threading.CancellationTokenSource limit = new(timeoutMs);
+                    using HttpRequestMessage req = new(HttpMethod.Get, baseUrl + "/api/friends/feed?limit=200");
+                    req.Headers.Add("Authorization", "Bearer " + NextendoAccount.NexToken);
+                    using HttpResponseMessage resp = _http.SendAsync(req, limit.Token).GetAwaiter().GetResult();
+
+                    if (!resp.IsSuccessStatusCode)
+                    {
+                        return byFriend;
+                    }
+
+                    using JsonDocument doc = JsonDocument.Parse(resp.Content.ReadAsStringAsync(limit.Token).GetAwaiter().GetResult());
+
+                    if (doc.RootElement.TryGetProperty("events", out JsonElement events) && events.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (JsonElement e in events.EnumerateArray())
+                        {
+                            ulong friend = e.TryGetProperty("pid", out JsonElement pidEl) && pidEl.ValueKind == JsonValueKind.Number ? pidEl.GetUInt64() : 0;
+                            string idText = e.TryGetProperty("title_id", out JsonElement idEl) ? idEl.GetString() ?? "" : "";
+                            string name = e.TryGetProperty("jeu", out JsonElement nameEl) ? nameEl.GetString() ?? "" : "";
+
+                            if (friend == 0 || name.Length == 0 ||
+                                !ulong.TryParse(idText, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out ulong titleId) || titleId == 0)
+                            {
+                                continue;
+                            }
+
+                            long seconds = e.TryGetProperty("secondes", out JsonElement secEl) && secEl.ValueKind == JsonValueKind.Number ? secEl.GetInt64() : 0;
+                            long last = 0;
+
+                            if (e.TryGetProperty("quand", out JsonElement lastEl) && lastEl.ValueKind == JsonValueKind.String &&
+                                DateTimeOffset.TryParse(lastEl.GetString(), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out DateTimeOffset when))
+                            {
+                                last = when.ToUnixTimeSeconds();
+                            }
+
+                            NextendoGames.Remember(titleId, name, null);
+
+                            if (!byFriend.TryGetValue(friend, out List<Played> list))
+                            {
+                                byFriend[friend] = list = new List<Played>();
+                            }
+
+                            list.Add(new Played(titleId, name, seconds, last));
+                        }
+                    }
+                }
+                catch
+                {
+                    return byFriend; // out of reach: asked again next time
+                }
+
+                Ryujinx.Common.Logging.Logger.Info?.Print(Ryujinx.Common.Logging.LogClass.ServiceFriend, $"[Nextendo] activity feed: {byFriend.Count} friends with recent games");
+                _feed = (Environment.TickCount64, byFriend);
+
+                return byFriend;
+            }
+        }
+
         public static IReadOnlyList<Played> History(ulong pid, int timeoutMs)
         {
+            // A page that walks the whole friend list (three friends or more within three
+            // seconds) is answered from the activity feed: one request for everybody instead
+            // of one per friend.
+            bool sweep;
+
+            lock (_historyAsks)
+            {
+                long now = Environment.TickCount64;
+
+                _historyAsks.Enqueue((now, pid));
+
+                while (_historyAsks.Count > 0 && now - _historyAsks.Peek().At > 3000)
+                {
+                    _historyAsks.Dequeue();
+                }
+
+                HashSet<ulong> asked = new();
+
+                foreach ((long _, ulong who) in _historyAsks)
+                {
+                    asked.Add(who);
+                }
+
+                sweep = asked.Count >= 3;
+            }
+
+            if (sweep && !string.IsNullOrEmpty(NextendoAccount.NexToken))
+            {
+                lock (_histories)
+                {
+                    if (_histories.TryGetValue(pid, out var known) && Environment.TickCount64 - known.At < 120_000)
+                    {
+                        return known.List;
+                    }
+                }
+
+                return Feed(4000).TryGetValue(pid, out List<Played> recent) ? recent : new List<Played>();
+            }
+
             lock (_histories)
             {
                 if (_histories.TryGetValue(pid, out var known) && Environment.TickCount64 - known.At < 120_000)
