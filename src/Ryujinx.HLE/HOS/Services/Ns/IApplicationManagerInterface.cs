@@ -136,6 +136,66 @@ namespace Ryujinx.HLE.HOS.Services.Ns
 
             return ResultCode.Success;
         }
+        private StubEvent _virtualCardEvent;
+
+        [CommandCmif(4072)] // 20.0.0+
+        // (uid) -> handle<copy>: an event the virtual game card page waits on.
+        public ResultCode GetVirtualGameCardEvent(ServiceCtx context)
+        {
+            _virtualCardEvent ??= new StubEvent(context);
+            _virtualCardEvent.Signal();
+            _virtualCardEvent.ReplyWithHandle(context);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(4042)] // 20.0.0+
+        [CommandCmif(4093)] // 20.0.0+
+        [CommandCmif(4008)] // 20.0.0+, with a transfer memory
+        // The other requests the HOME Menu makes the same way (found in its code: they all go
+        // through its helper for "request, then wait on the event, then read the result").
+        [CommandCmif(2366)]
+        [CommandCmif(2367)]
+        [CommandCmif(4007)]
+        [CommandCmif(4009)]
+        [CommandCmif(4010)]
+        [CommandCmif(4011)]
+        [CommandCmif(4013)]
+        [CommandCmif(4028)]
+        [CommandCmif(4029)]
+        [CommandCmif(4033)]
+        [CommandCmif(4060)]
+        [CommandCmif(4069)]
+        [CommandCmif(4071)]
+        [CommandCmif(4073)]
+        [CommandCmif(4080)]
+        [CommandCmif(4086)]
+        // Asked by the virtual game card page of the HOME Menu, which keeps the returned object
+        // (an asynchronous request): left without one, the page followed a null pointer.
+        // -> (handle<copy>, object)
+        public ResultCode RequestVirtualGameCardOperation(ServiceCtx context)
+        {
+            // A transfer memory handed with the request is let go at once: kept, it held the
+            // menu's own heap, which then could not shrink (fatal 2001-0106).
+            if (context.Request.HandleDesc != null)
+            {
+                foreach (int handle in context.Request.HandleDesc.ToCopy)
+                {
+                    context.Device.System.KernelContext.Syscall.CloseHandle(handle);
+                }
+            }
+
+            // [Nextendo, HOME Menu work] No virtual game card is held here: the request is over
+            // at once, with nothing in it.
+            _virtualCardEvent ??= new StubEvent(context);
+            _virtualCardEvent.Signal();
+            _virtualCardEvent.ReplyWithHandle(context);
+
+            MakeObject(context, new IAsyncValue(new byte[8]));
+
+            return ResultCode.Success;
+        }
+
         private StubEvent _controlDataDownloadEvent;
 
         [CommandCmif(412)] // 20.0.0+
