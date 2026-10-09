@@ -48,6 +48,7 @@ namespace Ryujinx.HLE.HOS.Services
         private KProcess _selfProcess;
         private KThread _selfThread;
         private KEvent _wakeEvent;
+        private int _receiveErrors;
         private int _wakeHandle = 0;
 
         private readonly ReaderWriterLockSlim _handleLock = new();
@@ -327,6 +328,11 @@ namespace Ryujinx.HLE.HOS.Services
 
                 _selfThread.HandlePostSyscall();
 
+                if (rc != Result.Success && rc != KernelResult.TimedOut && rc != KernelResult.PortRemoteClosed && _receiveErrors++ < 5)
+                {
+                    Logger.Error?.Print(LogClass.KernelIpc, $"Server {Name}: waiting on {handleCount} handles failed with {rc}.");
+                }
+
                 if (!_selfThread.Context.Running)
                 {
                     break;
@@ -375,7 +381,10 @@ namespace Ryujinx.HLE.HOS.Services
                             _wakeEvent.WritableEvent.Clear();
                         }
                     }
-                    else if (rc == KernelResult.PortRemoteClosed && signaledIndex >= 0 && SmObjectFactory != null)
+                    // [Nextendo] A session whose client is gone is dropped on every server, not only on sm:
+                    // with programs that start and end next to the HOME Menu, a closed session left in the
+                    // list answered every wait at once, for ever, and the server stopped hearing the others.
+                    else if (rc == KernelResult.PortRemoteClosed && signaledIndex >= portHandleCount + 1)
                     {
                         DestroySession(handles[signaledIndex]);
                     }

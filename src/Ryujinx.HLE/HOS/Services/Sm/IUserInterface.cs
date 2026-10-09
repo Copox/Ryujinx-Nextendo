@@ -68,6 +68,11 @@ namespace Ryujinx.HLE.HOS.Services.Sm
                 return ResultCode.InvalidName;
             }
 
+            if (System.Environment.GetEnvironmentVariable("NEXTENDO_IPC_TRACE") == "1")
+            {
+                Logger.Notice.Print(LogClass.KernelIpc, $"[sm] GetService {name} for process {context.Process.Pid}");
+            }
+
             KSession session = new(context.Device.System.KernelContext);
 
             if (_registry.TryGetService(name, out KPort port))
