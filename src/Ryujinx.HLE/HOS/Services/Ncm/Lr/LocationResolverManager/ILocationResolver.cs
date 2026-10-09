@@ -232,9 +232,34 @@ namespace Ryujinx.HLE.HOS.Services.Ncm.Lr.LocationResolverManager
                 ulong size = context.Request.RecvListBuff[0].Size;
 #pragma warning restore IDE0059
 
-                byte[] contentPathBuffer = Encoding.UTF8.GetBytes(contentPath);
+                // [Nextendo] The path in the form a console gives it ("@SystemContent://registered/
+                // <id>.nca"): homebrew cuts the mount name off by its length and opens the rest.
+                string guestPath = contentPath;
+
+                if (guestPath.EndsWith(".nca/00", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    guestPath = guestPath[..^3];
+                }
+
+                int mount = guestPath.IndexOf(":/", System.StringComparison.Ordinal);
+
+                if (mount > 0 && !guestPath.Substring(mount).StartsWith("://", System.StringComparison.Ordinal))
+                {
+                    guestPath = guestPath.Insert(mount + 1, "/");
+                }
+
+                Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.Service, $"[lr] {titleId:X16} -> {guestPath} (buffer 0x{size:X})");
+
+                byte[] contentPathBuffer = Encoding.UTF8.GetBytes(guestPath + "\0");
 
                 context.Memory.Write(position, contentPathBuffer);
+
+                // The size of the reply buffer: left at what the request said (zero for homebrew
+                // built with libnx), nothing at all was handed back.
+                if (context.Response.PtrBuff.Count > 0)
+                {
+                    context.Response.PtrBuff[0] = context.Response.PtrBuff[0].WithSize((ulong)contentPathBuffer.Length);
+                }
             }
             else
             {

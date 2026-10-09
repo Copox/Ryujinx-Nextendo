@@ -115,6 +115,30 @@ namespace Ryujinx.HLE.HOS.Services.Fs.FileSystemProxy
 
             Result result = _fileSystem.Get.OpenFile(ref file.Ref, in name, mode);
 
+            // [Nextendo] A system content file "<id>.nca" is kept by the emulator as a folder
+            // holding its single part "00" (a split file, as the console's own storage allows).
+            // Homebrew that reads system contents itself asks for the file by its name.
+            if (result.IsFailure())
+            {
+                System.ReadOnlySpan<byte> raw = System.Runtime.InteropServices.MemoryMarshal.AsBytes(
+                    System.Runtime.InteropServices.MemoryMarshal.CreateReadOnlySpan(in name, 1));
+                int length = System.MemoryExtensions.IndexOf(raw, (byte)0);
+                Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.ServiceFs, $"[fs] OpenFile failed ({result.Value:X}): {System.Text.Encoding.ASCII.GetString(raw[..System.Math.Max(0, length)])}");
+
+                if (length > 4 && length + 3 < raw.Length &&
+                    System.Text.Encoding.ASCII.GetString(raw[(length - 4)..length]).Equals(".nca", System.StringComparison.OrdinalIgnoreCase))
+                {
+                    byte[] split = raw.ToArray();
+
+                    "/00"u8.CopyTo(System.MemoryExtensions.AsSpan(split, length));
+
+                    ref readonly Path splitName = ref System.Runtime.InteropServices.MemoryMarshal.Cast<byte, Path>(split)[0];
+
+                    result = _fileSystem.Get.OpenFile(ref file.Ref, in splitName, mode);
+                    Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.ServiceFs, $"[fs] retried as its part 00: {result.Value:X}");
+                }
+            }
+
             if (result.IsSuccess())
             {
                 IFile fileInterface = new(ref file.Ref);

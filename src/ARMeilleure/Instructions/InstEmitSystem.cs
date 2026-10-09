@@ -62,6 +62,12 @@ namespace ARMeilleure.Instructions
                     info = typeof(NativeInterface).GetMethod(nameof(NativeInterface.GetCntvctEl0));
                     break;
 
+                case 0b11_011_0010_0101_001:
+                    // [Nextendo] GCSPR_EL0 (guarded control stack pointer): no guarded control stack
+                    // here, it reads as zero. Recent homebrew toolchains (NXThemes Installer) read it.
+                    SetIntOrZR(context, op.Rt, Const(0UL));
+                    return;
+
                 default:
                     throw new NotImplementedException($"Unknown MRS 0x{op.RawOpCode:X8} at 0x{op.Address:X16}.");
             }
