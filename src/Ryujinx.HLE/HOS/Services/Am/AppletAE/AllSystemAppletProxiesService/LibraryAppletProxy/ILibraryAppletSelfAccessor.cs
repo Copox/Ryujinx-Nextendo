@@ -6,6 +6,25 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Lib
 {
     class ILibraryAppletSelfAccessor : IpcService
     {
+        // [Nextendo, HOME Menu work]
+        [CommandCmif(150)] // 10.0.0+
+        // ShouldSetGpuTimeSliceManually() -> bool
+        public ResultCode ShouldSetGpuTimeSliceManually(ServiceCtx context)
+        {
+            context.ResponseData.Write(false);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(160)] // 17.0.0+
+        // GetLibraryAppletInfoEx() -> u64 (always 0)
+        public ResultCode GetLibraryAppletInfoEx(ServiceCtx context)
+        {
+            context.ResponseData.Write(0UL);
+
+            return ResultCode.Success;
+        }
+
         private readonly AppletStandalone _appletStandalone = new();
 
         // Set when the applet was started by a running system applet (see RealApplet).

@@ -27,6 +27,51 @@ namespace Ryujinx.HLE.HOS.Services.Fs
     [Service("fsp-srv")]
     class IFileSystemProxy : DisposableIpcService
     {
+        // [Nextendo, HOME Menu work]
+        [CommandCmif(83)] // 6.0.0+
+        // OpenSaveDataTransferProhibiter(u64 application_id) -> object<nn::fssrv::sf::ISaveDataTransferProhibiter>
+        public ResultCode OpenSaveDataTransferProhibiter(ServiceCtx context)
+        {
+            context.RequestData.ReadUInt64();
+
+            MakeObject(context, new ISaveDataTransferProhibiter());
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(201)] // 3.0.0+
+        // OpenDataStorageByProgramId(u64 program_id) -> object<nn::fssrv::sf::IStorage>: the data of
+        // a program of the system.
+        public ResultCode OpenDataStorageByProgramId(ServiceCtx context)
+        {
+            ulong programId = context.RequestData.ReadUInt64();
+
+            string contentPath = context.Device.System.ContentManager.GetInstalledContentPath(programId, StorageId.BuiltInSystem, NcaContentType.Program);
+            string ncaPath = string.IsNullOrEmpty(contentPath) ? null : FileSystem.VirtualFileSystem.SwitchPathToSystemPath(contentPath);
+
+            if (ncaPath == null || !File.Exists(ncaPath))
+            {
+                return (ResultCode)ResultFs.TargetNotFound.Value.Value;
+            }
+
+            try
+            {
+                LibHac.Fs.IStorage ncaStorage = new LocalStorage(ncaPath, FileAccess.Read, FileMode.Open);
+                Nca nca = new(context.Device.System.KeySet, ncaStorage);
+                LibHac.Fs.IStorage romfsStorage = context.Device.FileSystem.ModLoader.ApplyRomFsMods(programId, nca.OpenStorage(NcaSectionType.Data, context.Device.System.FsIntegrityCheckLevel));
+                using SharedRef<LibHac.Fs.IStorage> sharedStorage = new(romfsStorage);
+                using SharedRef<IStorage> sfStorage = new(new StorageInterfaceAdapter(ref sharedStorage.Ref));
+
+                MakeObject(context, new FileSystemProxy.IStorage(ref sfStorage.Ref));
+            }
+            catch (HorizonResultException ex)
+            {
+                return (ResultCode)ex.ResultValue.Value;
+            }
+
+            return ResultCode.Success;
+        }
+
         private SharedRef<LibHac.FsSrv.Sf.IFileSystemProxy> _baseFileSystemProxy;
         private ulong _pid;
 

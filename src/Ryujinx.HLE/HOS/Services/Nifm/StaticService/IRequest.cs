@@ -33,6 +33,14 @@ namespace Ryujinx.HLE.HOS.Services.Nifm.StaticService
             _version = version;
         }
 
+        // [Nextendo, HOME Menu work]
+        [CommandCmif(6)]
+        // SetRequirementPreset(s32)
+        public ResultCode SetRequirementPreset(ServiceCtx context)
+        {
+            return ResultCode.Success;
+        }
+
         [CommandCmif(0)]
         // GetRequestState() -> u32
         public ResultCode GetRequestState(ServiceCtx context)

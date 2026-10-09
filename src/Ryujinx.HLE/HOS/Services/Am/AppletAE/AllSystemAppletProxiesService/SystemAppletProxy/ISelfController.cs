@@ -10,6 +10,21 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 {
     class ISelfController : IpcService
     {
+        // [Nextendo, HOME Menu work]
+        [CommandCmif(60)]
+        // OverrideAutoSleepTimeAndDimmingTime(s32, s32, s32, s32)
+        public ResultCode OverrideAutoSleepTimeAndDimmingTime(ServiceCtx context)
+        {
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(72)] // 9.0.0+
+        // SetInputDetectionPolicy(u32)
+        public ResultCode SetInputDetectionPolicy(ServiceCtx context)
+        {
+            return ResultCode.Success;
+        }
+
         private readonly ulong _pid;
 
         private readonly KEvent _libraryAppletLaunchableEvent;

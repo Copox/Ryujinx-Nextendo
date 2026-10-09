@@ -8,6 +8,32 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 {
     class IDisplayController : IpcService
     {
+        // [Nextendo, HOME Menu work] No capture of the screen is kept.
+        [CommandCmif(5)]
+        // GetLastForegroundCaptureImageEx(buffer<bytes, 6>) -> bool
+        public ResultCode GetLastForegroundCaptureImageEx(ServiceCtx context)
+        {
+            context.ResponseData.Write(false);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(7)]
+        // GetCallerAppletCaptureImageEx(buffer<bytes, 6>) -> bool
+        public ResultCode GetCallerAppletCaptureImageEx(ServiceCtx context)
+        {
+            context.ResponseData.Write(false);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(20)] // 3.0.0+
+        // ClearCaptureBuffer(bool, s32 buffer, u32 color)
+        public ResultCode ClearCaptureBuffer(ServiceCtx context)
+        {
+            return ResultCode.Success;
+        }
+
         private readonly KTransferMemory _transferMem;
         private bool _lastApplicationCaptureBufferAcquired;
         private bool _callerAppletCaptureBufferAcquired;

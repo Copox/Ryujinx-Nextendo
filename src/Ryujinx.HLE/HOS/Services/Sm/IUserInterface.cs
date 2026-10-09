@@ -14,6 +14,35 @@ namespace Ryujinx.HLE.HOS.Services.Sm
 {
     partial class IUserInterface : IpcService
     {
+        // [Nextendo, HOME Menu work] The Atmosphere extension homebrew uses to know whether a
+        // service is there before opening it.
+        [CommandCmif(65100)]
+        // AtmosphereHasService(ServiceName name) -> bool
+        public ResultCode AtmosphereHasService(ServiceCtx context)
+        {
+            string name = ReadName(context);
+
+            context.ResponseData.Write(_registry.IsServiceRegistered(name) || _services.ContainsKey(name));
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(65101)]
+        // AtmosphereWaitService(ServiceName name)
+        public ResultCode AtmosphereWaitService(ServiceCtx context)
+        {
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(65004)]
+        // AtmosphereHasMitm(ServiceName name) -> bool
+        public ResultCode AtmosphereHasMitm(ServiceCtx context)
+        {
+            context.ResponseData.Write(false);
+
+            return ResultCode.Success;
+        }
+
         private static readonly Dictionary<string, Type> _services;
 
         private readonly SmRegistry _registry;

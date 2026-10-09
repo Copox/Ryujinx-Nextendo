@@ -62,6 +62,77 @@ namespace Ryujinx.HLE.HOS.Services.Nifm.StaticService
             return ResultCode.Success;
         }
 
+        [CommandCmif(2)]
+        // CreateScanRequest() -> object<nn::nifm::detail::IScanRequest>
+        public ResultCode CreateScanRequest(ServiceCtx context)
+        {
+            MakeObject(context, new IScanRequest(context));
+
+            return ResultCode.Success;
+        }
+
+        // [Nextendo, HOME Menu work] The one network known, the one the computer is on, under
+        // an id that stays the same as long as its name does.
+        private static UInt128 ProfileId(string name)
+        {
+            byte[] hash = System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes("nextendo-profile:" + name));
+
+            return System.Runtime.InteropServices.MemoryMarshal.Read<UInt128>(hash);
+        }
+
+        [CommandCmif(7)]
+        // EnumerateNetworkProfiles(u8 type) -> (s32 count, buffer<nn::nifm::detail::sf::NetworkProfileBasicInfo, 6>)
+        public ResultCode EnumerateNetworkProfiles(ServiceCtx context)
+        {
+            byte type = context.RequestData.ReadByte();
+            int count = 0;
+
+            HostNetwork.Reading host = HostNetwork.Current;
+
+            if ((type & 1) != 0 && host.Link != HostNetwork.Link.None && context.Request.ReceiveBuff.Count > 0 && context.Request.ReceiveBuff[0].Size >= 0x75)
+            {
+                bool wireless = host.Link == HostNetwork.Link.Wireless && host.Name.Length > 0;
+                string name = wireless ? host.Name : "Ethernet";
+                byte[] info = new byte[0x75];
+                byte[] raw = System.Text.Encoding.UTF8.GetBytes(name);
+
+                System.Runtime.InteropServices.MemoryMarshal.Write(info, ProfileId(name));
+                raw.AsSpan(0, Math.Min(raw.Length, 0x3F)).CopyTo(info.AsSpan(0x10));
+                info[0x50] = 1;                        // a profile the user made
+                info[0x51] = (byte)(wireless ? 1 : 2); // IEEE 802.11 or Ethernet
+
+                if (wireless)
+                {
+                    raw.AsSpan(0, Math.Min(raw.Length, 0x20)).CopyTo(info.AsSpan(0x52));
+                    info[0x73] = host.Authentication;
+                    info[0x74] = host.Encryption;
+                }
+
+                context.Memory.Write(context.Request.ReceiveBuff[0].Position, info);
+                count = 1;
+            }
+
+            context.ResponseData.Write(count);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(22)]
+        // IsAnyForegroundRequestAccepted() -> bool
+        public ResultCode IsAnyForegroundRequestAccepted(ServiceCtx context)
+        {
+            context.ResponseData.Write(HostNetwork.Current.Link != HostNetwork.Link.None);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(33)] // 2.0.0+
+        // ConfirmSystemAvailability(): the network service may be used.
+        public ResultCode ConfirmSystemAvailability(ServiceCtx context)
+        {
+            return ResultCode.Success;
+        }
+
         [CommandCmif(5)]
         // GetCurrentNetworkProfile() -> buffer<nn::nifm::detail::sf::NetworkProfileData, 0x1a, 0x17c>
         public ResultCode GetCurrentNetworkProfile(ServiceCtx context)
@@ -81,7 +152,7 @@ namespace Ryujinx.HLE.HOS.Services.Nifm.StaticService
 
             NetworkProfileData networkProfile = new()
             {
-                Uuid = Random.Shared.NextUInt128(),
+                Uuid = ProfileId(HostNetwork.Current.Link == HostNetwork.Link.Wireless && HostNetwork.Current.Name.Length > 0 ? HostNetwork.Current.Name : "Ethernet"),
             };
 
             networkProfile.IpSettingData.IpAddressSetting = new IpAddressSetting(interfaceProperties, unicastAddress);

@@ -6,6 +6,40 @@ namespace Ryujinx.HLE.HOS.Services.Ns
     [Service("ns:am")]
     class IApplicationManagerInterface : IpcService
     {
+        // [Nextendo, HOME Menu work]
+        [CommandCmif(38)]
+        // CheckApplicationLaunchVersion(nn::ncm::ApplicationId): every version may start.
+        public ResultCode CheckApplicationLaunchVersion(ServiceCtx context)
+        {
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(70)] // 3.0.0+
+        // ResumeAll()
+        public ResultCode ResumeAll(ServiceCtx context)
+        {
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(512)] // 19.0.0+
+        // IsGameCardApplicationRunning() -> bool: there is no game card.
+        public ResultCode IsGameCardApplicationRunning(ServiceCtx context)
+        {
+            context.ResponseData.Write(false);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(906)]
+        // IsApplicationUpdateRequested(nn::ncm::ApplicationId) -> (bool, u32): no update is asked for.
+        public ResultCode IsApplicationUpdateRequested(ServiceCtx context)
+        {
+            context.ResponseData.Write(false);
+            context.ResponseData.Write(0u);
+
+            return ResultCode.Success;
+        }
+
         private readonly StubEvent _recordUpdateEvent;
         private readonly StubEvent _sdCardMountStatusEvent;
         private readonly StubEvent _gameCardUpdateEvent;

@@ -17,6 +17,16 @@ namespace Ryujinx.HLE.HOS.Services.Settings
     [Service("set:sys")]
     class ISystemSettingsServer : IpcService
     {
+        // [Nextendo, HOME Menu work]
+        [CommandCmif(201)] // 10.1.0+
+        // GetFieldTestingFlag() -> bool
+        public ResultCode GetFieldTestingFlag(ServiceCtx context)
+        {
+            context.ResponseData.Write(false);
+
+            return ResultCode.Success;
+        }
+
         public ISystemSettingsServer(ServiceCtx context) { }
 
         [CommandCmif(3)]

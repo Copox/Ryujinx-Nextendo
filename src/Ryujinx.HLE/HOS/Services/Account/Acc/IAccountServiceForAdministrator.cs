@@ -7,6 +7,14 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc
     [Service("acc:su", AccountServiceFlag.Administrator)] // Max Sessions: 8
     class IAccountServiceForAdministrator : IpcService
     {
+        // [Nextendo, HOME Menu work] The command took this number in 19.0.0.
+        [CommandCmif(52)] // 19.0.0+
+        // TrySelectUserWithoutInteraction(bool) -> nn::account::Uid
+        public ResultCode TrySelectUserWithoutInteraction19(ServiceCtx context)
+        {
+            return _applicationServiceServer.TrySelectUserWithoutInteraction(context);
+        }
+
         private readonly ApplicationServiceServer _applicationServiceServer;
 
         public IAccountServiceForAdministrator(ServiceCtx context, AccountServiceFlag serviceFlag)

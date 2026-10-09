@@ -8,6 +8,21 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 {
     class IHomeMenuFunctions : IpcService
     {
+        // [Nextendo, HOME Menu work]
+        [CommandCmif(11)]
+        // LockForeground()
+        public ResultCode LockForeground(ServiceCtx context)
+        {
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(12)]
+        // UnlockForeground()
+        public ResultCode UnlockForeground(ServiceCtx context)
+        {
+            return ResultCode.Success;
+        }
+
         private readonly KEvent _channelEvent;
         private int _channelEventHandle;
 

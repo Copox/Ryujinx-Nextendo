@@ -7,6 +7,44 @@ namespace Ryujinx.HLE.HOS.Services.Pctl.ParentalControlServiceFactory
 {
     class IParentalControlService : IpcService
     {
+        // [Nextendo, HOME Menu work] No restriction is set.
+        [CommandCmif(1003)]
+        // ConfirmResumeApplicationPermission(nn::ncm::ApplicationId, ...)
+        public ResultCode ConfirmResumeApplicationPermission(ServiceCtx context)
+        {
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(1010)]
+        // IsRestrictedSystemSettingsEntered() -> bool
+        public ResultCode IsRestrictedSystemSettingsEntered(ServiceCtx context)
+        {
+            context.ResponseData.Write(false);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(1019)] // 20.0.0+
+        // ConfirmLaunchApplicationPermission(...)
+        public ResultCode ConfirmLaunchApplicationPermissionEx(ServiceCtx context)
+        {
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(1451)]
+        // StartPlayTimer()
+        public ResultCode StartPlayTimer(ServiceCtx context)
+        {
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(1452)]
+        // StopPlayTimer()
+        public ResultCode StopPlayTimer(ServiceCtx context)
+        {
+            return ResultCode.Success;
+        }
+
         private readonly ulong _pid;
         private readonly StubEvent _synchronizationEvent;
         private readonly StubEvent _playTimerEvent;

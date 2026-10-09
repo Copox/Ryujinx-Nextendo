@@ -1,6 +1,7 @@
 using Ryujinx.Common.Logging;
 using Ryujinx.HLE.HOS.Services.Hid.HidServer;
 using Ryujinx.HLE.HOS.Services.Hid.Types;
+using Ryujinx.HLE.HOS.Services.Hid.Types.SharedMemory.Npad;
 
 namespace Ryujinx.HLE.HOS.Services.Hid
 {
@@ -80,6 +81,116 @@ namespace Ryujinx.HLE.HOS.Services.Hid
         {
             _joyDetachOnBluetoothOffEvent ??= new Ryujinx.HLE.HOS.Services.StubEvent(context);
             _joyDetachOnBluetoothOffEvent.ReplyWithHandle(context);
+
+            return ResultCode.Success;
+        }
+
+        // [Nextendo, HOME Menu work] The commands the HOME Menu asks about its controllers.
+        // The state comes from the emulated controllers themselves.
+        private static ref Ryujinx.HLE.HOS.Services.Hid.Types.SharedMemory.Npad.NpadInternalState NpadState(ServiceCtx context, uint npadId)
+        {
+            PlayerIndex index = HidUtils.GetIndexFromNpadIdType((NpadIdType)npadId);
+
+            return ref context.Device.Hid.SharedMemory.Npads[(int)index].InternalState;
+        }
+
+        [CommandCmif(316)] // 10.0.0+
+        // GetNpadInterfaceType(u32 npad_id) -> u8 (1 Bluetooth, 2 Rail, 3 Usb, 4 Embedded)
+        public ResultCode GetNpadInterfaceType(ServiceCtx context)
+        {
+            uint npadId = context.RequestData.ReadUInt32();
+
+            context.ResponseData.Write((byte)((NpadIdType)npadId == NpadIdType.Handheld ? 2 : 1));
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(317)] // 10.0.0+
+        // GetNpadLeftRightInterfaceType(u32 npad_id) -> u8, u8
+        public ResultCode GetNpadLeftRightInterfaceType(ServiceCtx context)
+        {
+            uint npadId = context.RequestData.ReadUInt32();
+            byte type = (byte)((NpadIdType)npadId == NpadIdType.Handheld ? 2 : 1);
+
+            context.ResponseData.Write(type);
+            context.ResponseData.Write(type);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(318)] // 10.0.0+
+        // HasBattery(u32 npad_id) -> bool: every wireless controller has one.
+        public ResultCode HasBattery(ServiceCtx context)
+        {
+            uint npadId = context.RequestData.ReadUInt32();
+
+            context.ResponseData.Write(NpadState(context, npadId).StyleSet != 0);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(319)] // 10.0.0+
+        // HasLeftRightBattery(u32 npad_id) -> bool, bool: the two Joy-Con of a pair.
+        public ResultCode HasLeftRightBattery(ServiceCtx context)
+        {
+            uint npadId = context.RequestData.ReadUInt32();
+            NpadStyleTag style = NpadState(context, npadId).StyleSet;
+            bool pair = (style & (NpadStyleTag.JoyDual | NpadStyleTag.Handheld)) != 0;
+
+            context.ResponseData.Write(pair || (style & NpadStyleTag.JoyLeft) != 0);
+            context.ResponseData.Write(pair || (style & NpadStyleTag.JoyRight) != 0);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(310)] // 6.0.0+
+        // GetMaskedSupportedNpadStyleSet(u64 aruid) -> u32
+        public ResultCode GetMaskedSupportedNpadStyleSet(ServiceCtx context)
+        {
+            context.RequestData.ReadUInt64();
+
+            context.ResponseData.Write((uint)context.Device.Hid.Npads.SupportedStyleSets);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(523)] // 9.0.0+
+        // IsJoyConRailEnabled() -> bool
+        public ResultCode IsJoyConRailEnabled(ServiceCtx context)
+        {
+            context.ResponseData.Write(true);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(525)] // 11.0.0+
+        // IsJoyConAttachedOnAllRail() -> bool: the Joy-Con are on the console in handheld mode.
+        public ResultCode IsJoyConAttachedOnAllRail(ServiceCtx context)
+        {
+            context.ResponseData.Write(NpadState(context, (uint)NpadIdType.Handheld).StyleSet != 0);
+
+            return ResultCode.Success;
+        }
+
+        private Ryujinx.HLE.HOS.Services.StubEvent _connectionTriggerTimeoutEvent;
+        private Ryujinx.HLE.HOS.Services.StubEvent _deviceRegisteredEvent;
+
+        [CommandCmif(544)] // 3.0.0+
+        // AcquireConnectionTriggerTimeoutEvent() -> handle<copy>
+        public ResultCode AcquireConnectionTriggerTimeoutEvent(ServiceCtx context)
+        {
+            _connectionTriggerTimeoutEvent ??= new Ryujinx.HLE.HOS.Services.StubEvent(context);
+            _connectionTriggerTimeoutEvent.ReplyWithHandle(context);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(546)] // 3.0.0+
+        // AcquireDeviceRegisteredEventForControllerSupport() -> handle<copy>
+        public ResultCode AcquireDeviceRegisteredEventForControllerSupport(ServiceCtx context)
+        {
+            _deviceRegisteredEvent ??= new Ryujinx.HLE.HOS.Services.StubEvent(context);
+            _deviceRegisteredEvent.ReplyWithHandle(context);
 
             return ResultCode.Success;
         }

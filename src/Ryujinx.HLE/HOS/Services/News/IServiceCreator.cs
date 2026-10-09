@@ -66,6 +66,30 @@ namespace Ryujinx.HLE.HOS.Services.News
 
     class INewsService : IpcService
     {
+        // [Nextendo, HOME Menu work]
+        [CommandCmif(10100)]
+        // PostLocalNews(buffer<bytes, 5>)
+        public ResultCode PostLocalNews(ServiceCtx context)
+        {
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(30200)]
+        // IsSystemUpdateRequired() -> bool
+        public ResultCode IsSystemUpdateRequired(ServiceCtx context)
+        {
+            context.ResponseData.Write(false);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(40101)] // 3.0.0+
+        // RequestAutoSubscription(u64)
+        public ResultCode RequestAutoSubscription(ServiceCtx context)
+        {
+            return ResultCode.Success;
+        }
+
         public INewsService() { }
         [CommandCmif(30500)] // 20.0.0+
         // (buffer) -> object, an event holder: Get() -> handle<copy>

@@ -113,6 +113,16 @@ namespace Ryujinx.HLE.HOS.Services.Ns
     // answered as they turn up.
     class IDynamicRightsInterface : IpcService
     {
+        // [Nextendo, HOME Menu work]
+        [CommandCmif(26)] // 18.0.0+
+        // HasAccountRestrictedRightsInRunningApplications() -> bool
+        public ResultCode HasAccountRestrictedRightsInRunningApplications(ServiceCtx context)
+        {
+            context.ResponseData.Write(false);
+
+            return ResultCode.Success;
+        }
+
         public IDynamicRightsInterface() { }
     }
 
@@ -194,6 +204,14 @@ Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.Servi
 
     class IDownloadTaskInterface : IpcService
     {
+        // [Nextendo, HOME Menu work]
+        [CommandCmif(708)] // 4.0.0+
+        // DisableAutoCommit()
+        public ResultCode DisableAutoCommit(ServiceCtx context)
+        {
+            return ResultCode.Success;
+        }
+
         public IDownloadTaskInterface() { }
         [CommandCmif(707)]
         // EnableAutoCommit()
