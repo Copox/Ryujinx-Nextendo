@@ -80,6 +80,63 @@ namespace Ryujinx.HLE.HOS.Services.Nifm.StaticService
             return System.Runtime.InteropServices.MemoryMarshal.Read<UInt128>(hash);
         }
 
+        [CommandCmif(6)]
+        // EnumerateNetworkInterfaces(u32 filter) -> (s32 count, buffer<nn::nifm::NetworkInterfaceInfo, 0xa>):
+        // the wireless adapter of the computer, with its MAC address (shown in the Internet page).
+        public ResultCode EnumerateNetworkInterfaces(ServiceCtx context)
+        {
+            context.RequestData.ReadUInt32();
+
+            byte[] mac = null;
+
+            foreach (NetworkInterface adapter in NetworkInterface.GetAllNetworkInterfaces())
+            {
+                if (adapter.NetworkInterfaceType == NetworkInterfaceType.Wireless80211 && adapter.GetPhysicalAddress().GetAddressBytes().Length == 6)
+                {
+                    mac = adapter.GetPhysicalAddress().GetAddressBytes();
+
+                    break;
+                }
+            }
+
+            int count = 0;
+
+            if (mac != null && context.Request.RecvListBuff.Count > 0 && context.Request.RecvListBuff[0].Size >= 8)
+            {
+                byte[] info = new byte[8];
+                string layout = System.Environment.GetEnvironmentVariable("NEXTENDO_IF_LAYOUT") ?? "type0";
+
+                if (layout == "mac0")
+                {
+                    mac.CopyTo(info, 0);
+                    info[6] = 1;
+                    info[7] = 1;
+                }
+                else
+                {
+                    info[0] = 1; // IEEE 802.11
+                    mac.CopyTo(info, 1);
+                    info[7] = 1;
+                }
+
+                if (System.Environment.GetEnvironmentVariable("NEXTENDO_IF_SET") is string set)
+                {
+                    foreach (string part in set.Split(','))
+                    {
+                        info[System.Convert.ToInt32(part.Split('=')[0], 16)] = System.Convert.ToByte(part.Split('=')[1], 16);
+                    }
+                }
+
+                context.Memory.Write(context.Request.RecvListBuff[0].Position, info);
+                context.Response.PtrBuff[0] = context.Response.PtrBuff[0].WithSize(8u);
+                count = 1;
+            }
+
+            context.ResponseData.Write(count);
+
+            return ResultCode.Success;
+        }
+
         [CommandCmif(7)]
         // EnumerateNetworkProfiles(u8 type) -> (s32 count, buffer<nn::nifm::detail::sf::NetworkProfileBasicInfo, 6>)
         public ResultCode EnumerateNetworkProfiles(ServiceCtx context)
@@ -87,7 +144,7 @@ namespace Ryujinx.HLE.HOS.Services.Nifm.StaticService
             byte type = context.RequestData.ReadByte();
             int count = 0;
 
-            HostNetwork.Reading host = HostNetwork.Current;
+            HostNetwork.Reading host = HostNetwork.Named;
 
             if ((type & 1) != 0 && host.Link != HostNetwork.Link.None && context.Request.ReceiveBuff.Count > 0 && context.Request.ReceiveBuff[0].Size >= 0x75)
             {
@@ -98,19 +155,30 @@ namespace Ryujinx.HLE.HOS.Services.Nifm.StaticService
 
                 System.Runtime.InteropServices.MemoryMarshal.Write(info, ProfileId(name));
                 raw.AsSpan(0, Math.Min(raw.Length, 0x3F)).CopyTo(info.AsSpan(0x10));
-                info[0x50] = 1;                        // a profile the user made
+                info[0x50] = 0;                        // a profile the user made
                 info[0x51] = (byte)(wireless ? 1 : 2); // IEEE 802.11 or Ethernet
 
                 if (wireless)
                 {
-                    raw.AsSpan(0, Math.Min(raw.Length, 0x20)).CopyTo(info.AsSpan(0x52));
+                    info[0x52] = (byte)Math.Min(raw.Length, 0x20); // the SSID: its length, then its bytes
+                    raw.AsSpan(0, Math.Min(raw.Length, 0x20)).CopyTo(info.AsSpan(0x53));
                     info[0x73] = host.Authentication;
                     info[0x74] = host.Encryption;
+                }
+
+                if (System.Environment.GetEnvironmentVariable("NEXTENDO_PROF_SET") is string set)
+                {
+                    foreach (string part in set.Split(','))
+                    {
+                        info[System.Convert.ToInt32(part.Split('=')[0], 16)] = System.Convert.ToByte(part.Split('=')[1], 16);
+                    }
                 }
 
                 context.Memory.Write(context.Request.ReceiveBuff[0].Position, info);
                 count = 1;
             }
+
+            Logger.Info?.Print(LogClass.ServiceNifm, $"[nifm] profiles: type {type}, buffer 0x{(context.Request.ReceiveBuff.Count > 0 ? context.Request.ReceiveBuff[0].Size : 0):X}, {count} written");
 
             context.ResponseData.Write(count);
 
@@ -133,6 +201,40 @@ namespace Ryujinx.HLE.HOS.Services.Nifm.StaticService
             return ResultCode.Success;
         }
 
+        [CommandCmif(8)]
+        // GetNetworkProfile(nn::util::Uuid) -> buffer<nn::nifm::detail::sf::NetworkProfileData, 0x1a, 0x17c>:
+        // the one profile known is the network the computer is on.
+        public ResultCode GetNetworkProfile(ServiceCtx context)
+        {
+            context.RequestData.ReadBytes(0x10);
+
+            return GetCurrentNetworkProfile(context);
+        }
+
+        [CommandCmif(9)]
+        // SetNetworkProfile(buffer<nn::nifm::detail::sf::NetworkProfileData, 0x19, 0x17c>) -> nn::util::Uuid:
+        // kept as it is (the network of the computer is not changed from here).
+        public ResultCode SetNetworkProfile(ServiceCtx context)
+        {
+            UInt128 id = 0;
+
+            if (context.Request.PtrBuff.Count > 0 && context.Request.PtrBuff[0].Size >= 0x10)
+            {
+                id = context.Memory.Read<UInt128>(context.Request.PtrBuff[0].Position);
+            }
+
+            if (id == 0)
+            {
+                HostNetwork.Reading host = HostNetwork.Named;
+
+                id = ProfileId(host.Link == HostNetwork.Link.Wireless && host.Name.Length > 0 ? host.Name : "Ethernet");
+            }
+
+            context.ResponseData.Write(id);
+
+            return ResultCode.Success;
+        }
+
         [CommandCmif(5)]
         // GetCurrentNetworkProfile() -> buffer<nn::nifm::detail::sf::NetworkProfileData, 0x1a, 0x17c>
         public ResultCode GetCurrentNetworkProfile(ServiceCtx context)
@@ -152,7 +254,7 @@ namespace Ryujinx.HLE.HOS.Services.Nifm.StaticService
 
             NetworkProfileData networkProfile = new()
             {
-                Uuid = ProfileId(HostNetwork.Current.Link == HostNetwork.Link.Wireless && HostNetwork.Current.Name.Length > 0 ? HostNetwork.Current.Name : "Ethernet"),
+                Uuid = ProfileId(HostNetwork.Named.Link == HostNetwork.Link.Wireless && HostNetwork.Named.Name.Length > 0 ? HostNetwork.Named.Name : "Ethernet"),
             };
 
             networkProfile.IpSettingData.IpAddressSetting = new IpAddressSetting(interfaceProperties, unicastAddress);
@@ -160,7 +262,7 @@ namespace Ryujinx.HLE.HOS.Services.Nifm.StaticService
 
             // [Nextendo, HOME Menu work] The profile is the network the computer is on: its
             // wireless network by name, or its cable.
-            HostNetwork.Reading host = HostNetwork.Current;
+            HostNetwork.Reading host = HostNetwork.Named;
             bool wireless = host.Link == HostNetwork.Link.Wireless && host.Name.Length > 0;
             byte[] name = System.Text.Encoding.UTF8.GetBytes(wireless ? host.Name : "Ethernet");
 
@@ -254,7 +356,7 @@ namespace Ryujinx.HLE.HOS.Services.Nifm.StaticService
         {
             // [Nextendo, HOME Menu work] The link of the computer itself: wireless with its
             // strength, cable, or none (the HOME Menu draws its top right icon from this).
-            HostNetwork.Reading host = HostNetwork.Current;
+            HostNetwork.Reading host = HostNetwork.Named;
 
             if (host.Link == HostNetwork.Link.None)
             {
@@ -325,12 +427,86 @@ namespace Ryujinx.HLE.HOS.Services.Nifm.StaticService
                 GeneralServiceManager.Remove(_generalServiceDetail.ClientId);
             }
         }
+        // [Nextendo, HOME Menu work] nn::nifm::detail::sf::AccessPointData (0x34 bytes), as far as
+        // the Internet page shows it: SSID length at 0, SSID at 1, bars at 0x2C, channel at 0x2E,
+        // authentication at 0x30, encryption at 0x31, available at 0x32-0x33.
+        private const int AccessPointSize = 0x34;
+
+        private static void WriteAccessPoint(System.Span<byte> entry, string ssid, byte bars, int channel, byte authentication, byte encryption)
+        {
+            byte[] name = System.Text.Encoding.UTF8.GetBytes(ssid);
+            int length = System.Math.Min(name.Length, 32);
+
+            entry.Clear();
+            entry[0] = (byte)length;
+            name.AsSpan(0, length).CopyTo(entry[1..]);
+            entry[0x2C] = bars;
+            System.BitConverter.TryWriteBytes(entry.Slice(0x2E, 2), (ushort)channel);
+            entry[0x30] = authentication;
+            entry[0x31] = encryption;
+            entry[0x32] = 1; // the page lists it as one to connect to (greyed out without)
+            entry[0x33] = 1;
+        }
+
+        [CommandCmif(47)] // 19.0.0+
+        // GetScanData(u64) -> (s32 count, buffer<nn::nifm::detail::sf::AccessPointData, 6>): the
+        // wireless networks around the computer, as Windows sees them.
+        public ResultCode GetScanDataV19(ServiceCtx context)
+        {
+            return WriteScanData(context, context.Request.ReceiveBuff.Count > 0 ? context.Request.ReceiveBuff[0].Position : 0, context.Request.ReceiveBuff.Count > 0 ? context.Request.ReceiveBuff[0].Size : 0);
+        }
+
+        [CommandCmif(35)] // 4.0.0+
+        // GetScanData() -> (s32 count, buffer<nn::nifm::detail::sf::AccessPointData, 6>)
+        public ResultCode GetScanData(ServiceCtx context)
+        {
+            return WriteScanData(context, context.Request.ReceiveBuff.Count > 0 ? context.Request.ReceiveBuff[0].Position : 0, context.Request.ReceiveBuff.Count > 0 ? context.Request.ReceiveBuff[0].Size : 0);
+        }
+
+        private static ResultCode WriteScanData(ServiceCtx context, ulong position, ulong size)
+        {
+            System.Collections.Generic.List<HostNetwork.Nearby> networks = HostNetwork.Scan();
+            int count = System.Math.Min(networks.Count, (int)(size / AccessPointSize));
+
+            byte[] data = new byte[count * AccessPointSize];
+
+            for (int i = 0; i < count; i++)
+            {
+                HostNetwork.Nearby network = networks[i];
+
+                WriteAccessPoint(data.AsSpan(i * AccessPointSize, AccessPointSize), network.Name, network.Bars, network.Channel, network.Authentication, network.Encryption);
+            }
+
+            // Probe (development): "at=value" pairs set in every entry.
+            if (System.Environment.GetEnvironmentVariable("NEXTENDO_SCAN_SET") is string set)
+            {
+                for (int i = 0; i < count; i++)
+                {
+                    foreach (string part in set.Split(','))
+                    {
+                        data[i * AccessPointSize + System.Convert.ToInt32(part.Split('=')[0], 16)] = System.Convert.ToByte(part.Split('=')[1], 16);
+                    }
+                }
+            }
+
+            if (count > 0)
+            {
+                context.Memory.Write(position, data);
+            }
+
+            Logger.Info?.Print(LogClass.ServiceNifm, $"[nifm] scan: {count} network(s) around the computer");
+
+            context.ResponseData.Write(count);
+
+            return ResultCode.Success;
+        }
+
         [CommandCmif(36)]
         // GetCurrentAccessPoint() -> buffer<nn::nifm::detail::sf::AccessPointData, 0x1a>
         public ResultCode GetCurrentAccessPoint(ServiceCtx context)
         {
             // [Nextendo, HOME Menu work] The wireless network the computer is on, by name.
-            HostNetwork.Reading host = HostNetwork.Current;
+            HostNetwork.Reading host = HostNetwork.Named;
 
             if (host.Link != HostNetwork.Link.Wireless)
             {
@@ -350,6 +526,8 @@ namespace Ryujinx.HLE.HOS.Services.Nifm.StaticService
             // page works the frequency band out of the channel).
             accessPoint[0x2C] = host.Bars;
             System.BitConverter.TryWriteBytes(System.MemoryExtensions.AsSpan(accessPoint, 0x2E, 2), (ushort)host.Channel);
+            accessPoint[0x30] = host.Authentication;
+            accessPoint[0x31] = host.Encryption;
 
             if (System.Environment.GetEnvironmentVariable("NEXTENDO_AP_PROBE") is string probe)
             {

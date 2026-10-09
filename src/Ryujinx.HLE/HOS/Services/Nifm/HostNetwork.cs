@@ -32,6 +32,33 @@ namespace Ryujinx.HLE.HOS.Services.Nifm
         private static long _readAt = long.MinValue / 2;
         private static int _reading;
 
+        /// <summary>
+        /// The reading with the name of the wireless network: waits for a full reading when the
+        /// one at hand is the quick one (no name yet), as for the pages that show the network.
+        /// </summary>
+        public static Reading Named
+        {
+            get
+            {
+                Reading reading = Current;
+
+                if (reading.Link == Link.Wireless && reading.Name.Length == 0)
+                {
+                    try
+                    {
+                        _last = reading = Read(quick: false);
+                        _readAt = Environment.TickCount64;
+                    }
+                    catch (Exception)
+                    {
+                        // the quick reading stays
+                    }
+                }
+
+                return reading;
+            }
+        }
+
         public static Reading Current
         {
             get
@@ -162,6 +189,78 @@ namespace Ryujinx.HLE.HOS.Services.Nifm
             return new Reading(link, name, signal, airplane, channel, authentication, encryption);
         }
 
+        /// <summary>A wireless network around the computer, as Windows last saw it.</summary>
+        public readonly record struct Nearby(string Name, int SignalPercent, int Channel, byte Authentication, byte Encryption)
+        {
+            public byte Bars => SignalPercent >= 70 ? (byte)3 : SignalPercent >= 40 ? (byte)2 : (byte)1;
+        }
+
+        /// <summary>
+        /// The wireless networks around the computer (Windows only): read from the list Windows
+        /// keeps, nothing is changed on the computer. The strongest access point of each network.
+        /// </summary>
+        public static System.Collections.Generic.List<Nearby> Scan()
+        {
+            System.Collections.Generic.List<Nearby> found = [];
+
+            if (!OperatingSystem.IsWindows())
+            {
+                return found;
+            }
+
+            string report = Run("netsh", "wlan show networks mode=bssid");
+
+            // Each network starts with "SSID n : name"; the other lines are in the language of
+            // the system, found by what they hold.
+            string[] blocks = Regex.Split(report, "^\\s*SSID\\s+\\d+\\s*:", RegexOptions.Multiline);
+
+            for (int i = 1; i < blocks.Length; i++)
+            {
+                string block = blocks[i];
+                string name = block.Split('\n')[0].Trim();
+
+                if (name.Length == 0 || found.Exists(n => n.Name == name))
+                {
+                    continue;
+                }
+
+                int signal = 0;
+
+                foreach (Match m in Regex.Matches(block, ":\\s*(\\d{1,3})\\s*%"))
+                {
+                    signal = Math.Max(signal, int.Parse(m.Groups[1].Value));
+                }
+
+                Match channelLine = Regex.Match(block, "^\\s*(Canal|Channel|Kanal|Canale)\\s*:\\s*(\\d+)\\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+
+                (byte authentication, byte encryption) = Security(block);
+
+                found.Add(new Nearby(name, signal, channelLine.Success ? int.Parse(channelLine.Groups[2].Value) : 0, authentication, encryption));
+            }
+
+            found.Sort((a, b) => b.SignalPercent.CompareTo(a.SignalPercent));
+
+            return found;
+        }
+
+        // nn::nifm::Authentication: 1 open, 4 WPA-PSK, 5 WPA2 (enterprise), 6 WPA2-PSK.
+        // nn::nifm::Encryption: 1 none, 2 WEP, 3 TKIP, 4 AES.
+        private static (byte Authentication, byte Encryption) Security(string report)
+        {
+            byte authentication =
+                Regex.IsMatch(report, ":\\s*WPA[23]\\s*-?\\s*(Personal|Personnel|Pers)", RegexOptions.IgnoreCase) || Regex.IsMatch(report, ":\\s*WPA3", RegexOptions.IgnoreCase) ? (byte)6
+                : Regex.IsMatch(report, ":\\s*WPA2", RegexOptions.IgnoreCase) ? (byte)5
+                : Regex.IsMatch(report, ":\\s*WPA", RegexOptions.IgnoreCase) ? (byte)4
+                : (byte)1;
+
+            byte encryption = Regex.IsMatch(report, ":\\s*(CCMP|GCMP)", RegexOptions.IgnoreCase) ? (byte)4
+                : Regex.IsMatch(report, ":\\s*TKIP", RegexOptions.IgnoreCase) ? (byte)3
+                : Regex.IsMatch(report, ":\\s*WEP", RegexOptions.IgnoreCase) ? (byte)2
+                : (byte)1;
+
+            return (authentication, encryption);
+        }
+
         [System.Runtime.Versioning.SupportedOSPlatform("windows")]
         private static bool WindowsAirplaneMode()
         {
@@ -184,6 +283,7 @@ namespace Ryujinx.HLE.HOS.Services.Nifm
                 using Process process = Process.Start(new ProcessStartInfo(program, arguments)
                 {
                     RedirectStandardOutput = true,
+                    StandardOutputEncoding = System.Text.Encoding.UTF8, // netsh writes UTF-8 (with no-break spaces) when redirected
                     UseShellExecute = false,
                     CreateNoWindow = true,
                 });
