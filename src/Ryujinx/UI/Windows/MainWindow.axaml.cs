@@ -799,6 +799,18 @@ namespace Ryujinx.Ava.UI.Windows
 
             Ryujinx.Ava.Utilities.AppletMetadata homeMenu = new(ViewModel.ContentManager, "HOME Menu", 0x0100000000001000);
             Logger.Notice.Print(LogClass.Application, $"[home-menu] resolving qlaunch, content path={homeMenu.GetContentPath(ViewModel.ContentManager)}");
+            // No firmware installed (or one without the menu): say so instead of going on.
+            if (string.IsNullOrEmpty(homeMenu.GetContentPath(ViewModel.ContentManager)))
+            {
+                Logger.Error?.Print(LogClass.Application, "HOME Menu: qlaunch not found in the installed firmware.");
+
+                _ = Ryujinx.Ava.UI.Helpers.ContentDialogHelper.CreateWarningDialog(
+                    "HOME Menu",
+                    "The HOME Menu comes with the system firmware. Install a firmware first (Actions > Install Firmware).");
+
+                return;
+            }
+
             if (homeMenu.CanStart(out ApplicationData homeMenuData, out LibHac.Common.BlitStruct<LibHac.Ns.ApplicationControlProperty> homeMenuNacp))
             {
                 // Its own icon on the loading screen, not the generic NCA cartridge.
