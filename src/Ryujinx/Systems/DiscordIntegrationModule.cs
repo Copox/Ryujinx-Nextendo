@@ -226,6 +226,13 @@ namespace Ryujinx.Ava.Systems
         {
             if (titleId.TryGet(out string tid) && Switch.Shared.Processes.ActiveApplication is not null)
             {
+                // Another program in front (a game started from the HOME Menu, or the menu again
+                // after it): the presence is made anew, not the previous one kept.
+                if (!string.Equals(_currentTitleId, tid ?? "", StringComparison.OrdinalIgnoreCase))
+                {
+                    _discordPresencePlaying = null;
+                }
+
                 _currentTitleId = tid ?? "";
 
                 // La bascule d'application doit précéder la publication : sinon le premier message
@@ -314,6 +321,16 @@ namespace Ryujinx.Ava.Systems
             {
                 presence.Details = "On the HOME Menu";
                 presence.Assets.LargeImageText = "Nintendo Switch HOME Menu";
+
+                // On the menu, the big picture is the player's own (their Nextendo profile picture).
+                if (surNous && NextendoAccount.Pid != 0)
+                {
+                    presence.Assets.LargeImageKey = $"{NextendoEndpoint.Canonical}/api/avatar?pid={NextendoAccount.Pid}";
+                    presence.Assets.LargeImageText = TruncateToByteLength(
+                        string.IsNullOrEmpty(NextendoAccount.Username) ? "Nintendo Switch HOME Menu" : NextendoAccount.Username);
+                    presence.Assets.SmallImageKey = NextendoIcones.UrlJeu(tid) is { Length: > 0 } menu ? menu : NextendoIcones.UrlReseau();
+                    presence.Assets.SmallImageText = "HOME Menu";
+                }
             }
 
             _etatJeu = "";

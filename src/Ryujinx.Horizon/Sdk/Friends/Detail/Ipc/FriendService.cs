@@ -975,6 +975,11 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             // Meme remplissage que GetFriendList : les vrais amis Nextendo avec
             // leur presence reelle. MyPage (SDK 22) ne lit QUE cette version V2 :
             // la laisser vide, c'est une liste d'amis vide a l'ecran.
+            if (IsNextendoProfile(userId) && offset == 0)
+            {
+                NextendoActivity.Set("FriendList");
+            }
+
             if (IsNextendoProfile(userId) && (offset == 0 || WantsNsaIds()))
             {
                 IReadOnlyList<NextendoFriends.Entry> friends = WantsNsaIds() ? NextendoFriends.GetWarm(2000) : NextendoFriends.Get();
@@ -1176,10 +1181,6 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
 
             records.Clear();
 
-            if (IsNextendoProfile(userId))
-            {
-                NextendoActivity.Set("FriendList");
-            }
 
             IReadOnlyList<NextendoFriends.Entry> friends = IsNextendoProfile(userId) ? NextendoFriends.Get() : [];
             int filled = 0;

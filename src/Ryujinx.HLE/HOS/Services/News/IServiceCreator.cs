@@ -148,7 +148,6 @@ namespace Ryujinx.HLE.HOS.Services.News
 
             _data = newsId.Length > 0 && System.IO.File.Exists(file) ? System.IO.File.ReadAllBytes(file) : System.Array.Empty<byte>();
 
-            Ryujinx.Common.Configuration.NextendoActivity.Set("News");
 
             Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.Service, $"[news] open \"{newsId}\" -> {_data.Length} bytes");
 
