@@ -219,7 +219,7 @@ Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.Servi
         // GetTotalSpaceSize(u8 storageId) -> s64
         public ResultCode GetTotalSpaceSize(ServiceCtx context)
         {
-            context.ResponseData.Write(32L * 1024 * 1024 * 1024);
+            context.ResponseData.Write(HostDrive(context.RequestData.ReadByte()).Total);
 
             return ResultCode.Success;
         }
@@ -228,9 +228,39 @@ Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.Servi
         // GetFreeSpaceSize(u8 storageId) -> s64
         public ResultCode GetFreeSpaceSize(ServiceCtx context)
         {
-            context.ResponseData.Write(16L * 1024 * 1024 * 1024);
+            context.ResponseData.Write(HostDrive(context.RequestData.ReadByte()).Free);
 
             return ResultCode.Success;
+        }
+
+        // [Nextendo, HOME Menu work] The storage of the console is a folder of the computer:
+        // its size and free space are those of the disk that folder is on (the console memory
+        // is the data folder, the microSD card is the "sdcard" folder).
+        private static (long Total, long Free) HostDrive(byte storageId)
+        {
+            try
+            {
+                string folder = Ryujinx.Common.Configuration.AppDataManager.BaseDirPath;
+
+                if (storageId == 5)
+                {
+                    string card = System.IO.Path.Combine(folder, "sdcard");
+
+                    if (System.IO.Directory.Exists(card))
+                    {
+                        // A card folder may be a link to another disk.
+                        folder = System.IO.Directory.ResolveLinkTarget(card, true)?.FullName ?? card;
+                    }
+                }
+
+                System.IO.DriveInfo drive = new(System.IO.Path.GetPathRoot(System.IO.Path.GetFullPath(folder)));
+
+                return (drive.TotalSize, drive.AvailableFreeSpace);
+            }
+            catch (System.Exception)
+            {
+                return (32L * 1024 * 1024 * 1024, 16L * 1024 * 1024 * 1024);
+            }
         }
     }
 

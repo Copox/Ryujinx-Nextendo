@@ -87,7 +87,29 @@ namespace Ryujinx.HLE.HOS.Services.Nifm.StaticService
             networkProfile.IpSettingData.IpAddressSetting = new IpAddressSetting(interfaceProperties, unicastAddress);
             networkProfile.IpSettingData.DnsSetting = new DnsSetting(interfaceProperties);
 
-            "RyujinxNetwork"u8.CopyTo(networkProfile.Name.AsSpan());
+            // [Nextendo, HOME Menu work] The profile is the network the computer is on: its
+            // wireless network by name, or its cable.
+            HostNetwork.Reading host = HostNetwork.Current;
+            bool wireless = host.Link == HostNetwork.Link.Wireless && host.Name.Length > 0;
+            byte[] name = System.Text.Encoding.UTF8.GetBytes(wireless ? host.Name : "Ethernet");
+
+            name.AsSpan(0, System.Math.Min(name.Length, 63)).CopyTo(networkProfile.Name.AsSpan());
+
+            networkProfile.Unknown[0] = 0;                        // a profile the user made
+            networkProfile.Unknown[1] = (byte)(wireless ? 1 : 2); // IEEE 802.11 or Ethernet
+            networkProfile.Unknown[2] = 1;                        // connects by itself
+
+            if (wireless)
+            {
+                int length = System.Math.Min(name.Length, 32);
+
+                networkProfile.WirelessSettingData.SsidLength = (byte)length;
+                name.AsSpan(0, length).CopyTo(networkProfile.WirelessSettingData.Ssid.AsSpan());
+
+                // After the name: hidden network or not, then how it is secured.
+                networkProfile.WirelessSettingData.Unknown[1] = host.Authentication;
+                networkProfile.WirelessSettingData.Unknown[2] = host.Encryption;
+            }
 
             context.Memory.Write(networkProfileDataPosition, networkProfile);
 
@@ -232,6 +254,57 @@ namespace Ryujinx.HLE.HOS.Services.Nifm.StaticService
                 GeneralServiceManager.Remove(_generalServiceDetail.ClientId);
             }
         }
+        [CommandCmif(36)]
+        // GetCurrentAccessPoint() -> buffer<nn::nifm::detail::sf::AccessPointData, 0x1a>
+        public ResultCode GetCurrentAccessPoint(ServiceCtx context)
+        {
+            // [Nextendo, HOME Menu work] The wireless network the computer is on, by name.
+            HostNetwork.Reading host = HostNetwork.Current;
+
+            if (host.Link != HostNetwork.Link.Wireless)
+            {
+                return ResultCode.NoInternetConnection;
+            }
+
+            ulong position = context.Request.RecvListBuff[0].Position;
+            int size = int.TryParse(System.Environment.GetEnvironmentVariable("NEXTENDO_AP_SIZE"), System.Globalization.NumberStyles.HexNumber, null, out int given) ? given : 0x34;
+            byte[] accessPoint = new byte[size];
+            byte[] name = System.Text.Encoding.UTF8.GetBytes(host.Name);
+            int length = System.Math.Min(name.Length, 32);
+
+            accessPoint[0] = (byte)length;
+            System.Array.Copy(name, 0, accessPoint, 1, length);
+
+            // Found by probing the Internet page: bars of signal at 0x2C, channel at 0x2E (the
+            // page works the frequency band out of the channel).
+            accessPoint[0x2C] = host.Bars;
+            System.BitConverter.TryWriteBytes(System.MemoryExtensions.AsSpan(accessPoint, 0x2E, 2), (ushort)host.Channel);
+
+            if (System.Environment.GetEnvironmentVariable("NEXTENDO_AP_PROBE") is string probe)
+            {
+                // "from-to" (hex): each of those bytes holds its own offset; "at=value" sets one.
+                foreach (string part in probe.Split(','))
+                {
+                    if (part.Contains('='))
+                    {
+                        accessPoint[System.Convert.ToInt32(part.Split('=')[0], 16)] = System.Convert.ToByte(part.Split('=')[1], 16);
+                    }
+                    else
+                    {
+                        for (int k = System.Convert.ToInt32(part.Split('-')[0], 16); k < System.Convert.ToInt32(part.Split('-')[1], 16); k++)
+                        {
+                            accessPoint[k] = (byte)k;
+                        }
+                    }
+                }
+            }
+
+            context.Response.PtrBuff[0] = context.Response.PtrBuff[0].WithSize((uint)size);
+            context.Memory.Write(position, accessPoint);
+
+            return ResultCode.Success;
+        }
+
         [CommandCmif(17)]
         // IsWirelessCommunicationEnabled() -> bool
         public ResultCode IsWirelessCommunicationEnabled(ServiceCtx context)

@@ -22,7 +22,7 @@ namespace Ryujinx.HLE.HOS.Services.Nifm
             Cable,
         }
 
-        public readonly record struct Reading(Link Link, string Name, int SignalPercent, bool Airplane)
+        public readonly record struct Reading(Link Link, string Name, int SignalPercent, bool Airplane, int Channel = 0, byte Authentication = 0, byte Encryption = 0)
         {
             /// <summary>Bars of the console's indicator, 0 to 3.</summary>
             public byte Bars => Link != Link.Wireless ? (byte)0 : SignalPercent >= 70 ? (byte)3 : SignalPercent >= 40 ? (byte)2 : (byte)1;
@@ -97,6 +97,8 @@ namespace Ryujinx.HLE.HOS.Services.Nifm
             string name = "";
             int signal = 100;
             bool airplane = false;
+            int channel = 0;
+            byte authentication = 0, encryption = 0;
 
             if (OperatingSystem.IsWindows() && !quick)
             {
@@ -116,6 +118,39 @@ namespace Ryujinx.HLE.HOS.Services.Nifm
                     {
                         signal = int.Parse(strength.Groups[1].Value);
                     }
+
+                    // The report is in the language of the system: the lines are found by what
+                    // they hold, not by their label.
+                    Match channelLine = Regex.Match(report, "^\\s*(Canal|Channel|Kanal)\\s*:\\s*(\\d+)\\s*$", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+
+                    if (channelLine.Success)
+                    {
+                        channel = int.Parse(channelLine.Groups[2].Value);
+                    }
+
+                    // nn::nifm::Authentication: 1 open, 4 WPA-PSK, 5 WPA2 (enterprise), 6 WPA2-PSK.
+                    // nn::nifm::Encryption: 1 none, 2 WEP, 3 TKIP, 4 AES.
+                    if (Regex.IsMatch(report, ":\\s*WPA[23]\\s*-?\\s*(Personal|Personnel|Pers)", RegexOptions.IgnoreCase) || Regex.IsMatch(report, ":\\s*WPA3", RegexOptions.IgnoreCase))
+                    {
+                        authentication = 6;
+                    }
+                    else if (Regex.IsMatch(report, ":\\s*WPA2", RegexOptions.IgnoreCase))
+                    {
+                        authentication = 5;
+                    }
+                    else if (Regex.IsMatch(report, ":\\s*WPA", RegexOptions.IgnoreCase))
+                    {
+                        authentication = 4;
+                    }
+                    else if (ssid.Success)
+                    {
+                        authentication = 1;
+                    }
+
+                    encryption = Regex.IsMatch(report, ":\\s*(CCMP|GCMP)", RegexOptions.IgnoreCase) ? (byte)4
+                        : Regex.IsMatch(report, ":\\s*TKIP", RegexOptions.IgnoreCase) ? (byte)3
+                        : Regex.IsMatch(report, ":\\s*WEP", RegexOptions.IgnoreCase) ? (byte)2
+                        : ssid.Success ? (byte)1 : (byte)0;
                 }
 
                 if (link == Link.None)
@@ -124,7 +159,7 @@ namespace Ryujinx.HLE.HOS.Services.Nifm
                 }
             }
 
-            return new Reading(link, name, signal, airplane);
+            return new Reading(link, name, signal, airplane, channel, authentication, encryption);
         }
 
         [System.Runtime.Versioning.SupportedOSPlatform("windows")]
