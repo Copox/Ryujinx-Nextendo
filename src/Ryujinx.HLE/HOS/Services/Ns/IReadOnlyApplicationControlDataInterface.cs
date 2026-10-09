@@ -131,6 +131,17 @@ namespace Ryujinx.HLE.HOS.Services.Ns
                 icon = ResizeIcon(icon, 174);
             }
 
+            if (decoded && icon == null)
+            {
+                // A game the server names but has no picture of: a plain tile, so that its name
+                // shows instead of "loading failed".
+                using SkiaSharp.SKBitmap blank = new(174, 174);
+                blank.Erase(new SkiaSharp.SKColor(0xC8, 0xC8, 0xC8));
+                using SkiaSharp.SKData plain = blank.Encode(SkiaSharp.SKEncodedImageFormat.Jpeg, 90);
+
+                icon = plain?.ToArray();
+            }
+
             if (icon != null && System.Environment.GetEnvironmentVariable("NEXTENDO_FORCE_REENCODE") == "1")
             {
                 icon = ShrinkIcon(icon, 60000); // test: are re-encoded pictures readable by the menu?

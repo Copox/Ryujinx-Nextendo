@@ -799,9 +799,34 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
 
                     MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref head, 1))[..0x40].CopyTo(info);
 
-                    if (entry.Status > 0 && entry.AppId != 0)
+                    // The play history: up to twenty entries of 0x30 bytes, laid out like the
+                    // play log the console receives for a friend (application id, presence group
+                    // id, times played, minutes played, first and last time played). The game
+                    // being played now opens the list when the history does not have it yet.
+                    List<NextendoFriends.Played> played = new(NextendoFriends.History(entry.Pid, 2500));
+
+                    // An entry the server could not name has no title card to show.
+                    played.RemoveAll(g => string.IsNullOrEmpty(g.Name));
+
+                    if (entry.Status > 0 && entry.AppId != 0 && !played.Exists(g => g.TitleId == entry.AppId))
                     {
-                        BitConverter.TryWriteBytes(info.Slice(0xE0, 8), entry.AppId);
+                        played.Insert(0, new NextendoFriends.Played(entry.AppId, entry.Game, 0, DateTimeOffset.UtcNow.ToUnixTimeSeconds()));
+                    }
+
+                    for (int g = 0; g < played.Count && g < 20; g++)
+                    {
+                        Span<byte> slot = info.Slice(0xE0 + g * 0x30, 0x30);
+
+                        // Entry layout, found by probing the page: title id, presence group id,
+                        // then at 0x18 the number of times played, at 0x1C the minutes played, at
+                        // 0x20 the first time played and at 0x28 the last one. The server does not
+                        // know the first time: left empty, the page tells how long the game was
+                        // played instead of "first played ... ago".
+                        BitConverter.TryWriteBytes(slot.Slice(0x00, 8), played[g].TitleId);
+                        BitConverter.TryWriteBytes(slot.Slice(0x08, 8), played[g].TitleId);
+                        BitConverter.TryWriteBytes(slot.Slice(0x18, 4), 1);
+                        BitConverter.TryWriteBytes(slot.Slice(0x1C, 4), (int)Math.Min(int.MaxValue, played[g].Seconds / 60));
+                        BitConverter.TryWriteBytes(slot.Slice(0x28, 8), played[g].LastPlayed);
                     }
 
                     // "Friends since", in Unix seconds (found at 0x5D0 by probing).

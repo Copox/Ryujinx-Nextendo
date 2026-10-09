@@ -174,7 +174,7 @@ namespace Ryujinx.Common.Configuration
                         // La console attend un JPEG : on ne sert que ce qui en est un (SOI ff d8).
                         if (body.Length > 2 && body[0] == 0xFF && body[1] == 0xD8)
                         {
-                            data = body;
+                            data = NextendoImages.Fit(body, 256);
                         }
                     }
                 }
@@ -382,13 +382,9 @@ namespace Ryujinx.Common.Configuration
                         }
 
                         bool favorite = f.TryGetProperty("favorite", out JsonElement favEl) && favEl.ValueKind == JsonValueKind.True;
-                        long since = 0;
-
-                        if (f.TryGetProperty("created_at", out JsonElement sinceEl) && sinceEl.ValueKind == JsonValueKind.String &&
-                            DateTimeOffset.TryParse(sinceEl.GetString(), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out DateTimeOffset when))
-                        {
-                            since = when.ToUnixTimeSeconds();
-                        }
+                        // When the two accounts became friends (Unix seconds). Only this field says
+                        // it: "created_at" is the day the friend's account was opened.
+                        long since = f.TryGetProperty("since", out JsonElement sinceEl) && sinceEl.ValueKind == JsonValueKind.Number ? sinceEl.GetInt64() : 0;
 
                         if (pid != 0)
                         {
@@ -414,6 +410,97 @@ namespace Ryujinx.Common.Configuration
             {
                 // keep the stale cache on any failure
             }
+        }
+
+        /// <summary>One game of the play history of a friend.</summary>
+        public readonly record struct Played(ulong TitleId, string Name, long Seconds, long LastPlayed);
+
+        private static readonly Dictionary<ulong, (long At, List<Played> List)> _histories = new();
+
+        /// <summary>
+        /// The play history of a friend (/api/friends/history, friends only), most recent first,
+        /// kept two minutes. Waits for the server at most <paramref name="timeoutMs"/>: the page
+        /// that shows it asks once.
+        /// </summary>
+        public static IReadOnlyList<Played> History(ulong pid, int timeoutMs)
+        {
+            lock (_histories)
+            {
+                if (_histories.TryGetValue(pid, out var known) && Environment.TickCount64 - known.At < 120_000)
+                {
+                    return known.List;
+                }
+            }
+
+            List<Played> list = new();
+
+            if (string.IsNullOrEmpty(NextendoAccount.NexToken))
+            {
+                return list;
+            }
+
+            try
+            {
+                string baseUrl = NextendoEndpoint.BaseUrl().TrimEnd('/');
+
+                using System.Threading.CancellationTokenSource limit = new(timeoutMs);
+                using HttpRequestMessage req = new(HttpMethod.Get, baseUrl + "/api/friends/history?pid=" + pid);
+                req.Headers.Add("Authorization", "Bearer " + NextendoAccount.NexToken);
+                using HttpResponseMessage resp = _http.SendAsync(req, limit.Token).GetAwaiter().GetResult();
+
+                if (!resp.IsSuccessStatusCode)
+                {
+                    return list;
+                }
+
+                using JsonDocument doc = JsonDocument.Parse(resp.Content.ReadAsStringAsync(limit.Token).GetAwaiter().GetResult());
+
+                if (doc.RootElement.TryGetProperty("history", out JsonElement entries) && entries.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (JsonElement e in entries.EnumerateArray())
+                    {
+                        string idText = e.TryGetProperty("title_id", out JsonElement idEl) ? idEl.GetString() ?? "" : "";
+
+                        if (!ulong.TryParse(idText, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out ulong titleId) || titleId == 0)
+                        {
+                            continue;
+                        }
+
+                        string name = e.TryGetProperty("name", out JsonElement nameEl) ? nameEl.GetString() ?? "" : "";
+                        long seconds = e.TryGetProperty("seconds", out JsonElement secEl) && secEl.ValueKind == JsonValueKind.Number ? secEl.GetInt64() : 0;
+                        long last = 0;
+
+                        if (e.TryGetProperty("last_played", out JsonElement lastEl) && lastEl.ValueKind == JsonValueKind.String &&
+                            DateTimeOffset.TryParse(lastEl.GetString(), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out DateTimeOffset when))
+                        {
+                            last = when.ToUnixTimeSeconds();
+                        }
+
+                        byte[] icon = null;
+
+                        if (e.TryGetProperty("icon", out JsonElement iconEl) && iconEl.ValueKind == JsonValueKind.String && !string.IsNullOrEmpty(iconEl.GetString()))
+                        {
+                            try { icon = Convert.FromBase64String(iconEl.GetString()); } catch { icon = null; }
+                        }
+
+                        NextendoGames.Remember(titleId, name, icon);
+                        list.Add(new Played(titleId, name, seconds, last));
+                    }
+                }
+
+                list.Sort((a, b) => b.LastPlayed.CompareTo(a.LastPlayed));
+            }
+            catch
+            {
+                return list; // server out of reach: nothing is kept, the next page asks again
+            }
+
+            lock (_histories)
+            {
+                _histories[pid] = (Environment.TickCount64, list);
+            }
+
+            return list;
         }
 
         private static string _lastKey;

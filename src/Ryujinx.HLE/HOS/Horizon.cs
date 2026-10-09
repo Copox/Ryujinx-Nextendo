@@ -202,6 +202,27 @@ namespace Ryujinx.HLE.HOS
 
             VsyncEvent = new KEvent(KernelContext);
 
+            // [Nextendo, HOME Menu work] Pictures from Nextendo, in the form the console software reads.
+            Ryujinx.Common.Configuration.NextendoImages.SquareJpeg ??= static (image, side) =>
+            {
+                using SkiaSharp.SKBitmap source = SkiaSharp.SKBitmap.Decode(image);
+
+                if (source == null)
+                {
+                    return null;
+                }
+
+                if (source.Width == side && source.Height == side)
+                {
+                    return image;
+                }
+
+                using SkiaSharp.SKBitmap scaled = source.Resize(new SkiaSharp.SKImageInfo(side, side), SkiaSharp.SKFilterQuality.High);
+                using SkiaSharp.SKData encoded = scaled?.Encode(SkiaSharp.SKEncodedImageFormat.Jpeg, 90);
+
+                return encoded?.ToArray();
+            };
+
             DisplayResolutionChangeEvent = new KEvent(KernelContext);
 
             SharedFontManager = new SharedFontManager(device, fontStorage);
