@@ -34,6 +34,8 @@ namespace Ryujinx.Common.Configuration
 
         private static readonly System.Net.Http.HttpClient _http = new() { Timeout = System.TimeSpan.FromSeconds(3) };
 
+        public static bool Knows(ulong titleId) => _games.ContainsKey(titleId);
+
         public static bool TryGet(ulong titleId, out Game game)
         {
             if (!_games.TryGetValue(titleId, out game))

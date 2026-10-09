@@ -383,7 +383,20 @@ namespace Ryujinx.Common.Configuration
                                 try { icon = Convert.FromBase64String(iconEl.GetString()); } catch { icon = null; }
                             }
 
-                            NextendoGames.Remember(appId, game, icon);
+                            // A game the server has no name for still gets its card: named by what the
+                            // player is on (the HOME Menu of a console), else by its id; the icon is
+                            // asked of the catalogue when the card is drawn.
+                            string cardName = game;
+
+                            if (string.IsNullOrEmpty(cardName) && appId != 0)
+                            {
+                                cardName = appId == NextendoGames.HomeMenuId ? "Menu HOME" : appId.ToString("X16");
+                            }
+
+                            if (!NextendoGames.Knows(appId) || !string.IsNullOrEmpty(game))
+                            {
+                                NextendoGames.Remember(appId, cardName, icon);
+                            }
                         }
 
                         bool favorite = f.TryGetProperty("favorite", out JsonElement favEl) && favEl.ValueKind == JsonValueKind.True;
