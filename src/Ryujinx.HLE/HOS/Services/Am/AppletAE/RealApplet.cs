@@ -95,6 +95,11 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
 
                 HomeMenuStatus.Running = true;
 
+                if (first)
+                {
+                    NextendoHomeResolution.HomeInFront(system);
+                }
+
                 _systemApplets[pid] = state;
 
                 // [Nextendo, HOME Menu work] With the HOME Menu, the overlay applet that draws the
@@ -161,6 +166,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
 
             _application = application;
             Ryujinx.Common.Configuration.NextendoGames.Playing = title.Id;
+            NextendoHomeResolution.GameInFront();
 
             Thread thread = new(() =>
             {
@@ -258,6 +264,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
             {
                 _application = null;
                 Ryujinx.Common.Configuration.NextendoGames.Playing = Ryujinx.Common.Configuration.NextendoGames.HomeMenuId;
+                NextendoHomeResolution.HomeInFront(system);
             }
 
             if (application.Pid != 0)
