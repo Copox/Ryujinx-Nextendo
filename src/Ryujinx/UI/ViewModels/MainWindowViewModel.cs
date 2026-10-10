@@ -260,6 +260,13 @@ namespace Ryujinx.Ava.UI.ViewModels
                 }
             });
 
+            // [Nextendo, HOME Menu work] The language chosen in the HOME Menu is the one of the emulator.
+            Ryujinx.Common.Configuration.NextendoSystemSettings.LanguageChanged += language => Dispatcher.UIThread.Post(() =>
+            {
+                ConfigurationState.Instance.System.Language.Value = (Ryujinx.Ava.Systems.Configuration.System.Language)language;
+                ConfigurationState.Instance.ToFileFormat().SaveConfig(Program.ConfigurationPath);
+            });
+
             Applications.ToObservableChangeSet()
                 .Filter(Filter)
                 .Sort(GetComparer())

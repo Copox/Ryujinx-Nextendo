@@ -29,6 +29,28 @@ namespace Ryujinx.HLE.HOS.Services.Settings
 
         public ISystemSettingsServer(ServiceCtx context) { }
 
+        [CommandCmif(0)]
+        // SetLanguageCode(nn::settings::LanguageCode)
+        public ResultCode SetLanguageCode(ServiceCtx context)
+        {
+            // [Nextendo, HOME Menu work] "Language" of the HOME Menu settings: the language of the
+            // emulator, kept in its settings (the HOME Menu then restarts in it).
+            string code = System.Text.Encoding.ASCII.GetString(context.RequestData.ReadBytes(8)).TrimEnd('\0');
+            int index = System.Array.IndexOf(Ryujinx.HLE.HOS.SystemState.SystemStateMgr.LanguageCodes, code);
+
+            if (index < 0)
+            {
+                return ResultCode.Success;
+            }
+
+            context.Device.System.State.SetLanguage((Ryujinx.HLE.HOS.SystemState.SystemLanguage)index);
+            Ryujinx.Common.Configuration.NextendoSystemSettings.SetLanguage(index);
+
+            Ryujinx.Common.Logging.Logger.Info?.Print(Ryujinx.Common.Logging.LogClass.ServiceSet, $"[home] system language: {code}");
+
+            return ResultCode.Success;
+        }
+
         [CommandCmif(3)]
         // GetFirmwareVersion() -> buffer<nn::settings::system::FirmwareVersion, 0x1a, 0x100>
         public ResultCode GetFirmwareVersion(ServiceCtx context)

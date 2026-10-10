@@ -62,5 +62,25 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 
             return ResultCode.Success;
         }
+
+        [CommandCmif(40)]
+        // IsSleepEnabled() -> bool
+        public ResultCode IsSleepEnabled(ServiceCtx context)
+        {
+            context.ResponseData.Write(true);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(41)]
+        // IsRebootEnabled() -> bool
+        public ResultCode IsRebootEnabled(ServiceCtx context)
+        {
+            // [Nextendo, HOME Menu work] Without it the HOME Menu turns the console off where it
+            // means to restart it (after a change of language).
+            context.ResponseData.Write(true);
+
+            return ResultCode.Success;
+        }
     }
 }
