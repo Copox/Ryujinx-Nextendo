@@ -170,13 +170,89 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc
             return _applicationServiceServer.ListQualifiedUsers(context);
         }
 
+        // [Nextendo, HOME Menu work] "Add User" and "Delete User" of the HOME Menu settings.
+        [CommandCmif(200)]
+        // BeginUserRegistration() -> nn::account::Uid
+        public ResultCode BeginUserRegistration(ServiceCtx context)
+        {
+            context.Device.System.AccountManager.BeginUserRegistration().Write(context.ResponseData);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(201)]
+        // CompleteUserRegistration(nn::account::Uid)
+        public ResultCode CompleteUserRegistration(ServiceCtx context)
+        {
+            UserId userId = context.RequestData.ReadStruct<UserId>();
+
+            return context.Device.System.AccountManager.CompleteUserRegistration(userId) ? ResultCode.Success : ResultCode.UserNotFound;
+        }
+
+        [CommandCmif(202)]
+        // CancelUserRegistration(nn::account::Uid)
+        public ResultCode CancelUserRegistration(ServiceCtx context)
+        {
+            context.Device.System.AccountManager.CancelUserRegistration(context.RequestData.ReadStruct<UserId>());
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(203)]
+        // DeleteUser(nn::account::Uid)
+        public ResultCode DeleteUser(ServiceCtx context)
+        {
+            UserId userId = context.RequestData.ReadStruct<UserId>();
+            AccountManager accounts = context.Device.System.AccountManager;
+
+            if (!accounts.TryGetUser(userId, out _))
+            {
+                return ResultCode.UserNotFound;
+            }
+
+            accounts.DeleteUser(userId);
+
+            // The Nextendo account loses its user on this emulator: it can be imported again.
+            if (string.Equals(userId.ToString(), Ryujinx.Common.Configuration.NextendoAccount.ProfileUserId, System.StringComparison.OrdinalIgnoreCase))
+            {
+                Ryujinx.Common.Configuration.NextendoAccount.SetProfileUserId(null);
+            }
+
+            Logger.Info?.Print(LogClass.ServiceAcc, $"[acc] user {userId} deleted from the HOME Menu");
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(204)]
+        // SetUserPosition(i32, nn::account::Uid)
+        public ResultCode SetUserPosition(ServiceCtx context)
+        {
+            int position = context.RequestData.ReadInt32();
+
+            context.RequestData.ReadInt32();
+
+            UserId userId = context.RequestData.ReadStruct<UserId>();
+
+            context.Device.System.AccountManager.SetUserPosition(userId, position);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(206)]
+        // CompleteUserRegistrationForcibly(nn::account::Uid)
+        public ResultCode CompleteUserRegistrationForcibly(ServiceCtx context)
+        {
+            return CompleteUserRegistration(context);
+        }
+
         [CommandCmif(205)]
         // GetProfileEditor(nn::account::Uid) -> object<nn::account::profile::IProfileEditor>
         public ResultCode GetProfileEditor(ServiceCtx context)
         {
             UserId userId = context.RequestData.ReadStruct<UserId>();
 
-            if (!context.Device.System.AccountManager.TryGetUser(userId, out UserProfile userProfile))
+            if (!context.Device.System.AccountManager.TryGetUser(userId, out UserProfile userProfile) &&
+                !context.Device.System.AccountManager.TryGetPendingUser(userId, out userProfile))
             {
                 Logger.Warning?.Print(LogClass.ServiceAcc, $"User 0x{userId} not found!");
 

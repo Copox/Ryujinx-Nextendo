@@ -1,3 +1,4 @@
+using Ryujinx.Common;
 using LibHac.Ns;
 using Ryujinx.Common.Utilities;
 
@@ -243,6 +244,78 @@ namespace Ryujinx.HLE.HOS.Services.Ns
             _controlDataDownloadEvent.ReplyWithHandle(context);
 
             MakeObject(context, new IAsyncResult());
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(201)]
+        // DeleteUserSaveDataAll(nn::account::Uid) -> object<nn::ns::detail::IProgressMonitorForDeleteUserSaveDataAll>
+        public ResultCode DeleteUserSaveDataAll(ServiceCtx context)
+        {
+            Account.Acc.UserId userId = context.RequestData.ReadStruct<Account.Acc.UserId>();
+
+            context.Device.System.AccountManager.DeleteUserSaveData(userId);
+
+            MakeObject(context, new IProgressMonitorForDeleteUserSaveDataAll());
+
+            return ResultCode.Success;
+        }
+
+        // [Nextendo, HOME Menu work] "Online License Settings" of a user (User Settings): the
+        // choice is kept with the emulator data.
+        private static string OnlineLicensePath => System.IO.Path.Combine(Ryujinx.Common.Configuration.AppDataManager.BaseDirPath, "nextendo_online_license.txt");
+
+        private StubEvent _onlineLicenseEvent;
+
+        private static System.Collections.Generic.HashSet<string> OnlineLicenseUsers()
+        {
+            try
+            {
+                return System.IO.File.Exists(OnlineLicensePath) ? [.. System.IO.File.ReadAllLines(OnlineLicensePath)] : [];
+            }
+            catch (System.Exception)
+            {
+                return [];
+            }
+        }
+
+        [CommandCmif(4031)]
+        // SetOnlineLicenseEnabled(u64 enabled, nn::account::Uid) -> (handle<copy>, object<nn::ns::detail::IAsyncResult>)
+        public ResultCode SetOnlineLicenseEnabled(ServiceCtx context)
+        {
+            bool enabled = (context.RequestData.ReadUInt64() & 1) != 0;
+            string userId = context.RequestData.ReadStruct<Account.Acc.UserId>().ToString();
+
+            System.Collections.Generic.HashSet<string> users = OnlineLicenseUsers();
+
+            if (enabled ? users.Add(userId) : users.Remove(userId))
+            {
+                try
+                {
+                    System.IO.File.WriteAllLines(OnlineLicensePath, users);
+                }
+                catch (System.Exception)
+                {
+                    // kept for this session only
+                }
+            }
+
+            _onlineLicenseEvent ??= new StubEvent(context);
+            _onlineLicenseEvent.Signal();
+            _onlineLicenseEvent.ReplyWithHandle(context);
+
+            MakeObject(context, new IAsyncResult());
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(4032)]
+        // IsOnlineLicenseEnabled(nn::account::Uid) -> bool
+        public ResultCode IsOnlineLicenseEnabled(ServiceCtx context)
+        {
+            string userId = context.RequestData.ReadStruct<Account.Acc.UserId>().ToString();
+
+            context.ResponseData.Write(OnlineLicenseUsers().Contains(userId));
 
             return ResultCode.Success;
         }

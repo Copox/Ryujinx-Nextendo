@@ -15,6 +15,13 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
         // CheckAvailability()
         public ResultCode CheckAvailability(ServiceCtx context)
         {
+            // A local user has no network service account (no Nextendo account linked): 2124-0200
+            // makes the HOME Menu show it as a local user ("Link Nintendo Account", "Delete User").
+            if (Ryujinx.HLE.HOS.HomeMenuStatus.Running && !IsNextendoUser())
+            {
+                return (ResultCode)((200 << 9) | 124);
+            }
+
             return _managerServer.CheckAvailability(context);
         }
 
@@ -162,11 +169,17 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
             }
         }
 
+        private bool IsNextendoUser()
+        {
+            return Ryujinx.Common.Configuration.NextendoAccount.IsLinked &&
+                string.Equals(_userId.ToString(), Ryujinx.Common.Configuration.NextendoAccount.ProfileUserId, System.StringComparison.OrdinalIgnoreCase);
+        }
+
         [CommandCmif(200)]
         // IsRegistered() -> bool
         public ResultCode IsRegistered(ServiceCtx context)
         {
-            context.ResponseData.Write(true);
+            context.ResponseData.Write(IsNextendoUser());
 
             return ResultCode.Success;
         }
@@ -175,8 +188,9 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
         // IsLinkedWithNintendoAccount() -> bool
         public ResultCode IsLinkedWithNintendoAccount(ServiceCtx context)
         {
-            // The local user is the Nextendo account the emulator is signed in with.
-            context.ResponseData.Write(true);
+            // Only the user of the Nextendo account the emulator is signed in with is linked; the
+            // others are local users.
+            context.ResponseData.Write(IsNextendoUser());
 
             return ResultCode.Success;
         }
