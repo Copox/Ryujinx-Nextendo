@@ -19,6 +19,9 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
         private const string RequestUrl = "https://nextendo.network/connect/console";
         private const string CallbackUri = "nintendo://nextendo.link/callback";
 
+        // Found by trying the results the import compares with (see Register).
+        private const int AlreadyLinkedDescription = 0;
+
         private bool _signedIn;
         private UserId _created;
 
@@ -256,7 +259,11 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
 
                     Logger.Info?.Print(LogClass.ServiceAcc, $"[acc] user import: the account already has the user {profile.UserId}");
 
-                    return ResultCode.Success;
+                    // The answer that makes the import say "this account is already linked to a
+                    // user of this console" (a description of the account module, 2124-xxxx).
+                    int description = int.TryParse(Environment.GetEnvironmentVariable("NEXTENDO_DUP_CODE"), out int forced) ? forced : AlreadyLinkedDescription;
+
+                    return (ResultCode)((description << 9) | 124);
                 }
             }
 

@@ -43,7 +43,12 @@ namespace Ryujinx.HLE.HOS.Applets
             {
                 try
                 {
-                    if (NextendoAccountLink.SignIn != null)
+                    // Development: the account already linked stands for a sign-in (scripted tests).
+                    if (Environment.GetEnvironmentVariable("NEXTENDO_LOGIN_SKIP") == "1" && NextendoAccount.IsLinked)
+                    {
+                        _ok = true;
+                    }
+                    else if (NextendoAccountLink.SignIn != null)
                     {
                         (bool ok, string error) = await NextendoAccountLink.SignIn();
 
@@ -59,18 +64,33 @@ namespace Ryujinx.HLE.HOS.Applets
 
                 NextendoAccountLink.SignedIn = _ok;
 
-                WebCommonReturnValue result = new()
+                // The answer the user import reads (0x1010 bytes): the nickname of the account at
+                // 0x8 (found by the import page showing what sat there).
+                byte[] output = new byte[0x1010];
+
+                if (_ok)
                 {
-                    ExitReason = _ok ? WebExitReason.LastUrl : WebExitReason.BackButton,
-                };
+                    BitConverter.TryWriteBytes(output.AsSpan(0, 4), (uint)WebExitReason.LastUrl);
 
-                string url = _ok ? CallbackUri + "?code=nextendo" : "";
-                byte[] urlBytes = Encoding.ASCII.GetBytes(url);
+                    byte[] nick = Encoding.UTF8.GetBytes(NextendoAccount.Username ?? "");
 
-                urlBytes.CopyTo(result.LastUrl.AsSpan());
-                result.LastUrlSize = (ulong)urlBytes.Length;
+                    nick.AsSpan(0, Math.Min(nick.Length, 0x20)).CopyTo(output.AsSpan(0x8));
+                }
+                else
+                {
+                    BitConverter.TryWriteBytes(output.AsSpan(0, 4), (uint)WebExitReason.BackButton);
+                }
 
-                _normalSession.Push(MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref result, 1)).ToArray());
+                if (Environment.GetEnvironmentVariable("NEXTENDO_LOGIN_PROBE") == "1")
+                {
+                    // Every 8-byte slot after the nickname holds its own offset (0x1000 + offset).
+                    for (int at = 0x30; at + 8 <= output.Length; at += 8)
+                    {
+                        BitConverter.TryWriteBytes(output.AsSpan(at, 8), 0x1000UL + (ulong)at);
+                    }
+                }
+
+                _normalSession.Push(output);
 
                 AppletStateChanged?.Invoke(this, null);
             });

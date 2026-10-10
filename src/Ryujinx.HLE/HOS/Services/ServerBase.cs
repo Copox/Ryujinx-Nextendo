@@ -431,6 +431,8 @@ namespace Ryujinx.HLE.HOS.Services
         {
             IpcMessage request = ReadRequest();
 
+            request.ServerPointerBuffer = recvListAddr;
+
             IpcMessage response = new();
 
             ulong tempAddr = recvListAddr;

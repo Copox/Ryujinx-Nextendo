@@ -18,6 +18,49 @@ namespace Ryujinx.Common.Configuration
         /// <summary>The sign-in page of the console was answered by a Nextendo sign-in.</summary>
         public static bool SignedIn { get; set; }
 
+        private static string _email;
+        private static long _emailAt = long.MinValue / 2;
+
+        /// <summary>
+        /// The e-mail address of the Nextendo account (/api/me), kept ten minutes; "" when it is
+        /// not known. Shown by the user page of the HOME Menu, as a console shows the address of
+        /// its Nintendo Account.
+        /// </summary>
+        public static string Email()
+        {
+            if (!NextendoAccount.IsLinked)
+            {
+                return "";
+            }
+
+            if (_email != null && Environment.TickCount64 - _emailAt < 10 * 60 * 1000)
+            {
+                return _email;
+            }
+
+            try
+            {
+                using System.Net.Http.HttpClient http = new() { Timeout = TimeSpan.FromSeconds(5) };
+                using System.Net.Http.HttpRequestMessage req = new(System.Net.Http.HttpMethod.Get, NextendoEndpoint.BaseUrl().TrimEnd('/') + "/api/me");
+
+                req.Headers.Add("Authorization", "Bearer " + NextendoAccount.NexToken);
+
+                using System.Net.Http.HttpResponseMessage resp = http.Send(req);
+                using System.IO.Stream body = resp.Content.ReadAsStream();
+                using System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(body);
+
+                _email = doc.RootElement.TryGetProperty("account", out System.Text.Json.JsonElement account) &&
+                         account.TryGetProperty("email", out System.Text.Json.JsonElement email) ? email.GetString() ?? "" : "";
+                _emailAt = Environment.TickCount64;
+            }
+            catch (Exception)
+            {
+                _email ??= "";
+            }
+
+            return _email;
+        }
+
         /// <summary>Set by the last import: the account already had its user on this emulator.</summary>
         public static bool AlreadyRegistered { get; set; }
     }

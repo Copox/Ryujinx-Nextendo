@@ -52,6 +52,12 @@ namespace Ryujinx.HLE.HOS
         private static readonly Regex _kanji = new(@"任天堂(?!\s*(Switch|eShop|$))", RegexOptions.Compiled);
         private static readonly Regex _hangul = new(@"닌텐도(?!\s*(스위치|Switch|e숍|eShop|$))", RegexOptions.Compiled);
 
+        // "The console" is the emulator: "Ryujinx | Nextendo". Not when it names another console
+        // (the previous one, the one data comes from, a Nintendo Switch 2...).
+        private const string Emulator = "Ryujinx | Nextendo";
+        private static readonly Regex _consoleFr = new(@"\b(?:[Ll]a|[Cc]ette) console(?!\s+(?:Nintendo|Nextendo|source|précédente|cible|d'origine|de destination|Switch|\d)|\s+(?:depuis|sur|dans|avec|à partir de|vers) laquelle)", RegexOptions.Compiled);
+        private static readonly Regex _consoleEn = new(@"\b(?:[Tt]he|[Tt]his) console(?!\s+(?:you|from|to which|Nintendo|Nextendo|Switch|\d))", RegexOptions.Compiled);
+
         public static bool Enabled => Environment.GetEnvironmentVariable("NEXTENDO_BRANDING") != "0";
 
         public static IStorage Appliquer(ulong programId, IStorage baseStorage)
@@ -145,6 +151,13 @@ namespace Ryujinx.HLE.HOS
             // The names of Nintendo's consoles and shop stay (a "Nextendo Switch" means nothing);
             // the account, the online service, the support site become Nextendo's. A "Nintendo"
             // at the end of a run is followed by a formatting tag holding "Switch 2": kept too.
+            text = language switch
+            {
+                "fr" => _consoleFr.Replace(text, Emulator),
+                "en" => _consoleEn.Replace(text, Emulator),
+                _ => text,
+            };
+
             text = _brand.Replace(text, "Nextendo");
             text = _brandUpper.Replace(text, "NEXTENDO");
             text = _katakana.Replace(text, "ネクステンドー");
