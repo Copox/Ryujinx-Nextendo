@@ -13,6 +13,21 @@ namespace Ryujinx.HLE.HOS.Services.Hid
     /// chosen for a controller (nn::hid HidcfgButtonConfigFull, 0x54 bytes) is applied to what that
     /// player presses, and kept with the emulator data, as are the five saved mappings.
     /// </summary>
+    /// <summary>
+    /// [Nextendo, HOME Menu work] The input configuration of the emulator, seen as a HOME Menu
+    /// button mapping (set by the input manager of the emulator).
+    /// </summary>
+    public static class NextendoButtonBridge
+    {
+        /// <summary>The mapping of a player (HidcfgButtonConfigFull), or null if it has no controller.</summary>
+        public static Func<int, byte[]> Read { get; set; }
+
+        /// <summary>Applies a mapping (null: the default one) to the input configuration of a player.</summary>
+        public static Func<int, byte[], bool> Write { get; set; }
+
+        public static byte[] DefaultConfig() => NextendoButtonConfig.Default();
+    }
+
     static class NextendoButtonConfig
     {
         public const int FullSize = 0x54;
@@ -118,6 +133,12 @@ namespace Ryujinx.HLE.HOS.Services.Hid
 
         public static byte[] Get(int player)
         {
+            // The emulator's own input configuration is the mapping.
+            if (NextendoButtonBridge.Read?.Invoke(player) is byte[] emulator)
+            {
+                return emulator;
+            }
+
             lock (_lock)
             {
                 return Load().Players.TryGetValue(player, out string config) ? Convert.FromBase64String(config) : Default();
@@ -126,6 +147,23 @@ namespace Ryujinx.HLE.HOS.Services.Hid
 
         public static void Set(int player, byte[] config)
         {
+            if (NextendoButtonBridge.Write?.Invoke(player, config) == true)
+            {
+                lock (_lock)
+                {
+                    Load();
+
+                    if (_saved.Players.Remove(player) | _remaps.Remove(player))
+                    {
+                        Store();
+                    }
+                }
+
+                Logger.Info?.Print(LogClass.ServiceHid, $"[home] button mapping of player {player + 1} written to the input settings of the emulator");
+
+                return;
+            }
+
             lock (_lock)
             {
                 Load();
@@ -149,6 +187,11 @@ namespace Ryujinx.HLE.HOS.Services.Hid
 
         public static bool IsCustom(int player)
         {
+            if (NextendoButtonBridge.Read?.Invoke(player) is byte[] emulator)
+            {
+                return !emulator.AsSpan().SequenceEqual(Default());
+            }
+
             lock (_lock)
             {
                 return Load().Players.ContainsKey(player);
@@ -157,6 +200,14 @@ namespace Ryujinx.HLE.HOS.Services.Hid
 
         public static bool AnyCustom()
         {
+            for (int player = 0; player < 8; player++)
+            {
+                if (NextendoButtonBridge.Read?.Invoke(player) is byte[] emulator && !emulator.AsSpan().SequenceEqual(Default()))
+                {
+                    return true;
+                }
+            }
+
             lock (_lock)
             {
                 return Load().Enabled && _saved.Players.Count > 0;
@@ -174,6 +225,14 @@ namespace Ryujinx.HLE.HOS.Services.Hid
 
         public static void ResetAll()
         {
+            for (int player = 0; player < 8; player++)
+            {
+                if (NextendoButtonBridge.Read?.Invoke(player) is byte[] emulator && !emulator.AsSpan().SequenceEqual(Default()))
+                {
+                    NextendoButtonBridge.Write(player, null);
+                }
+            }
+
             lock (_lock)
             {
                 Load().Players.Clear();

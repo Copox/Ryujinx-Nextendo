@@ -479,6 +479,11 @@ namespace Ryujinx.Ava.Systems
 
             TouchScreenManager.Initialize(Device);
 
+            // [Nextendo, HOME Menu work] A mapping changed in the HOME Menu is the input setting of
+            // the emulator: kept in its configuration file.
+            NpadManager.ButtonConfigChanged -= SaveInputConfiguration;
+            NpadManager.ButtonConfigChanged += SaveInputConfiguration;
+
             Dispatcher.UIThread.InvokeAsync(() =>
             {
                 _viewModel.IsGameRunning = true;
@@ -1570,6 +1575,23 @@ namespace Ryujinx.Ava.Systems
             }
 
             return state;
+        }
+
+        private static void SaveInputConfiguration()
+        {
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (ConfigurationState.Instance.System.UseInputGlobalConfig.Value && Program.UseExtraConfig)
+                {
+                    ConfigurationState.InstanceExtra.ToFileFormat().SaveConfig(Program.GlobalConfigurationPath);
+                }
+                else
+                {
+                    ConfigurationState.Instance.ToFileFormat().SaveConfig(Program.ConfigurationPath);
+                }
+
+                Logger.Info?.Print(LogClass.Application, "[home] button mapping saved in the input settings");
+            });
         }
     }
 }

@@ -18,7 +18,7 @@ using Switch = Ryujinx.HLE.Switch;
 
 namespace Ryujinx.Input.HLE
 {
-    public class NpadManager : IDisposable
+    public partial class NpadManager : IDisposable
     {
         private readonly CemuHookClient _cemuHookClient;
 
@@ -376,6 +376,7 @@ namespace Ryujinx.Input.HLE
         {
             _device = device;
             _device.Configuration.RefreshInputConfig = RefreshInputConfigForHLE;
+            HookButtonConfig();
 
             ReloadConfiguration(inputConfig, playerInputAssignments, enableKeyboard, enableMouse);
         }
