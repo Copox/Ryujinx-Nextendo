@@ -12,6 +12,9 @@ namespace Ryujinx.Horizon.Sdk.Sf.Cmif
     {
         private const uint MaxCmifVersion = 1;
 
+        // [Nextendo, HOME Menu work] Development: every command of the named service, logged.
+        private static readonly string _traceService = Environment.GetEnvironmentVariable("NEXTENDO_HIPC_TRACE");
+
         private static readonly HipcCommandProcessor _stubProcessor = new([new CommandArg(CommandArgType.OutArgument, 0x10, 8)]);
 
         public abstract Result ProcessMessage(ref ServiceDispatchContext context, ReadOnlySpan<byte> inRawData);
@@ -62,6 +65,11 @@ namespace Ryujinx.Horizon.Sdk.Sf.Cmif
             }
 
             Logger.Trace?.Print(LogClass.KernelIpc, $"{objectName}.{commandHandler.MethodName} called");
+
+            if (_traceService != null && objectName.Contains(_traceService))
+            {
+                Logger.Notice.Print(LogClass.KernelIpc, $"[hipc] {objectName} {commandId} {commandHandler.MethodName}");
+            }
 
             Result commandResult = commandHandler.Invoke(ref outHeader, ref context, inMessageRawData);
 

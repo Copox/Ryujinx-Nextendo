@@ -1031,8 +1031,9 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
         public Result GetReceivedFriendRequestCount(out int count, out int count2, Uid userId)
         {
             // [Nextendo, HOME Menu work] The requests received by the Nextendo account.
+            // The page adds the two (unread, then read): all the requests count once, as unread.
             count = IsNextendoProfile(userId) ? NextendoFriends.Requests().Count : 0;
-            count2 = count;
+            count2 = 0;
 
             Logger.Stub?.PrintStub(LogClass.ServiceFriend, new { userId });
 
@@ -1084,6 +1085,19 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             for (int i = offset; i < requests.Count && (count + 1) * size <= requestList.Length; i++)
             {
                 WriteFriendRequestV2(requestList.Slice(count * size, size), requests[i]);
+
+                if (Environment.GetEnvironmentVariable("NEXTENDO_FRQ_ROUTE") is string routes && routes.Split(',').Length > count)
+                {
+                    // "at:value,value,...": one int per request, in list order.
+                    string[] parts = routes.Split(':');
+                    int at = parts.Length > 1 ? Convert.ToInt32(parts[0], 16) : 0xEC;
+                    string[] values = parts[^1].Split(',');
+
+                    if (values.Length > count)
+                    {
+                        BitConverter.TryWriteBytes(requestList.Slice(count * size + at, 4), Convert.ToInt32(values[count]));
+                    }
+                }
                 count++;
             }
 
@@ -1132,8 +1146,38 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             nick.AsSpan(0, Math.Min(nick.Length, 0x20)).CopyTo(record.Slice(0x20, 0x21));
 
             // The address of the picture at 0x48: the page downloads it itself.
-            byte[] picture = System.Text.Encoding.ASCII.GetBytes($"{NextendoEndpoint.Canonical.TrimEnd('/')}/api/avatar?pid={entry.Pid}");
+            // An account with no picture of its own has the default avatar of Nextendo, served by
+            // the emulator (the server has no address for it).
+            string pictureUrl = entry.HasPicture
+                ? $"{NextendoEndpoint.Canonical.TrimEnd('/')}/api/avatar?pid={entry.Pid}"
+                : NextendoLocalImages.DefaultAvatarUrl(entry.Pid);
+            byte[] picture = System.Text.Encoding.ASCII.GetBytes(pictureUrl);
             picture.AsSpan(0, Math.Min(picture.Length, 0x9F)).CopyTo(record.Slice(0x48, 0xA0));
+
+            // The date of the request at 0x158 (found by probing: one date per free slot, the
+            // detail page showed the one of the slot 43).
+            BitConverter.TryWriteBytes(record.Slice(0x158, 8), entry.RequestedAt);
+
+            // How the request was made, at 0xEC (found by probing the detail page): 1 a local
+            // search, 2 a friend code, 3 a game (its id then at 0xF8). Requests to Nextendo go
+            // through friend codes (the site and the console both send by code).
+            BitConverter.TryWriteBytes(record.Slice(0xEC, 4), 2);
+
+            if (Environment.GetEnvironmentVariable("NEXTENDO_FRQ_DATES") is not null)
+            {
+                // Each free 8-byte slot holds a date of its own (2001-01-01 plus one day per slot).
+                for (int slot = 1; slot < record.Length / 8; slot++)
+                {
+                    int at = slot * 8;
+
+                    if (at is >= 0x18 and < 0x48 || at is >= 0x48 and < 0xE8)
+                    {
+                        continue;
+                    }
+
+                    BitConverter.TryWriteBytes(record.Slice(at, 8), 978307200L + slot * 86400L);
+                }
+            }
 
             if (Environment.GetEnvironmentVariable("NEXTENDO_FRQ_URLS") is not null)
             {
@@ -1154,6 +1198,17 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                     at.Clear();
                     at[0] = (byte)('A' + slot / 26);
                     at[1] = (byte)('a' + slot % 26);
+                }
+            }
+
+            if (Environment.GetEnvironmentVariable("NEXTENDO_FRQ_FILL") is string fill)
+            {
+                // "from-to=value,..." (hex): those bytes set to the value.
+                foreach (string part in fill.Split(','))
+                {
+                    string[] range = part.Split('=')[0].Split('-');
+
+                    record[Convert.ToInt32(range[0], 16)..Convert.ToInt32(range[1], 16)].Fill(Convert.ToByte(part.Split('=')[1], 16));
                 }
             }
         }
@@ -1320,11 +1375,12 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                 {
                     int from = probe == "letters" ? 0 : 0x40, to = size;
 
-                    if (probe.StartsWith("ones:"))
+                    if (probe.StartsWith("ones:") || probe.StartsWith("letters:"))
                     {
-                        from = Convert.ToInt32(probe[5..].Split('-')[0], 16);
-                        to = Convert.ToInt32(probe[5..].Split('-')[1], 16);
-                        probe = "ones";
+                        string range = probe[(probe.IndexOf(':') + 1)..];
+                        from = Convert.ToInt32(range.Split('-')[0], 16);
+                        to = Convert.ToInt32(range.Split('-')[1], 16);
+                        probe = probe[..probe.IndexOf(':')];
                     }
 
                     for (int k = from; k < to; k++)
@@ -1343,6 +1399,35 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                         at.Clear();
                         at[0] = (byte)('A' + slot / 26);
                         at[1] = (byte)('a' + slot % 26);
+                    }
+                }
+
+                if (Environment.GetEnvironmentVariable("NEXTENDO_PEX_LOG") is string logAt)
+                {
+                    // "base:stride:count" (hex): play log entries laid out like the friend's.
+                    string[] p = logAt.Split(':');
+                    int lb = Convert.ToInt32(p[0], 16), ls = Convert.ToInt32(p[1], 16), lc = Convert.ToInt32(p[2], 16);
+
+                    for (int g = 0; g < lc && lb + g * ls + 0x30 <= size; g++)
+                    {
+                        Span<byte> e = record.Slice(lb + g * ls, 0x30);
+                        BitConverter.TryWriteBytes(e.Slice(0x00, 8), 0x01006A800016E000UL);
+                        BitConverter.TryWriteBytes(e.Slice(0x08, 8), 0x01006A800016E000UL);
+                        BitConverter.TryWriteBytes(e.Slice(0x18, 4), 1);
+                        BitConverter.TryWriteBytes(e.Slice(0x1C, 4), 600);
+                        BitConverter.TryWriteBytes(e.Slice(0x28, 8), DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 3600);
+                    }
+                }
+
+                if (Environment.GetEnvironmentVariable("NEXTENDO_PEX_APP") is string app)
+                {
+                    // "from-to:stride": a game id every stride bytes between from and to.
+                    string[] range = app.Split(':')[0].Split('-');
+                    int stride = app.Contains(':') ? Convert.ToInt32(app.Split(':')[1], 16) : 8;
+
+                    for (int at = Convert.ToInt32(range[0], 16); at + 8 <= Convert.ToInt32(range[1], 16) && at + 8 <= size; at += stride)
+                    {
+                        BitConverter.TryWriteBytes(record.Slice(at, 8), 0x01006A800016E000UL);
                     }
                 }
 

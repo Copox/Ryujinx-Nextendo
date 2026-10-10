@@ -43,6 +43,7 @@ namespace Ryujinx.Common.Configuration
             public long Since { get; init; }
             public string FriendCode { get; init; }
             public long RequestedAt { get; init; }
+            public bool HasPicture { get; init; }
 
             public Entry(ulong pid, string name, byte[] appField, ulong nsa = 0, int status = 0)
             {
@@ -117,6 +118,7 @@ namespace Ryujinx.Common.Configuration
                     {
                         FriendCode = r.TryGetProperty("friend_code", out JsonElement fc) ? fc.GetString() ?? "" : "",
                         RequestedAt = at,
+                        HasPicture = r.TryGetProperty("image", out JsonElement img) && img.ValueKind == JsonValueKind.String && img.GetString().Length > 0,
                     });
                 }
             }
