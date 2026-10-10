@@ -17,6 +17,7 @@ namespace Ryujinx.Input.HLE
 
         private static readonly List<double> _homeTimes = [];
         private static readonly List<(double Time, uint X, uint Y)> _touches = [];
+        private static readonly List<(double Time, int X, int Y, double Hold)> _sticks = [];
         private static readonly List<(double Time, ControllerKeys Keys, double Hold)> _steps = Load();
         private static readonly Stopwatch _clock = new();
 
@@ -41,7 +42,13 @@ namespace Ryujinx.Input.HLE
                     continue;
                 }
 
-                if (parts[1].Equals("Touch", StringComparison.OrdinalIgnoreCase) && parts.Length == 4 &&
+                if (parts[1].Equals("LStick", StringComparison.OrdinalIgnoreCase) && parts.Length >= 4 &&
+                    int.TryParse(parts[2], out int stickX) && int.TryParse(parts[3], out int stickY))
+                {
+                    // "t:LStick:x:y[:hold]": the left stick of the first pad held there (-32767..32767).
+                    _sticks.Add((time, stickX, stickY, parts.Length > 4 && double.TryParse(parts[4], NumberStyles.Float, CultureInfo.InvariantCulture, out double sh) ? sh : 0.6));
+                }
+                else if (parts[1].Equals("Touch", StringComparison.OrdinalIgnoreCase) && parts.Length == 4 &&
                     uint.TryParse(parts[2], out uint touchX) && uint.TryParse(parts[3], out uint touchY))
                 {
                     // "t:Touch:x:y": a tap on the 1280x720 screen.
@@ -155,6 +162,16 @@ namespace Ryujinx.Input.HLE
                 idle.LStick = default;
                 idle.RStick = default;
                 states[i] = idle;
+            }
+
+            foreach ((double time, int x, int y, double hold) in _sticks)
+            {
+                if (now >= time && now < time + hold && states.Count > 0)
+                {
+                    GamepadInput moved = states[0];
+                    moved.LStick = new Ryujinx.HLE.HOS.Services.Hid.JoystickPosition { Dx = x, Dy = y };
+                    states[0] = moved;
+                }
             }
 
             if (keys != 0)

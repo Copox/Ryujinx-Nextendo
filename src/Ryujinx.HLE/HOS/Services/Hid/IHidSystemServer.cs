@@ -6,7 +6,7 @@ using Ryujinx.HLE.HOS.Services.Hid.Types.SharedMemory.Npad;
 namespace Ryujinx.HLE.HOS.Services.Hid
 {
     [Service("hid:sys")]
-    class IHidSystemServer : IpcService
+    partial class IHidSystemServer : IpcService
     {
         public IHidSystemServer(ServiceCtx context) { }
 
@@ -92,27 +92,6 @@ namespace Ryujinx.HLE.HOS.Services.Hid
             PlayerIndex index = HidUtils.GetIndexFromNpadIdType((NpadIdType)npadId);
 
             return ref context.Device.Hid.SharedMemory.Npads[(int)index].InternalState;
-        }
-
-        // The "unique pads" (the physical controllers, apart from the players they are assigned
-        // to) are polled many times a second; none is declared, as before, but without the
-        // warning each time.
-        [CommandCmif(321)] // 3.0.0+
-        // GetUniquePadsFromNpad(u32 npad_id) -> (s64 count, buffer<UniquePadId, 0xa>)
-        public ResultCode GetUniquePadsFromNpad(ServiceCtx context)
-        {
-            context.ResponseData.Write(0L);
-
-            return ResultCode.Success;
-        }
-
-        [CommandCmif(703)]
-        // GetUniquePadIds() -> (s64 count, buffer<UniquePadId, 0xa>)
-        public ResultCode GetUniquePadIds(ServiceCtx context)
-        {
-            context.ResponseData.Write(0L);
-
-            return ResultCode.Success;
         }
 
         [CommandCmif(315)] // 9.0.0+

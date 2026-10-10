@@ -413,7 +413,8 @@ namespace Ryujinx.HLE.HOS.Services.Hid
 
             NpadCommonState newState = new()
             {
-                Buttons = (NpadButton)state.Buttons,
+                // [Nextendo, HOME Menu work] Through the button mapping chosen in the HOME Menu.
+                Buttons = NextendoButtonConfig.Apply((int)state.PlayerId, (NpadButton)state.Buttons),
                 AnalogStickL = new AnalogStickState
                 {
                     X = state.LStick.Dx,
