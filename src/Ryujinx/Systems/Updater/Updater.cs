@@ -199,7 +199,8 @@ namespace Ryujinx.Ava.Systems
             {
                 bool shouldRestart = true;
 
-                if (!OperatingSystem.IsMacOS())
+                // [Nextendo, HOME Menu work] Asked from the HOME Menu: restart at once, into it.
+                if (!OperatingSystem.IsMacOS() && !_nextendoHomeMenuRestart)
                 {
                     shouldRestart = await ContentDialogHelper.CreateChoiceDialog(LocaleManager.Instance[LocaleKeys.RyujinxUpdater],
                         LocaleManager.Instance[LocaleKeys.DialogUpdaterCompleteMessage],
@@ -209,6 +210,11 @@ namespace Ryujinx.Ava.Systems
                 if (shouldRestart)
                 {
                     List<string> arguments = CommandLineState.Arguments.ToList();
+
+                    if (_nextendoHomeMenuRestart && !arguments.Contains("@home-menu"))
+                    {
+                        arguments.Add("@home-menu");
+                    }
                     string executableDirectory = AppDomain.CurrentDomain.BaseDirectory;
 
                     // On macOS we perform the update at relaunch.
@@ -257,7 +263,7 @@ namespace Ryujinx.Ava.Systems
                             try
                             {
                                 string quotedArgs = string.Join(' ',
-                                    CommandLineState.Arguments.Select(a => $"\"{a}\""));
+                                    arguments.Select(a => $"\"{a}\""));
 
                                 ProcessStartInfo delayedStart = new("cmd.exe")
                                 {
@@ -294,7 +300,7 @@ namespace Ryujinx.Ava.Systems
                                 WorkingDirectory = executableDirectory,
                             };
 
-                            foreach (string argument in CommandLineState.Arguments)
+                            foreach (string argument in arguments)
                             {
                                 processStart.ArgumentList.Add(argument);
                             }

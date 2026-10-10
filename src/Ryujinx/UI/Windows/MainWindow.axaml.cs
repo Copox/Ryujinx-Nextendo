@@ -509,6 +509,8 @@ namespace Ryujinx.Ava.UI.Windows
                 }
             };
 
+            Ryujinx.Ava.Systems.Updater.HookHomeMenuUpdate();
+
             Ryujinx.Common.Configuration.NextendoProfileEdits.Push = (userId, name, image) =>
             {
                 if (!Ryujinx.Common.Configuration.NextendoAccount.IsLinked ||

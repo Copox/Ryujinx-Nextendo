@@ -239,6 +239,68 @@ namespace Ryujinx.Ava.Systems
             }
         }
 
+        private static bool _nextendoHomeMenuRestart;
+        private static string _nextendoHomeMenuAsset;
+
+        /// <summary>
+        /// [Nextendo, HOME Menu work] "System Update" of the HOME Menu: checks the releases, and
+        /// installs the newer one without asking, then starts the HOME Menu again.
+        /// </summary>
+        public static void HookHomeMenuUpdate()
+        {
+            Ryujinx.Common.Configuration.NextendoSystemUpdate.Check = async () =>
+            {
+                // NEXTENDO_UPDATE_TEST_VERSION: checks as if this build had that version (tests).
+                string running = Environment.GetEnvironmentVariable("NEXTENDO_UPDATE_TEST_VERSION") ?? Program.Version;
+
+                if (!Version.TryParse(running, out Version currentVersion))
+                {
+                    Logger.Info?.Print(LogClass.Application, $"[Nextendo] HOME Menu update check: local build '{Program.Version}', not updated");
+
+                    return null;
+                }
+
+                (Version newVersion, string assetUrl) = await QueryNextendoReleaseAsync();
+
+                if (newVersion is null || newVersion <= currentVersion || string.IsNullOrEmpty(assetUrl) || !NextendoIsOwnReleaseUrl(assetUrl))
+                {
+                    return null;
+                }
+
+                _nextendoHomeMenuAsset = assetUrl;
+
+                return newVersion.ToString();
+            };
+
+            Ryujinx.Common.Configuration.NextendoSystemUpdate.Install = () => Dispatcher.UIThread.Post(async () =>
+            {
+                if (_running || _nextendoHomeMenuAsset == null)
+                {
+                    return;
+                }
+
+                _running = true;
+                _nextendoHomeMenuRestart = true;
+
+                try
+                {
+                    await UpdateRyujinx(_nextendoHomeMenuAsset);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error?.Print(LogClass.Application, $"[Nextendo] HOME Menu update failed: {ex.Message}");
+                }
+                finally
+                {
+                    if (!_updateSuccessful)
+                    {
+                        _running = false;
+                        _nextendoHomeMenuRestart = false;
+                    }
+                }
+            });
+        }
+
         /// <summary>
         /// Silent check for the "update available" indicator: no dialogs, no download. Returns
         /// false on any failure, because a background check is not worth bothering anyone about.

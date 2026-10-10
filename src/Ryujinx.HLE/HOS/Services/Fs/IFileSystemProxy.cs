@@ -214,7 +214,11 @@ namespace Ryujinx.HLE.HOS.Services.Fs
         // FormatSdCardFileSystem() -> ()
         public ResultCode FormatSdCardFileSystem(ServiceCtx context)
         {
-            return (ResultCode)_baseFileSystemProxy.Get.FormatSdCardFileSystem().Value;
+            // [Nextendo, HOME Menu work] The "microSD card" is a folder of the computer: "Format
+            // microSD Card" of the HOME Menu settings erases nothing.
+            Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.ServiceFs, "[home] microSD card format asked: nothing erased (the card is a folder of the computer)");
+
+            return ResultCode.Success;
         }
 
         [CommandCmif(21)]

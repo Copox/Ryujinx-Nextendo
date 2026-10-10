@@ -1,7 +1,9 @@
 using Ryujinx.HLE.HOS.Ipc;
 using Ryujinx.HLE.HOS.Kernel.Threading;
 using Ryujinx.Horizon.Common;
+using Ryujinx.Common.Logging;
 using System;
+using System.Threading.Tasks;
 
 namespace Ryujinx.HLE.HOS.Services.Ns
 {
@@ -54,24 +56,25 @@ namespace Ryujinx.HLE.HOS.Services.Ns
             return ResultCode.Success;
         }
     }
-    // [Nextendo, HOME Menu work] The console is always up to date here: the check ends at
-    // once and says so, nothing is ever downloaded.
+    // [Nextendo, HOME Menu work] The system update is the update of the emulator: the check
+    // asks GitHub for a newer Ryujinx | Nextendo; "Update" installs it (download, files
+    // replaced, the emulator starts the HOME Menu again).
     class ISystemUpdateControl : IpcService
     {
-        private StubEvent _done;
+        // nn::ns::LatestSystemUpdate
+        private const byte UpToDate = 0;
+        private const byte NeedsDownload = 2;
 
-        private void ReplyDone(ServiceCtx context)
-        {
-            _done ??= new StubEvent(context);
-            _done.Signal();
-            _done.ReplyWithHandle(context);
-        }
+        private StubEvent _checkDone;
+        private StubEvent _downloadDone;
+        // Kept across the controls the HOME Menu opens (one checks, another applies).
+        private static bool _available;
 
         [CommandCmif(0)]
         // HasDownloaded() -> b8
         public ResultCode HasDownloaded(ServiceCtx context)
         {
-            context.ResponseData.Write(false);
+            context.ResponseData.Write(_available);
 
             return ResultCode.Success;
         }
@@ -80,8 +83,37 @@ namespace Ryujinx.HLE.HOS.Services.Ns
         // RequestCheckLatestUpdate() -> (handle<copy>, object<nn::ns::detail::IAsyncValue>)
         public ResultCode RequestCheckLatestUpdate(ServiceCtx context)
         {
-            ReplyDone(context);
-            MakeObject(context, new IAsyncValue(new byte[4])); // 0: up to date
+            byte[] value = new byte[4];
+            StubEvent done = _checkDone = new StubEvent(context);
+
+            done.ReplyWithHandle(context);
+            MakeObject(context, new IAsyncValue(value));
+
+            Task.Run(async () =>
+            {
+                string version = null;
+
+                try
+                {
+                    Task<string> check = Ryujinx.Common.Configuration.NextendoSystemUpdate.Check?.Invoke() ?? Task.FromResult<string>(null);
+
+                    if (await Task.WhenAny(check, Task.Delay(20000)) == check)
+                    {
+                        version = check.Result;
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.Warning?.Print(LogClass.ServiceNs, $"[home] update check failed: {e.Message}");
+                }
+
+                _available = version != null;
+                value[0] = _available ? NeedsDownload : UpToDate;
+
+                Logger.Info?.Print(LogClass.ServiceNs, $"[home] update check: {(version != null ? "Ryujinx | Nextendo " + version + " available" : "up to date")}");
+
+                done.Signal();
+            });
 
             return ResultCode.Success;
         }
@@ -90,7 +122,10 @@ namespace Ryujinx.HLE.HOS.Services.Ns
         // RequestDownloadLatestUpdate() -> (handle<copy>, object<nn::ns::detail::IAsyncResult>)
         public ResultCode RequestDownloadLatestUpdate(ServiceCtx context)
         {
-            ReplyDone(context);
+            // The updater of the emulator downloads with its own progress window, once applied.
+            _downloadDone ??= new StubEvent(context);
+            _downloadDone.Signal();
+            _downloadDone.ReplyWithHandle(context);
             MakeObject(context, new IAsyncResult());
 
             return ResultCode.Success;
@@ -100,15 +135,34 @@ namespace Ryujinx.HLE.HOS.Services.Ns
         // GetDownloadProgress() -> (s64 loaded, s64 total)
         public ResultCode GetDownloadProgress(ServiceCtx context)
         {
-            context.ResponseData.Write(0L);
-            context.ResponseData.Write(0L);
+            context.ResponseData.Write(1L);
+            context.ResponseData.Write(1L);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(9)]
+        // GetDownloadedEulaDataSize(nn::ns::detail::EulaDataPath) -> u64
+        public ResultCode GetDownloadedEulaDataSize(ServiceCtx context)
+        {
+            context.ResponseData.Write(0UL); // no new agreement to read
 
             return ResultCode.Success;
         }
 
         [CommandCmif(4)]
         // ApplyDownloadedUpdate()
-        public ResultCode ApplyDownloadedUpdate(ServiceCtx context) => ResultCode.Success;
+        public ResultCode ApplyDownloadedUpdate(ServiceCtx context)
+        {
+            if (_available)
+            {
+                Logger.Info?.Print(LogClass.ServiceNs, "[home] update: the emulator installs the new version and restarts");
+
+                Ryujinx.Common.Configuration.NextendoSystemUpdate.Install?.Invoke();
+            }
+
+            return ResultCode.Success;
+        }
     }
 
     class IAsyncValue : IpcService
@@ -133,9 +187,12 @@ namespace Ryujinx.HLE.HOS.Services.Ns
         // Get() -> buffer<bytes, 6>
         public ResultCode Get(ServiceCtx context)
         {
-            if (context.Request.ReceiveBuff.Count > 0 && context.Request.ReceiveBuff[0].Size >= (ulong)_value.Length)
+            // The value may be smaller than the room kept for it (LatestSystemUpdate is one byte).
+            if (context.Request.ReceiveBuff.Count > 0 && context.Request.ReceiveBuff[0].Size > 0)
             {
-                context.Memory.Write(context.Request.ReceiveBuff[0].Position, _value);
+                int size = (int)Math.Min(context.Request.ReceiveBuff[0].Size, (ulong)_value.Length);
+
+                context.Memory.Write(context.Request.ReceiveBuff[0].Position, _value.AsSpan(0, size));
             }
 
             return ResultCode.Success;

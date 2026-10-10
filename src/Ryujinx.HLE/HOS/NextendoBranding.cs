@@ -58,6 +58,25 @@ namespace Ryujinx.HLE.HOS
         private static readonly Regex _consoleFr = new(@"\b(?:[Ll]a|[Cc]ette) console(?!\s+(?:Nintendo|Nextendo|source|précédente|cible|d'origine|de destination|Switch|\d)|\s+(?:depuis|sur|dans|avec|à partir de|vers) laquelle)", RegexOptions.Compiled);
         private static readonly Regex _consoleEn = new(@"\b(?:[Tt]he|[Tt]his) console(?!\s+(?:you|from|to which|Nintendo|Nextendo|Switch|\d))", RegexOptions.Compiled);
 
+        // The label before the system version on the System Update page, in each language: the
+        // version of the emulator is put in front of it.
+        private static readonly HashSet<string> _systemVersionLabels =
+        [
+            "Logiciel système : version ", "System version ", "Systemversion ", "Versione di sistema: ", "Versión: ", "Versie: ",
+            "Versão da consola: ", "Версия системы ", "システムバージョン ", "시스템 버전 ", "系统版本 ", "系統版本 ",
+        ];
+
+        private static string EmulatorVersion
+        {
+            get
+            {
+                string version = Ryujinx.Common.ReleaseInformation.Version ?? "";
+                int end = version.IndexOfAny(['+', '-']);
+
+                return end > 0 ? version[..end] : version;
+            }
+        }
+
         public static bool Enabled => Environment.GetEnvironmentVariable("NEXTENDO_BRANDING") != "0";
 
         public static IStorage Appliquer(ulong programId, IStorage baseStorage)
@@ -91,7 +110,21 @@ namespace Ryujinx.HLE.HOS
                 string language = LanguageOf(entry.FullPath);
                 byte[] packed = Read(baseRom, entry.FullPath);
                 byte[] msbt = Yaz0Decode(packed);
-                byte[] patched = PatchMsbt(msbt, text => Rebrand(text, language), out int count);
+                string grep = Environment.GetEnvironmentVariable("NEXTENDO_MSBT_GREP");
+                byte[] patched = PatchMsbt(msbt, text =>
+                {
+                    if (grep != null && Regex.IsMatch(text, grep))
+                    {
+                        Logger.Info?.Print(LogClass.ModLoader, $"[msbt] {programId:X16} {entry.FullPath}: {text.Replace('\n', '|')}");
+                    }
+
+                    if (entry.FullPath.EndsWith("/setting.msbt.szs", StringComparison.Ordinal) && _systemVersionLabels.Contains(text))
+                    {
+                        text = $"{Emulator} {EmulatorVersion} · {text}";
+                    }
+
+                    return Rebrand(text, language);
+                }, out int count);
 
                 if (count > 0)
                 {
