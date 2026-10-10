@@ -79,7 +79,7 @@ namespace Ryujinx.HLE.HOS
 
         public static bool Enabled => Environment.GetEnvironmentVariable("NEXTENDO_BRANDING") != "0";
 
-        public static IStorage Appliquer(ulong programId, IStorage baseStorage)
+        public static IStorage Appliquer(ulong programId, IStorage baseStorage, IStorage originalStorage = null)
         {
             if (!Enabled || baseStorage == null || programId < 0x0100000000001000 || programId > 0x0100000000001FFF)
             {
@@ -88,7 +88,7 @@ namespace Ryujinx.HLE.HOS
 
             try
             {
-                return Patch(programId, baseStorage);
+                return Patch(programId, baseStorage, originalStorage);
             }
             catch (Exception e)
             {
@@ -98,9 +98,14 @@ namespace Ryujinx.HLE.HOS
             }
         }
 
-        private static IStorage Patch(ulong programId, IStorage baseStorage)
+        private static IStorage Patch(ulong programId, IStorage baseStorage, IStorage originalStorage)
         {
             RomFsFileSystem baseRom = new(baseStorage);
+
+            // [Nextendo, HOME Menu themes] With themes for the themes page, the layouts are the
+            // system's own: a theme installed on top of them (NXThemes, in atmosphere/contents)
+            // would be mixed with the one chosen, or stay with Basic White.
+            RomFsFileSystem layoutRom = originalStorage != null && originalStorage != baseStorage && Themes.NextendoThemes.Packs().Count > 0 ? new(originalStorage) : null;
             Dictionary<string, byte[]> changed = new();
 
             // NEXTENDO_ROMFS_DUMP=<folder>: the layouts of the system programs are written there (study).
@@ -151,11 +156,18 @@ namespace Ryujinx.HLE.HOS
             {
                 try
                 {
-                    byte[] themed = Themes.NextendoThemes.Apply(programId, entry.Name, Yaz0Decode(Read(baseRom, entry.FullPath)));
+                    byte[] packed = Read(baseRom, entry.FullPath);
+                    byte[] own = layoutRom != null && Exists(layoutRom, entry.FullPath) ? Read(layoutRom, entry.FullPath) : packed;
+                    byte[] themed = Themes.NextendoThemes.Apply(programId, entry.Name, Yaz0Decode(own));
 
                     if (themed != null)
                     {
                         changed[entry.FullPath] = Yaz0Encode(themed);
+                    }
+                    else if (!own.AsSpan().SequenceEqual(packed))
+                    {
+                        changed[entry.FullPath] = own;
+                        Logger.Info?.Print(LogClass.ModLoader, $"[theme] {entry.FullPath}: the system's own (a theme installed in atmosphere/contents left aside)");
                     }
                 }
                 catch (Exception e)

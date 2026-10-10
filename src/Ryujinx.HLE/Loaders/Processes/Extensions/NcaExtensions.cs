@@ -83,6 +83,8 @@ namespace Ryujinx.HLE.Loaders.Processes.Extensions
             }
             else
             {
+                IStorage originalRomFs = romFs;
+
                 romFs = device.Configuration.VirtualFileSystem.ModLoader.ApplyRomFsMods(processResult.ProgramId, romFs);
 
                 // [Nextendo] Ecran-titre de Splatoon 3 : permuter deux logos que le jeu livre deja.
@@ -91,7 +93,7 @@ namespace Ryujinx.HLE.Loaders.Processes.Extensions
                 romFs = NextendoEcranTitre.Appliquer(processResult.ProgramId, romFs);
 
                 // [Nextendo, HOME Menu work] The texts of the system name Nextendo.
-                romFs = NextendoBranding.Appliquer(processResult.ProgramId, romFs);
+                romFs = NextendoBranding.Appliquer(processResult.ProgramId, romFs, originalRomFs);
 
                 device.Configuration.VirtualFileSystem.SetRomFs(processResult.ProcessId, romFs.AsStream(FileAccess.Read));
             }
