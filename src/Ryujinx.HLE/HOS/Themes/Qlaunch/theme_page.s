@@ -26,6 +26,8 @@
 ;   +0x100  0x20 bytes per added entry: its object
 ;   +0x300  u64   per added entry: its line
 ;   +0x400  0x100 bytes per added entry: its name (UTF-16)
+;   +0x1400 0x40 bytes per added entry: its picture (the page's picture holder, vtable 0x10E1118)
+;   +0x1800 0x20 bytes per added entry: its picture's path in the program's files
 ;
 ; Entry points (the table below, 4 bytes each):
 ;   +0x00  build       vtable slot 0x10D4020 (+0x3C0)
@@ -244,6 +246,9 @@ build_entry:
     mov x0, x19
     mov w1, w24
     bl add_line
+    mov x0, x19
+    mov w1, w24
+    bl add_picture
     add w24, w24, #1
     b build_entry
 
@@ -694,6 +699,161 @@ add_line:
     ret
 
 ; ---------------------------------------------------------------------------------------------
+; the picture of an added entry (as the page loads theme/ThemeIcon_00.jpg)
+; x0 = the page, w1 = added entry number
+add_picture:
+    sub sp, sp, #0xe0
+    stp x29, x30, [sp, #0xd0]
+    add x29, sp, #0xd0
+    stp x19, x20, [sp, #0xa0]
+    stp x21, x22, [sp, #0xb0]
+    stp x23, x24, [sp, #0xc0]
+    mov x19, x0
+    mov w23, w1
+
+    ; none when the theme has no picture
+    adrp x24, @DATA
+    add x8, x24, #0x1000
+    add x8, x8, #0x800
+    add x8, x8, x23, lsl #5
+    ldrb w8, [x8]
+    cbz w8, add_picture_done
+    ; the holder: vtable, the rest zero
+    add x20, x24, #0x1000
+    add x20, x20, #0x400
+    add x20, x20, x23, lsl #6
+    adrp x8, #0x10e1000
+    add x8, x8, #0x118
+    stp x8, xzr, [x20]
+    stp xzr, xzr, [x20, #0x10]
+    stp xzr, xzr, [x20, #0x20]
+    stp xzr, xzr, [x20, #0x30]
+
+    ; its texture (92x54), as the page asks for it
+    mov w8, #0x1d
+    adrp x9, #0xef9000
+    add x9, x9, #0x150
+    stp x8, x9, [sp, #0x70]
+    ldr x8, [x19, #0x50]
+    adrp x11, #0x10e8000
+    add x11, x11, #0x180
+    strh wzr, [sp, #0x20]
+    ldp x9, x10, [x8, #0x28]
+    ldr x8, [x8, #0x28]
+    stp x11, x9, [sp, #0x50]
+    mov x9, #0x5c
+    mov w11, #0x20
+    movk x9, #0x36, lsl #32
+    str w11, [sp, #0x24]
+    stp x10, x9, [sp, #0x60]
+    stp x8, x9, [sp, #0x10]
+    mov x0, x20
+    add x1, sp, #0x50
+    bl #0xafb520
+
+    ; the picture, from the program's files
+    adrp x8, #0x1143000
+    ldr x8, [x8, #0xa40]
+    ldr x21, [x20, #0x30]
+    ldr x0, [x21, #0x18]
+    blr x8
+    mov x22, x0
+    mov x0, x21
+    bl #0x3cf320
+    ldr x9, [x20, #0x30]
+    add x8, x22, x0
+    add x1, x24, #0x1000
+    add x1, x1, #0x800
+    add x1, x1, x23, lsl #5
+    ldr x9, [x9, #0x10]
+    stp x8, x9, [sp]
+    mov x0, sp
+    bl #0xbc0a50
+    mov x8, #2
+    mov x9, #4
+    movk x8, #3, lsl #32
+    movk x9, #5, lsl #32
+    stp x8, x9, [sp, #0x30]
+    add x1, sp, #0x30
+    mov x0, x20
+    ldr x8, [x20]
+    ldr x8, [x8, #0x28]
+    blr x8
+
+    ; shown in the entry's P_Icon
+    mov x0, x19
+    add w1, w23, #2
+    bl entry_button
+    cbz x0, add_picture_done
+    ldr x8, [x0, #0x20]
+    ldr x0, [x8, #0x18]
+    adrp x1, #0xbe4000
+    add x1, x1, #0x8cc            ; "P_Icon"
+    bl #0xb94e20
+    cbz x0, add_picture_done
+    bl #0x1c99d0
+    ldr x8, [x20, #0x38]
+    cbz x8, add_picture_done
+    ldr x9, [x0, #0x18]
+    str x8, [x9, #8]
+add_picture_done:
+    ldp x23, x24, [sp, #0xc0]
+    ldp x21, x22, [sp, #0xb0]
+    ldp x19, x20, [sp, #0xa0]
+    ldp x29, x30, [sp, #0xd0]
+    add sp, sp, #0xe0
+    ret
+
+; the picture of an added entry released (as the page releases its own)
+; x0 = the holder
+release_picture:
+    stp x29, x30, [sp, #-0x30]!
+    mov x29, sp
+    stp x19, x20, [sp, #0x10]
+    str x21, [sp, #0x20]
+    mov x19, x0
+    ldr x8, [x19]
+    cbz x8, release_picture_done
+    bl #0xafb2a0
+    add x20, x19, #0x20
+    ldr x0, [x20, #0x10]
+    adrp x8, #0x10e1000
+    add x8, x8, #0x98
+    stur x8, [x20, #-0x20]
+    cbz x0, release_picture_buffer
+    ldr x8, [x0]
+    ldr x8, [x8, #8]
+    blr x8
+release_picture_buffer:
+    ldr x21, [x20, #8]
+    cbz x21, release_picture_image
+    add x0, x21, #0x68
+    bl #0x3d1a00
+    mov x0, x21
+    bl #0x3d1d60
+    mov x0, x21
+    mov w1, #0x130
+    bl #0x33c560
+release_picture_image:
+    ldr x21, [x20]
+    cbz x21, release_picture_clear
+    add x0, x21, #0x58
+    bl #0x3d1a00
+    mov x0, x21
+    mov w1, #0xe8
+    bl #0x33c560
+release_picture_clear:
+    stp xzr, xzr, [x19]
+    stp xzr, xzr, [x19, #0x10]
+    stp xzr, xzr, [x19, #0x20]
+    stp xzr, xzr, [x19, #0x30]
+release_picture_done:
+    ldr x21, [sp, #0x20]
+    ldp x19, x20, [sp, #0x10]
+    ldp x29, x30, [sp], #0x30
+    ret
+
+; ---------------------------------------------------------------------------------------------
 ; the page is shown: the original, then the added entries
 ; x0 = the page
 refresh:
@@ -1127,6 +1287,11 @@ destroy_entry:
     b.ge destroy_page
     cmp w24, #16
     b.ge destroy_page
+    ; the picture
+    add x0, x23, #0x1000
+    add x0, x0, #0x400
+    add x0, x0, x24, lsl #6
+    bl release_picture
     ; the line
     add x21, x23, #0x300
     ldr x20, [x21, x24, lsl #3]

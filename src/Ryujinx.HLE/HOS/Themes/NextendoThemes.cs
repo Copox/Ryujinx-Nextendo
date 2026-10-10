@@ -87,6 +87,76 @@ namespace Ryujinx.HLE.HOS.Themes
             return packs.Select(p => Path.GetRelativePath(ThemesFolder, p)).Order(StringComparer.OrdinalIgnoreCase).ToList();
         }
 
+        private static readonly Dictionary<string, byte[]> _pictures = [];
+
+        /// <summary>
+        /// The picture of a pack in the HOME Menu's themes page: its HOME Menu wallpaper (or the
+        /// first one it has), at the size of the system's own (92x54, JPEG). Null when none.
+        /// </summary>
+        public static byte[] Picture(string pack)
+        {
+            lock (_pictures)
+            {
+                if (_pictures.TryGetValue(pack, out byte[] known))
+                {
+                    return known;
+                }
+
+                byte[] picture = null;
+
+                try
+                {
+                    string path = Path.Combine(ThemesFolder, pack);
+                    IEnumerable<string> files = Directory.Exists(path) ? Directory.GetFiles(path, "*.nxtheme") : File.Exists(path) ? [path] : [];
+                    List<ThemePart> parts = [];
+
+                    foreach (string file in files)
+                    {
+                        try
+                        {
+                            parts.Add(ThemePart.Load(file));
+                        }
+                        catch (Exception)
+                        {
+                        }
+                    }
+
+                    foreach (ThemePart part in parts.OrderBy(p => p.Target == "home" ? 0 : p.Target == "lock" ? 1 : 2))
+                    {
+                        if (part.Wallpaper == null)
+                        {
+                            continue;
+                        }
+
+                        using SkiaSharp.SKBitmap image = SkiaSharp.SKBitmap.Decode(part.Wallpaper);
+
+                        if (image == null)
+                        {
+                            continue;
+                        }
+
+                        using SkiaSharp.SKBitmap small = image.Resize(new SkiaSharp.SKImageInfo(92, 54, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Opaque), SkiaSharp.SKFilterQuality.High);
+                        using SkiaSharp.SKData jpeg = small?.Encode(SkiaSharp.SKEncodedImageFormat.Jpeg, 90);
+
+                        picture = jpeg?.ToArray();
+
+                        if (picture != null)
+                        {
+                            break;
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.Warning?.Print(LogClass.ModLoader, $"[theme] no picture for {pack}: {e.Message}");
+                }
+
+                _pictures[pack] = picture;
+
+                return picture;
+            }
+        }
+
         /// <summary>The pack chosen (relative to /Themes), or null for the system's own look.</summary>
         public static string Chosen
         {

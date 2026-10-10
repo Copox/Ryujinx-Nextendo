@@ -35,6 +35,23 @@ namespace Ryujinx.HLE.HOS.Themes
             return id > 0 && name.EndsWith(')') ? name[..id] : name;
         }
 
+        /// <summary>Where the picture of an added entry is in the HOME Menu's files (as it names its own).</summary>
+        public static string PicturePath(int entry) => $"theme/NxThemeIcon_{entry:D2}.jpg";
+
+        /// <summary>The pictures of the added entries, to add to the HOME Menu's files.</summary>
+        public static IEnumerable<(string Path, byte[] Data)> Pictures()
+        {
+            List<string> packs = NextendoThemes.Packs();
+
+            for (int i = 0; i < Math.Min(packs.Count, MaxEntries); i++)
+            {
+                if (NextendoThemes.Picture(packs[i]) is { } picture)
+                {
+                    yield return ("/" + PicturePath(i), picture);
+                }
+            }
+        }
+
         // The page's "build" method in its vtable (relocated at start: the base is added to it).
         private const uint BuildSlot = 0x10D4020;
 
@@ -204,6 +221,11 @@ namespace Ryujinx.HLE.HOS.Themes
                 byte[] name = Encoding.Unicode.GetBytes(DisplayName(packs[i]));
 
                 name.AsSpan(0, Math.Min(name.Length, 0xFE)).CopyTo(data.AsSpan(0x400 + 0x100 * i));
+
+                if (NextendoThemes.Picture(packs[i]) != null)
+                {
+                    Encoding.ASCII.GetBytes(PicturePath(i)).CopyTo(data.AsSpan(0x1800 + 0x20 * i));
+                }
             }
 
             Logger.Info?.Print(LogClass.Loader, $"[theme] themes for the HOME Menu page: {packs.Count} ({string.Join(", ", packs)})");
