@@ -1366,9 +1366,43 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                 }
 
                 Span<byte> record = extraList.Slice(i * size, size);
-                FriendImpl head = MakeNextendoFriend(wanted, entry.Name, PresenceStatus.Offline, sameApp: false);
 
-                MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref head, 1))[..0x40].CopyTo(record);
+                // nn::friends ProfileExtra, laid out as the accessors of the HOME Menu read it: the
+                // account id at 0 (the page of a request looks its profile up by it), the nickname
+                // at 8, the address of the picture at 0x30, twenty played games of 0x30 bytes from
+                // 0xD0 (same entries as the friend's history) and "valid" at 0x490.
+                BitConverter.TryWriteBytes(record.Slice(0x00, 8), wanted);
+
+                byte[] nickname = Encoding.UTF8.GetBytes(entry.Name ?? "");
+                nickname.AsSpan(0, Math.Min(nickname.Length, 0x20)).CopyTo(record.Slice(0x08, 0x21));
+
+                if (size >= 0xD0)
+                {
+                    string pictureUrl = entry.HasPicture
+                        ? $"{NextendoEndpoint.Canonical.TrimEnd('/')}/api/avatar?pid={entry.Pid}"
+                        : NextendoLocalImages.DefaultAvatarUrl(entry.Pid);
+                    byte[] picture = Encoding.ASCII.GetBytes(pictureUrl);
+                    picture.AsSpan(0, Math.Min(picture.Length, 0x9F)).CopyTo(record.Slice(0x30, 0xA0));
+                }
+
+                if (size >= 0x490 && Environment.GetEnvironmentVariable("NEXTENDO_PEX_LOG") is null)
+                {
+                    List<NextendoFriends.Played> played = new(NextendoFriends.History(entry.Pid, 2500, direct: true));
+
+                    played.RemoveAll(g => string.IsNullOrEmpty(g.Name));
+
+                    for (int g = 0; g < played.Count && g < 20; g++)
+                    {
+                        Span<byte> slot = record.Slice(0xD0 + g * 0x30, 0x30);
+
+                        BitConverter.TryWriteBytes(slot.Slice(0x00, 8), played[g].TitleId);
+                        BitConverter.TryWriteBytes(slot.Slice(0x08, 8), played[g].TitleId);
+                        BitConverter.TryWriteBytes(slot.Slice(0x18, 4), 1);
+                        BitConverter.TryWriteBytes(slot.Slice(0x1C, 4), (int)Math.Min(int.MaxValue, played[g].Seconds / 60));
+                        BitConverter.TryWriteBytes(slot.Slice(0x28, 8), played[g].LastPlayed);
+                    }
+                }
+
                 record[size >= 0x491 ? 0x490 : size - 1] = 1; // "valid", found by bisecting the received list (record of 0x4A8)
 
                 if (Environment.GetEnvironmentVariable("NEXTENDO_PEX_PROBE") is string probe)

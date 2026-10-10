@@ -654,7 +654,8 @@ namespace Ryujinx.Common.Configuration
         /// <summary>True while a page is asking the history of every friend in a row.</summary>
         public static bool Sweeping { get; private set; }
 
-        public static IReadOnlyList<Played> History(ulong pid, int timeoutMs)
+        /// <param name="direct">Asked for itself (a friend request: not in the friends' activity feed).</param>
+        public static IReadOnlyList<Played> History(ulong pid, int timeoutMs, bool direct = false)
         {
             // A page that walks the whole friend list (three friends or more within three
             // seconds) is answered from the activity feed: one request for everybody instead
@@ -683,7 +684,7 @@ namespace Ryujinx.Common.Configuration
                 Sweeping = sweep;
             }
 
-            if (sweep && !string.IsNullOrEmpty(NextendoAccount.NexToken))
+            if (sweep && !direct && !string.IsNullOrEmpty(NextendoAccount.NexToken))
             {
                 lock (_histories)
                 {

@@ -461,6 +461,8 @@ namespace Ryujinx.HLE.Loaders.Processes
                 return ProcessResult.Failed;
             }
 
+            HOS.NextendoMemProbe.Register(process, nsoBase);
+
             for (int index = 0; index < executables.Length; index++)
             {
                 Logger.Info?.Print(LogClass.Loader, $"Loading image {index} at 0x{nsoBase[index]:x16}...");
