@@ -140,6 +140,15 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc
                 Logger.Stub?.PrintStub(LogClass.ServiceAcc, new { isNetworkServiceAccountRequired });
             }
 
+            // [Nextendo, HOME Menu work] With several users, nobody is picked: the HOME Menu then asks
+            // who plays (PlayerSelect) before it starts the game, like a Switch.
+            if (Ryujinx.HLE.HOS.HomeMenuStatus.Running && context.Device.System.AccountManager.GetUserCount() > 1)
+            {
+                UserId.Null.Write(context.ResponseData);
+
+                return ResultCode.Success;
+            }
+
             // NOTE: As we returned an invalid UserId if there is more than one user earlier, now we can return only the first one.
             context.Device.System.AccountManager.GetFirst().UserId.Write(context.ResponseData);
 

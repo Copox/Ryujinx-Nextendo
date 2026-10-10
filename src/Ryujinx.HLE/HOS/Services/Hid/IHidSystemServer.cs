@@ -22,18 +22,25 @@ namespace Ryujinx.HLE.HOS.Services.Hid
         }
 
         [CommandCmif(306)]
-        // GetLastActiveNpad(u32) -> u8, u8
+        // GetLastActiveNpad() -> u32 NpadIdType
         public ResultCode GetLastActiveNpad(ServiceCtx context)
         {
-            // TODO: RequestData seems to have garbage data, reading an extra uint seems to fix the issue.
-            context.RequestData.ReadUInt32();
+            // [Nextendo, HOME Menu work] The controller in use: the first one connected.
+            NpadIdType active = NpadIdType.Player1;
 
-            ResultCode resultCode = GetAppletFooterUiTypeImpl(context, out AppletFooterUiType appletFooterUiType);
+            foreach (PlayerIndex index in new[] { PlayerIndex.Player1, PlayerIndex.Player2, PlayerIndex.Player3, PlayerIndex.Player4, PlayerIndex.Player5, PlayerIndex.Player6, PlayerIndex.Player7, PlayerIndex.Player8, PlayerIndex.Handheld })
+            {
+                if (context.Device.Hid.SharedMemory.Npads[(int)index].InternalState.StyleSet != 0)
+                {
+                    active = HidUtils.GetNpadIdTypeFromIndex(index);
 
-            context.ResponseData.Write((byte)appletFooterUiType);
-            context.ResponseData.Write((byte)0);
+                    break;
+                }
+            }
 
-            return resultCode;
+            context.ResponseData.Write((uint)active);
+
+            return ResultCode.Success;
         }
 
         [CommandCmif(307)]
@@ -67,6 +74,14 @@ namespace Ryujinx.HLE.HOS.Services.Hid
         private ResultCode GetAppletFooterUiTypeImpl(ServiceCtx context, out AppletFooterUiType appletFooterUiType)
         {
             NpadIdType npadIdType = (NpadIdType)context.RequestData.ReadUInt32();
+
+            if (npadIdType > NpadIdType.Player8 && npadIdType != NpadIdType.Handheld)
+            {
+                appletFooterUiType = AppletFooterUiType.None;
+
+                return ResultCode.InvalidNpadIdType;
+            }
+
             PlayerIndex playerIndex = HidUtils.GetIndexFromNpadIdType(npadIdType);
 
             appletFooterUiType = context.Device.Hid.SharedMemory.Npads[(int)playerIndex].InternalState.AppletFooterUiType;

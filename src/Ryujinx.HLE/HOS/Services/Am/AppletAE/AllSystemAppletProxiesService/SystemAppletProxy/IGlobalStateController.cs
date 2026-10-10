@@ -22,6 +22,15 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         }
 
         public IGlobalStateController() { }
+
+        [CommandCmif(30)]
+        // OpenCradleFirmwareUpdater() -> object<nn::am::service::ICradleFirmwareUpdater>
+        public ResultCode OpenCradleFirmwareUpdater(ServiceCtx context)
+        {
+            MakeObject(context, new ICradleFirmwareUpdater());
+
+            return ResultCode.Success;
+        }
         [CommandCmif(14)]
         // ShouldSleepOnBoot() -> bool
         public ResultCode ShouldSleepOnBoot(ServiceCtx context)
