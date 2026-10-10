@@ -36,14 +36,28 @@ namespace Ryujinx.HLE.HOS.Services.Time
 
         // TODO: 9.0.0+ power states and alarms
 
-        public TimeManager()
+        /// <summary>
+        /// [Nextendo, HOME Menu work] A new emulation (a restart of the HOME Menu) starts with new
+        /// clocks: those of the previous one were set against a steady clock that started again
+        /// from zero, and the HOME Menu showed 01:00. The time zone data is kept.
+        /// </summary>
+        public static void ResetClocks()
+        {
+            _instance = new TimeManager(_instance?.TimeZone);
+        }
+
+        public TimeManager() : this(null)
+        {
+        }
+
+        private TimeManager(TimeZoneContentManager timeZone)
         {
             StandardSteadyClock = new StandardSteadyClockCore();
             TickBasedSteadyClock = new TickBasedSteadyClockCore();
             StandardLocalSystemClock = new StandardLocalSystemClockCore(StandardSteadyClock);
             StandardNetworkSystemClock = new StandardNetworkSystemClockCore(StandardSteadyClock);
             StandardUserSystemClock = new StandardUserSystemClockCore(StandardLocalSystemClock, StandardNetworkSystemClock);
-            TimeZone = new TimeZoneContentManager();
+            TimeZone = timeZone ?? new TimeZoneContentManager();
             EphemeralNetworkSystemClock = new EphemeralNetworkSystemClockCore(TickBasedSteadyClock);
             SharedMemory = new TimeSharedMemory();
             LocalClockContextWriter = new LocalSystemClockContextWriter(SharedMemory);

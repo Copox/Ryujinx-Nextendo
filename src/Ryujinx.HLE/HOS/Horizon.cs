@@ -195,6 +195,7 @@ namespace Ryujinx.HLE.HOS
 
             KSharedMemory timeSharedMemory = new(KernelContext, timeStorage, 0, 0, KMemoryPermission.Read);
 
+            TimeServiceManager.ResetClocks();
             TimeServiceManager.Instance.Initialize(device, this, timeSharedMemory, timeStorage, TimeSize);
 
             AppletCaptureBufferTransfer = new KTransferMemory(KernelContext, appletCaptureBufferStorage);
