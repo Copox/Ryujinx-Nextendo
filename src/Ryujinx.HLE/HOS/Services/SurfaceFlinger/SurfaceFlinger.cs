@@ -40,6 +40,9 @@ namespace Ryujinx.HLE.HOS.Services.SurfaceFlinger
 
         public long RenderLayerId { get; private set; }
 
+        /// <summary>[Nextendo, HOME Menu work] The layer of the overlay applet, laid over the one on screen.</summary>
+        public long OverlayLayerId { get; private set; }
+
         private class Layer
         {
             public int ProducerBinderId;
@@ -263,6 +266,17 @@ namespace Ryujinx.HLE.HOS.Services.SurfaceFlinger
         {
             lock (_lock)
             {
+                // [Nextendo, HOME Menu work] The overlay applet draws above the others: its layers
+                // never become the one on screen (they are laid over it, see OverlayLayerId).
+                Layer layer = layerId != 0 ? GetLayerByIdLocked(layerId) : null;
+
+                if (layer != null && Am.AppletAE.RealAppletManager.IsOverlay(layer.Owner))
+                {
+                    OverlayLayerId = layerId;
+
+                    return;
+                }
+
                 RenderLayerId = layerId;
             }
         }

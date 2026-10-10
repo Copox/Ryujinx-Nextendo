@@ -100,6 +100,30 @@ namespace Ryujinx.HLE.HOS
                 }
             }
 
+            // The "Nintendo Switch Online" button of the HOME Menu (and its picture on the screen
+            // that resumes a system applet): the Nextendo logo instead, as single-channel masks the
+            // layouts colour, of the size and GPU layout of the originals.
+            if (programId == 0x0100000000001000)
+            {
+                foreach ((string path, string texture, string asset) in _logos)
+                {
+                    if (!Exists(baseRom, path))
+                    {
+                        continue;
+                    }
+
+                    byte[] layout = Yaz0Decode(Read(baseRom, path));
+                    bool replaced = ReplaceTexture(layout, texture, Ryujinx.Common.EmbeddedResources.Read("Ryujinx.HLE/HOS/NextendoAssets/" + asset));
+
+                    if (replaced)
+                    {
+                        changed[path] = Yaz0Encode(layout);
+                    }
+
+                    Logger.Info?.Print(LogClass.ModLoader, $"[Nextendo] HOME Menu: Nextendo logo in {path} ({texture}) {(replaced ? "done" : "not done")}");
+                }
+            }
+
             if (changed.Count == 0)
             {
                 return baseStorage;
@@ -124,6 +148,87 @@ namespace Ryujinx.HLE.HOS
             Logger.Info?.Print(LogClass.ModLoader, $"[Nextendo] texts of {programId:X16}: {strings} string(s) in {changed.Count} file(s) name Nextendo");
 
             return builder.Build();
+        }
+
+        // The online button of the HOME Menu, then its picture on the screen that resumes a system applet.
+        private static readonly (string Path, string Texture, string Asset)[] _logos =
+        [
+            ("/lyt/ResidentMenu.szs", "RdtIcoLR_00^s", "RdtIcoLR_00.bc4"),
+            ("/lyt/Entrance.szs", "EntIcoLHUB^s", "EntIcoLHUB.bc4"),
+        ];
+
+        private static bool Exists(IFileSystem fs, string path) =>
+            fs.GetEntryType(out DirectoryEntryType type, path.ToU8Span()).IsSuccess() && type == DirectoryEntryType.File;
+
+        // Puts new texture data (already in the GPU layout of the original, same size) in place of
+        // a texture of the BNTX archives of a SARC layout. True when done.
+        private static bool ReplaceTexture(byte[] sarc, string name, byte[] data)
+        {
+            if (sarc.Length < 0x20 || Encoding.ASCII.GetString(sarc, 0, 4) != "SARC")
+            {
+                return false;
+            }
+
+            int dataOffset = BitConverter.ToInt32(sarc, 0x0C);
+            int sfat = 0x14;
+            int nodes = BitConverter.ToUInt16(sarc, sfat + 6);
+            int names = sfat + 12 + 16 * nodes + 8;
+
+            for (int i = 0; i < nodes; i++)
+            {
+                int node = sfat + 12 + 16 * i;
+                int nameOffset = (BitConverter.ToInt32(sarc, node + 4) & 0xFFFF) * 4;
+                int start = dataOffset + BitConverter.ToInt32(sarc, node + 8);
+                int end = dataOffset + BitConverter.ToInt32(sarc, node + 12);
+                int nameEnd = Array.IndexOf(sarc, (byte)0, names + nameOffset);
+                string file = Encoding.ASCII.GetString(sarc, names + nameOffset, nameEnd - (names + nameOffset));
+
+                if (!file.EndsWith(".bntx", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                Span<byte> bntx = sarc.AsSpan(start, end - start);
+                int nx = bntx.IndexOf("NX  "u8);
+
+                if (nx < 0)
+                {
+                    continue;
+                }
+
+                int count = BitConverter.ToInt32(bntx[(nx + 4)..]);
+                int infoPointers = (int)BitConverter.ToInt64(bntx[(nx + 8)..]);
+
+                for (int t = 0; t < count; t++)
+                {
+                    int brti = (int)BitConverter.ToInt64(bntx[(infoPointers + 8 * t)..]);
+                    int nameAddress = (int)BitConverter.ToInt64(bntx[(brti + 0x60)..]);
+                    int nameLength = BitConverter.ToUInt16(bntx[nameAddress..]);
+                    string texture = Encoding.ASCII.GetString(bntx.Slice(nameAddress + 2, nameLength));
+
+                    if (texture != name)
+                    {
+                        continue;
+                    }
+
+                    int size = BitConverter.ToInt32(bntx[(brti + 0x50)..]);
+                    int mips = (int)BitConverter.ToInt64(bntx[(brti + 0x70)..]);
+                    int mip0 = (int)BitConverter.ToInt64(bntx[mips..]);
+
+                    if (size != data.Length)
+                    {
+                        Logger.Warning?.Print(LogClass.ModLoader, $"[Nextendo] texture {name}: 0x{size:X} bytes, 0x{data.Length:X} given, left as it is");
+
+                        return false;
+                    }
+
+                    data.CopyTo(bntx.Slice(mip0, size));
+
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         // "/message/EUfr/x.msbt.szs" -> "fr"; Chinese keeps its script.

@@ -63,6 +63,8 @@
     <EmbeddedResource Include="HOS\Applets\SoftwareKeyboard\Resources\Icon_BtnB.png" />
     <EmbeddedResource Include="HOS\Applets\SoftwareKeyboard\Resources\Icon_KeyF6.png" />
     <EmbeddedResource Include="HOS\Services\Account\Acc\DefaultUserImage.jpg" />
+    <EmbeddedResource Include="HOS\NextendoAssets\EntIcoLHUB.bc4" />
+    <EmbeddedResource Include="HOS\NextendoAssets\RdtIcoLR_00.bc4" />
     <EmbeddedResource Include="HOS\Services\Account\Acc\GuestUserImage.jpg" />
   </ItemGroup>
 

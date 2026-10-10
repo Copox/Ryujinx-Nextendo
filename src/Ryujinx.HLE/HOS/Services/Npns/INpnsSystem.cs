@@ -29,6 +29,13 @@ namespace Ryujinx.HLE.HOS.Services.Npns
             return ResultCode.Success;
         }
 
+        [CommandCmif(8)]
+        // ListenToByName(buffer<bytes, 0x19> name)
+        public ResultCode ListenToByName(ServiceCtx context)
+        {
+            return ResultCode.Success;
+        }
+
         [CommandCmif(103)]
         // GetState() -> u32
         public ResultCode GetState(ServiceCtx context)

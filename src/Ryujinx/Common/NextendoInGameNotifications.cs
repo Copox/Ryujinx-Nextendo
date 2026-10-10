@@ -307,6 +307,12 @@ namespace Ryujinx.Ava.Common
 
         private static void Push(NextendoToastModel toast, TimeSpan duration)
         {
+            // [Nextendo, HOME Menu work] In the HOME Menu, the notifications are the system's own.
+            if (Ryujinx.HLE.HOS.HomeMenuStatus.Running)
+            {
+                return;
+            }
+
             Toasts.Insert(0, toast);
 
             while (Toasts.Count > MaxToasts)

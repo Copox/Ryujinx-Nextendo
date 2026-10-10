@@ -78,6 +78,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
 
             Ryujinx.Common.Configuration.NextendoGames.Playing = Ryujinx.Common.Configuration.NextendoGames.HomeMenuId;
             HomeMenuStatus.Set("");
+            HomeMenuStatus.Running = false;
         }
 
         public static void RegisterSystemApplet(Horizon system, ulong pid)
@@ -91,6 +92,8 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
                 Logger.Notice.Print(LogClass.ServiceAm, $"[home] system applet {pid} gets its own message queue");
 
                 bool first = _systemApplets.IsEmpty;
+
+                HomeMenuStatus.Running = true;
 
                 _systemApplets[pid] = state;
 

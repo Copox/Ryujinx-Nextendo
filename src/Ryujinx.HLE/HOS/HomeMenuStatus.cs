@@ -12,6 +12,9 @@ namespace Ryujinx.HLE.HOS
 
         public static event Action Changed;
 
+        /// <summary>The emulation is the HOME Menu (and what it starts): the system draws its own notifications.</summary>
+        public static bool Running { get; internal set; }
+
         /// <summary>The console is asked to restart (true) or to turn off (false).</summary>
         public static event Action<bool> PowerRequested;
 

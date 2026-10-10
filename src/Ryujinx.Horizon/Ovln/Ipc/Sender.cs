@@ -9,9 +9,9 @@ namespace Ryujinx.Horizon.Ovln.Ipc
         [CmifCommand(0)]
         public Result Send(RawMessage message, SendOption option)
         {
-            // Notifications d'applets en surimpression : rien a afficher dans
-            // l'emulateur, on accepte et on jette.
-            Ryujinx.Common.Logging.Logger.Info?.Print(Ryujinx.Common.Logging.LogClass.Service, "[Nextendo] ovln ISender.Send (ignore)");
+            // [Nextendo, HOME Menu work] To the receivers (the overlay applet draws it).
+            OvlnQueue.Send(System.Runtime.InteropServices.MemoryMarshal.AsBytes(System.Runtime.InteropServices.MemoryMarshal.CreateReadOnlySpan(ref message, 1)), option.EnqueuePosition == 1);
+
             return Result.Success;
         }
 

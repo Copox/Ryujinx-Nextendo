@@ -57,6 +57,13 @@ namespace Ryujinx.Ava.UI.Helpers
 
         public static void Show(string title, string text, NotificationType type, bool waitingExit = false, Action onClick = null, Action onClose = null)
         {
+            // [Nextendo, HOME Menu work] In the HOME Menu, the notifications are the system's own
+            // (errors still show: they are about the emulator itself).
+            if (Ryujinx.HLE.HOS.HomeMenuStatus.Running && type != NotificationType.Error)
+            {
+                return;
+            }
+
             TimeSpan delay = waitingExit ? TimeSpan.FromMilliseconds(0) : TimeSpan.FromMilliseconds(NotificationDelayInMs);
 
             _notifications.Add(new Notification(title, text, type, delay, onClick, onClose));

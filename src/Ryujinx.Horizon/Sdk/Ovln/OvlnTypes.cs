@@ -2,9 +2,9 @@ using System.Runtime.InteropServices;
 
 namespace Ryujinx.Horizon.Sdk.Ovln
 {
-    // nn::ovln::SourceName : tampon opaque de 0x20 octets. qlaunch l'envoie tel
-    // quel a OpenSender/AddSource/RemoveSource, on ne le lit jamais.
-    [StructLayout(LayoutKind.Sequential, Size = 0x20, Pack = 1)]
+    // nn::ovln::SourceName : tampon opaque de 0x10 octets (l'applet de surimpression
+    // l'envoie seul a AddSource : 0x10 octets de donnees), on ne le lit jamais.
+    [StructLayout(LayoutKind.Sequential, Size = 0x10, Pack = 1)]
     struct SourceName
     {
     }
