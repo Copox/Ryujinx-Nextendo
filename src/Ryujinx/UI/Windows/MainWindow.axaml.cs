@@ -923,11 +923,25 @@ namespace Ryujinx.Ava.UI.Windows
                         Path = app.Path,
                         Icon = app.Icon,
                         Nacp = app.HasControlHolder ? app.ControlHolder.ByteSpan.ToArray() : null,
+                        UpdatePath = ApplicationLibrary?.FindUpdateConfigurationFor(app.Id).FirstOrDefault(u => u.IsSelected).TitleUpdate?.Path,
+                        DlcPaths = ApplicationLibrary?.DownloadableContents.Items
+                            .Where(d => d.IsEnabled && d.Dlc.TitleIdBase == (app.Id & ~0x1FFFUL))
+                            .Select(d => d.Dlc.ContainerPath).Distinct().ToArray() ?? [],
                     });
                 }
 
                 return titles;
             });
+
+            Ryujinx.HLE.HOS.HomeMenuLibrary.Delete = title =>
+            {
+                bool deleted = Ryujinx.Ava.Systems.NextendoSoftwareDeletion.Delete(title);
+
+                // The game list is read again: the HOME Menu no longer shows the game.
+                Dispatcher.UIThread.Post(LoadApplications);
+
+                return deleted;
+            };
 
             if (homeMenuData != null)
                 _ = ViewModel.LoadApplication(homeMenuData, _startFullscreen || Ryujinx.Common.Configuration.NextendoHomeMenuSettings.Fullscreen, homeMenuNacp);

@@ -248,6 +248,27 @@ namespace Ryujinx.HLE.HOS.Services.Ns
             return ResultCode.Success;
         }
 
+        [CommandCmif(5)]
+        // DeleteApplicationCompletely(nn::ncm::ApplicationId)
+        public ResultCode DeleteApplicationCompletely(ServiceCtx context)
+        {
+            // [Nextendo, HOME Menu work] "Delete Software": the game, its update and its add-on
+            // content leave the computer (to the recycle bin); the saves stay, as on a Switch.
+            ulong id = context.RequestData.ReadUInt64();
+            HomeMenuTitle title = HomeMenuLibrary.Find(id);
+
+            if (title == null)
+            {
+                return ResultCode.Success;
+            }
+
+            bool done = HomeMenuLibrary.Delete?.Invoke(title) ?? false;
+
+            Ryujinx.Common.Logging.Logger.Info?.Print(Ryujinx.Common.Logging.LogClass.ServiceNs, $"[home] delete software {title.Name} ({id:X16}): {(done ? "done" : "not done")}");
+
+            return ResultCode.Success;
+        }
+
         [CommandCmif(201)]
         // DeleteUserSaveDataAll(nn::account::Uid) -> object<nn::ns::detail::IProgressMonitorForDeleteUserSaveDataAll>
         public ResultCode DeleteUserSaveDataAll(ServiceCtx context)

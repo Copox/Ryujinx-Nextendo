@@ -1,3 +1,4 @@
+using System;
 namespace Ryujinx.HLE.HOS.Services.Ns
 {
     [Service("ns:am2")]
@@ -225,6 +226,29 @@ Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.Servi
     class IContentManagementInterface : IpcService
     {
         public IContentManagementInterface() { }
+
+        [CommandCmif(11)]
+        // CalculateApplicationOccupiedSize(nn::ncm::ApplicationId) -> nn::ns::ApplicationOccupiedSize
+        public ResultCode CalculateApplicationOccupiedSize(ServiceCtx context)
+        {
+            // [Nextendo, HOME Menu work] "Data Management > Software": the size of the game, its
+            // update and its add-on content, as files of the computer, in the console memory.
+            ulong id = context.RequestData.ReadUInt64();
+            HomeMenuTitle title = HomeMenuLibrary.Find(id);
+            byte[] sizes = new byte[0x80];
+
+            if (title != null)
+            {
+                sizes[0] = 4; // BuiltInUser
+                BitConverter.TryWriteBytes(sizes.AsSpan(0x08), title.ApplicationSize);
+                BitConverter.TryWriteBytes(sizes.AsSpan(0x10), title.UpdateSize);
+                BitConverter.TryWriteBytes(sizes.AsSpan(0x18), title.DlcSize);
+            }
+
+            context.ResponseData.Write(sizes);
+
+            return ResultCode.Success;
+        }
 
         [CommandCmif(43)]
         // CheckSdCardMountStatus()

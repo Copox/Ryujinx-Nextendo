@@ -13,6 +13,26 @@ namespace Ryujinx.HLE.HOS
         // The 256x256 JPEG and the 0x4000 bytes control property of the title, when known.
         public byte[] Icon;
         public byte[] Nacp;
+
+        // The update selected and the add-on content enabled for the title in the emulator.
+        public string UpdatePath;
+        public string[] DlcPaths = [];
+
+        private static long SizeOf(string path)
+        {
+            try
+            {
+                return !string.IsNullOrEmpty(path) && System.IO.File.Exists(path) ? new System.IO.FileInfo(path).Length : 0;
+            }
+            catch (Exception)
+            {
+                return 0;
+            }
+        }
+
+        public long ApplicationSize => SizeOf(Path);
+        public long UpdateSize => SizeOf(UpdatePath);
+        public long DlcSize => System.Linq.Enumerable.Sum(DlcPaths ?? [], SizeOf);
     }
 
     // The emulator's game library, handed to the HOME Menu as the console's installed titles.
@@ -23,6 +43,12 @@ namespace Ryujinx.HLE.HOS
 
         // Raised when the list changes: the HOME Menu then lists its titles again.
         public static event Action Changed;
+
+        /// <summary>
+        /// "Delete Software" of the HOME Menu: removes the files of the title from the computer
+        /// (set by the interface, which then lists its games again). True when done.
+        /// </summary>
+        public static Func<HomeMenuTitle, bool> Delete { get; set; }
 
         public static void SetProvider(Func<IReadOnlyList<HomeMenuTitle>> provider)
         {
