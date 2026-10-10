@@ -106,7 +106,10 @@ namespace Ryujinx.Common.Configuration
 
                 long at = 0;
 
-                if (r.TryGetProperty("vu", out JsonElement atEl) && atEl.ValueKind == JsonValueKind.String &&
+                // The date of the request ("requested_at", kept by the server since 10/10/2026); for
+                // older requests, the "created_at" of the account it comes from, what a Switch shows
+                // for them. "vu" is the last time the player was seen, not the request.
+                if ((r.TryGetProperty("requested_at", out JsonElement atEl) || r.TryGetProperty("created_at", out atEl)) && atEl.ValueKind == JsonValueKind.String &&
                     DateTimeOffset.TryParse(atEl.GetString(), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out DateTimeOffset when))
                 {
                     at = when.ToUnixTimeSeconds();
