@@ -233,6 +233,27 @@ namespace Ryujinx.HLE.HOS.Themes
                         ApplyLayout(archive, theme.Layout, !skip.Contains("anims"));
                     }
 
+                    // The "Clear Lock" lock screen layout, made before 9.0, moved the Continue button
+                    // and the status bar where they are not seen since: back in place.
+                    if (theme.Target == "lock" && theme.Layout?.ID == "builtin_ClearLock" && !skip.Contains("fix"))
+                    {
+                        ApplyLayout(archive, new LayoutPatch
+                        {
+                            Files =
+                            [
+                                new LayoutFilePatch
+                                {
+                                    FileName = "blyt/EntMain.bflyt",
+                                    Patches =
+                                    [
+                                        new PanePatch { PaneName = "L_BtnResume", Position = new Vector { X = -180, Y = 0 } },
+                                        new PanePatch { PaneName = "N_CntHud", Position = new Vector { X = 0, Y = 0 } },
+                                    ],
+                                },
+                            ],
+                        });
+                    }
+
                     Logger.Info?.Print(LogClass.ModLoader, $"[theme] {theme.Name} ({theme.Target}) applied to {archiveName}");
                 }
                 catch (Exception e)

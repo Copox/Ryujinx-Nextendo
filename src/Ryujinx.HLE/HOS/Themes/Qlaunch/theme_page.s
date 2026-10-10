@@ -37,6 +37,152 @@
     b refresh
     b deactivate
     b destroy
+    b index_of_button             ; +0x10
+    b index_of_focus              ; +0x14
+    b get_focused                 ; +0x18
+    b pick                        ; +0x1C
+    b current                     ; +0x20
+    b entry_button                ; +0x24
+
+; ---------------------------------------------------------------------------------------------
+; helpers for the page's own code (patched to call them; see build.py)
+
+; the number of entries (x0 = the page) -> w0
+entry_count:
+    adrp x8, @DATA
+    ldr w0, [x8]
+    cmp w0, #16
+    mov w9, #16
+    csel w0, w0, w9, le
+    add w0, w0, #2
+    ret
+
+; the button of entry i: x0 = the page, w1 = i -> x0
+entry_button:
+    stp x29, x30, [sp, #-0x10]!
+    mov x29, sp
+    bl entry_object
+    ldr x0, [x0, #0x10]
+    ldp x29, x30, [sp], #0x10
+    ret
+
+; the entry of a button: x0 = the page, x1 = the button -> w0 (-1: none)
+index_of_button:
+    stp x29, x30, [sp, #-0x30]!
+    mov x29, sp
+    stp x19, x20, [sp, #0x10]
+    stp x21, x22, [sp, #0x20]
+    mov x19, x0
+    mov x20, x1
+    bl entry_count
+    mov w21, w0
+    mov w22, wzr
+index_of_button_loop:
+    cmp w22, w21
+    b.ge index_of_button_none
+    mov x0, x19
+    mov w1, w22
+    bl entry_button
+    cmp x0, x20
+    b.eq index_of_button_found
+    add w22, w22, #1
+    b index_of_button_loop
+index_of_button_none:
+    mov w22, #-1
+index_of_button_found:
+    mov w0, w22
+    ldp x21, x22, [sp, #0x20]
+    ldp x19, x20, [sp, #0x10]
+    ldp x29, x30, [sp], #0x30
+    ret
+
+; the entry of a focus element (button+0x430): x0 = the page, x1 = the element -> w0 (-1: none)
+index_of_focus:
+    stp x29, x30, [sp, #-0x30]!
+    mov x29, sp
+    stp x19, x20, [sp, #0x10]
+    stp x21, x22, [sp, #0x20]
+    mov x19, x0
+    mov x20, x1
+    bl entry_count
+    mov w21, w0
+    mov w22, wzr
+index_of_focus_loop:
+    cmp w22, w21
+    b.ge index_of_focus_none
+    mov x0, x19
+    mov w1, w22
+    bl entry_button
+    cbz x0, index_of_focus_next
+    ldr x0, [x0, #0x430]
+    cmp x0, x20
+    b.eq index_of_focus_found
+index_of_focus_next:
+    add w22, w22, #1
+    b index_of_focus_loop
+index_of_focus_none:
+    mov w22, #-1
+index_of_focus_found:
+    mov w0, w22
+    ldp x21, x22, [sp, #0x20]
+    ldp x19, x20, [sp, #0x10]
+    ldp x29, x30, [sp], #0x30
+    ret
+
+; the page's focused button (its method +0x388): x0 = the page -> x0 (0: none)
+get_focused:
+    stp x29, x30, [sp, #-0x20]!
+    mov x29, sp
+    stp x19, x20, [sp, #0x10]
+    mov x19, x0
+    ldr x9, [x0, #0xb68]
+    ldr x9, [x9, #0x18]
+    ldr x1, [x9, #0x18]
+    cbz x1, get_focused_none
+    bl index_of_focus
+    tbnz w0, #31, get_focused_none
+    mov w1, w0
+    mov x0, x19
+    bl entry_button
+    b get_focused_done
+get_focused_none:
+    mov x0, xzr
+get_focused_done:
+    ldp x19, x20, [sp, #0x10]
+    ldp x29, x30, [sp], #0x20
+    ret
+
+; an entry is picked (index in w20, the caller's): the theme kept for the emulator, and the
+; colour set to give the system -> w0 (a theme is drawn on Basic Black)
+; (it replaces one instruction: only x0, x16 and x17 may change)
+pick:
+    adrp x16, @DATA
+    subs w17, w20, #2
+    b.ge pick_theme
+    mov w17, #-1
+pick_theme:
+    str w17, [x16, #0x30]
+    mov w0, #1
+    cmp w20, #1
+    b.gt pick_done
+    mov w0, w20
+pick_done:
+    ret
+
+; the entry to check when the page is shown: the theme in use, else the colour set (w9 the
+; caller's colour state, at x9+8) -> w0
+current:
+    adrp x8, @DATA
+    ldr w10, [x8, #4]
+    tbnz w10, #31, current_colour
+    add w0, w10, #2
+    ret
+current_colour:
+    ldr w0, [x9, #8]
+    cmp w0, #1
+    mov w10, #1
+    csel w0, w0, w10, ls
+    ret
 
 ; ---------------------------------------------------------------------------------------------
 ; the page is built: the original, then the added entries and their lines

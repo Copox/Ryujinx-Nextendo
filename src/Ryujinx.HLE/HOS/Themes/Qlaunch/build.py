@@ -35,4 +35,32 @@ if len(code) > DATA - CAVE:
 
 open(os.path.join(here, 'theme_page.bin'), 'wb').write(code)
 
-print(f'{len(code)} bytes, {count} statements')
+# Changes to the program's own code, assembled at their place: (address, instructions).
+ENTRY = {'index_of_button': CAVE + 0x10, 'index_of_focus': CAVE + 0x14, 'get_focused': CAVE + 0x18,
+         'pick': CAVE + 0x1C, 'current': CAVE + 0x20, 'entry_button': CAVE + 0x24}
+PATCHES = [
+    # the page's buttons: room for the added entries (it reserves 2)
+    (0x98CEE0, ['mov w1, #18']),
+    # focus callback: the focused entry, whichever it is
+    (0x98DD90, ['mov x19, x0', f'bl #{ENTRY["index_of_focus"]:#x}', 'tbnz w0, #31, #0x98ddb4',
+                'mov w2, w0', 'str w2, [x19, #0xd64]', 'b #0x98ddd0']),
+    # check group callback: the picked entry, whichever it is
+    (0x98DFD0, ['mov x0, x19', f'bl #{ENTRY["index_of_button"]:#x}', 'tbnz w0, #31, #0x98df34',
+                'mov w20, w0', 'b #0x98dff4']),
+    # ... a theme is drawn on Basic Black; the emulator is told which
+    (0x98E058, [f'bl #{ENTRY["pick"]:#x}']),
+    (0x98E064, ['str w0, [x8, #8]']),
+    # page shown: the entry to check (the theme in use)
+    (0x98E69C, [f'bl #{ENTRY["current"]:#x}', 'mov w8, w0', 'str w8, [x19, #0xd64]', 'b #0x98e6f8']),
+    (0x98E6F8, ['mov x0, x19', 'mov w1, w8', f'bl #{ENTRY["entry_button"]:#x}', 'mov x19, x0', 'b #0x98e710']),
+    # the focused button
+    (0x98EEF0, [f'b #{ENTRY["get_focused"]:#x}']),
+]
+
+with open(os.path.join(here, 'theme_page.patches'), 'wb') as f:
+    f.write(len(PATCHES).to_bytes(4, 'little'))
+    for address, asm in PATCHES:
+        patch = bytes(ks.asm(chr(10).join(asm), address)[0])
+        f.write(address.to_bytes(4, 'little') + len(patch).to_bytes(4, 'little') + patch)
+
+print(f'{len(code)} bytes, {count} statements, {len(PATCHES)} patches')

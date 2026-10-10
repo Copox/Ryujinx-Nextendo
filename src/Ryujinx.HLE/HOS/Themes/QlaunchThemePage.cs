@@ -95,20 +95,77 @@ namespace Ryujinx.HLE.HOS.Themes
                 process.CpuMemory.Write(baseAddress + slots[i], slot);
             }
 
-            // The page's buttons: room for the added entries (the page reserves 2).
-            WriteCode(process, baseAddress + 0x98CEE0, 0x52800241); // mov w1, #18
+            // The page's own code, changed to know the added entries (Qlaunch/build.py).
+            byte[] patches = Ryujinx.Common.EmbeddedResources.Read("Ryujinx.HLE/HOS/Themes/Qlaunch/theme_page.patches");
+            int count = BinaryPrimitives.ReadInt32LittleEndian(patches);
+
+            for (int i = 0, at = 4; i < count; i++)
+            {
+                uint address = BinaryPrimitives.ReadUInt32LittleEndian(patches.AsSpan(at));
+                int length = BinaryPrimitives.ReadInt32LittleEndian(patches.AsSpan(at + 4));
+
+                process.CpuMemory.Write(baseAddress + address, patches.AsSpan(at + 8, length));
+                at += 8 + length;
+            }
+
+            _process = process;
+            _base = baseAddress;
 
             Logger.Info?.Print(LogClass.Loader, $"[theme] HOME Menu themes page: {code.Length} bytes of code added");
         }
 
         private static readonly Dictionary<KProcess, ulong> _pending = [];
 
-        private static void WriteCode(KProcess process, ulong address, uint instruction)
-        {
-            byte[] bytes = new byte[4];
+        private static KProcess _process;
+        private static ulong _base;
+        private static List<string> _packs = [];
 
-            BinaryPrimitives.WriteUInt32LittleEndian(bytes, instruction);
-            process.CpuMemory.Write(address, bytes);
+        /// <summary>
+        /// The HOME Menu has set its colour set: an entry of its themes page was picked. A theme
+        /// different from the one in use is kept, and the HOME Menu starts again with it (its
+        /// layouts are made when it starts). True when that happens.
+        /// </summary>
+        public static bool TakePick()
+        {
+            KProcess process = _process;
+
+            if (process == null)
+            {
+                return false;
+            }
+
+            ulong at = _base + Cave + CodeSize + 0x30;
+            int picked;
+
+            try
+            {
+                picked = process.CpuMemory.Read<int>(at);
+                process.CpuMemory.Write(at, -2);
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+
+            if (picked < -1 || picked >= _packs.Count)
+            {
+                return false;
+            }
+
+            string theme = picked < 0 ? null : _packs[picked];
+
+            if (theme == NextendoThemes.Chosen)
+            {
+                return false;
+            }
+
+            NextendoThemes.Chosen = theme;
+
+            Logger.Info?.Print(LogClass.ServiceSet, $"[theme] HOME Menu theme: {theme ?? "the system's"}, the HOME Menu starts again");
+
+            HomeMenuStatus.RequestPower(true);
+
+            return true;
         }
 
         /// <summary>The program has started (its modules are known): the added code may run.</summary>
@@ -133,6 +190,8 @@ namespace Ryujinx.HLE.HOS.Themes
         private static void WriteData(byte[] data)
         {
             List<string> packs = NextendoThemes.Packs();
+
+            _packs = packs;
 
             int count = Math.Min(packs.Count, MaxEntries);
 

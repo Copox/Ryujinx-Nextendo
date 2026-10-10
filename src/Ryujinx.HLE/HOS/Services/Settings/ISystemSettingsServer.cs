@@ -206,6 +206,9 @@ namespace Ryujinx.HLE.HOS.Services.Settings
 
             context.Device.System.State.ThemeColor = (ColorSet)colorSetId;
 
+            // [Nextendo, HOME Menu themes] An installed theme picked on the themes page.
+            Ryujinx.HLE.HOS.Themes.QlaunchThemePage.TakePick();
+
             // [Nextendo, HOME Menu work] The theme chosen in the HOME Menu settings is kept.
             try
             {
