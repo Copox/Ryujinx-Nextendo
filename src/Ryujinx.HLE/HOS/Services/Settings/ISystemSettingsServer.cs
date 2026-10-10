@@ -183,7 +183,8 @@ namespace Ryujinx.HLE.HOS.Services.Settings
                     {
                         context.Device.System.State.ThemeColor = (ColorSet)id;
                     }
-                    else if (System.IO.Directory.Exists(System.IO.Path.Combine(baseDir, "sdcard", "atmosphere", "contents", "0100000000001000", "romfs", "lyt")))
+                    else if (Ryujinx.HLE.HOS.Themes.NextendoThemes.Chosen != null ||
+                             System.IO.Directory.Exists(System.IO.Path.Combine(baseDir, "sdcard", "atmosphere", "contents", "0100000000001000", "romfs", "lyt")))
                     {
                         context.Device.System.State.ThemeColor = ColorSet.BasicBlack;
                     }

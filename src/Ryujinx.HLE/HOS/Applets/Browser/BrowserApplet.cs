@@ -108,7 +108,8 @@ namespace Ryujinx.HLE.HOS.Applets.Browser
             // Ryujinx.exe to point it anywhere (Nextendo, your own store, or any URL).
             if (_shimKind == ShimKind.Shop)
             {
-                string url = "https://nextendo.network";
+                // The Nintendo website of the console's language, where games are bought.
+                string url = NintendoStoreUrl(_system?.State.DesiredLanguageCode ?? 0);
                 try
                 {
                     string exeDir = Path.GetDirectoryName(Environment.ProcessPath ?? "") ?? "";
@@ -129,7 +130,11 @@ namespace Ryujinx.HLE.HOS.Applets.Browser
 
                 try
                 {
-                    Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
+                    // NEXTENDO_ESHOP_DRYRUN=1: the address is only written in the log (tests).
+                    if (Environment.GetEnvironmentVariable("NEXTENDO_ESHOP_DRYRUN") != "1")
+                    {
+                        Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
+                    }
                     Logger.Info?.Print(LogClass.ServiceAm, $"[eShop redirect] opened {url} in host browser");
                 }
                 catch (Exception ex)
@@ -160,6 +165,31 @@ namespace Ryujinx.HLE.HOS.Applets.Browser
             AppletStateChanged?.Invoke(this, null);
 
             return ResultCode.Success;
+        }
+
+        // [Nextendo] The eShop button opens the store of the Nintendo website, in the language of
+        // the console.
+        private static string NintendoStoreUrl(long languageCode)
+        {
+            string code = System.Text.Encoding.ASCII.GetString(BitConverter.GetBytes(languageCode)).TrimEnd('\0');
+
+            return code switch
+            {
+                "ja" => "https://store-jp.nintendo.com/",
+                "en-US" => "https://www.nintendo.com/us/store/",
+                "fr" => "https://www.nintendo.com/fr-fr/Jeux/Jeux-347085.html",
+                "fr-CA" => "https://www.nintendo.com/fr-ca/",
+                "de" => "https://www.nintendo.com/de-de/",
+                "it" => "https://www.nintendo.com/it-it/",
+                "es" => "https://www.nintendo.com/es-es/",
+                "es-419" => "https://www.nintendo.com/es-mx/",
+                "nl" => "https://www.nintendo.com/nl-nl/",
+                "pt" => "https://www.nintendo.com/pt-pt/",
+                "pt-BR" => "https://www.nintendo.com/pt-br/",
+                "ko" => "https://www.nintendo.com/kr/",
+                "zh-TW" or "zh-Hant" or "zh-CN" or "zh-Hans" => "https://www.nintendo.com/tw/",
+                _ => "https://www.nintendo.com/en-gb/",
+            };
         }
 
         private static byte[] BuildResponseOld(WebCommonReturnValue result)

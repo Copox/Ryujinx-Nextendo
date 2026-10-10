@@ -34,6 +34,13 @@
             </StackPanel>
 
             <StackPanel Spacing="6">
+                <TextBlock FontWeight="SemiBold" Text="Thème du menu HOME" />
+                <ComboBox Name="HomeThemeCombo" HorizontalAlignment="Stretch" />
+                <TextBlock Name="HomeThemeHint" TextWrapping="Wrap" Opacity="0.7" FontSize="12"
+                           Text="Les thèmes Themezer (.nxtheme) rangés dans le dossier Themes de la carte SD. Toutes les parties du thème choisi s'appliquent (menu HOME, écran de verrouillage, paramètres, logiciels, actualités, page utilisateur, sélection de l'utilisateur), au prochain démarrage du menu HOME." />
+            </StackPanel>
+
+            <StackPanel Spacing="6">
                 <TextBlock FontWeight="SemiBold" Text="Thème de couleur" />
                 <RadioButton Name="ThemeAutoRadio" GroupName="Theme" Content="Automatique (noir avec un thème personnalisé)" />
                 <RadioButton Name="ThemeWhiteRadio" GroupName="Theme" Content="Blanc basique" />

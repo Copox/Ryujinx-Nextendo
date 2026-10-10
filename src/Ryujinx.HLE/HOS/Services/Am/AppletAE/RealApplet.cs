@@ -404,6 +404,13 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
         {
             ulong programId = ProgramIdOf(appletId);
 
+            // [Nextendo, HOME Menu work] The eShop button opens the Nintendo website in the
+            // browser of the computer (the shop applet of the firmware cannot reach a store).
+            if (appletId == AppletId.LibAppletShop)
+            {
+                return null;
+            }
+
             if (programId == 0)
             {
                 return null;

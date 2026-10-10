@@ -102,6 +102,18 @@ namespace Ryujinx.HLE.HOS
         {
             RomFsFileSystem baseRom = new(baseStorage);
             Dictionary<string, byte[]> changed = new();
+
+            // NEXTENDO_ROMFS_DUMP=<folder>: the layouts of the system programs are written there (study).
+            if (Environment.GetEnvironmentVariable("NEXTENDO_ROMFS_DUMP") is { Length: > 0 } dump)
+            {
+                foreach (DirectoryEntryEx entry in baseRom.EnumerateEntries().Where(f => f.Type == DirectoryEntryType.File && f.FullPath.StartsWith("/lyt/", StringComparison.Ordinal)))
+                {
+                    string target = System.IO.Path.Combine(dump, programId.ToString("X16"), entry.FullPath.TrimStart('/'));
+
+                    Directory.CreateDirectory(System.IO.Path.GetDirectoryName(target));
+                    File.WriteAllBytes(target, Read(baseRom, entry.FullPath));
+                }
+            }
             int strings = 0;
 
             foreach (DirectoryEntryEx entry in baseRom.EnumerateEntries().Where(f => f.Type == DirectoryEntryType.File &&
@@ -133,6 +145,25 @@ namespace Ryujinx.HLE.HOS
                 }
             }
 
+            // [Nextendo, HOME Menu themes] The theme chosen changes the layout archives of its parts.
+            foreach (DirectoryEntryEx entry in baseRom.EnumerateEntries().Where(f => f.Type == DirectoryEntryType.File &&
+                         f.FullPath.StartsWith("/lyt/", StringComparison.Ordinal) && f.FullPath.EndsWith(".szs", StringComparison.Ordinal)).ToList())
+            {
+                try
+                {
+                    byte[] themed = Themes.NextendoThemes.Apply(programId, entry.Name, Yaz0Decode(Read(baseRom, entry.FullPath)));
+
+                    if (themed != null)
+                    {
+                        changed[entry.FullPath] = Yaz0Encode(themed);
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.Warning?.Print(LogClass.ModLoader, $"[theme] {entry.FullPath} left as it is: {e.Message}");
+                }
+            }
+
             // The "Nintendo Switch Online" button of the HOME Menu (and its picture on the screen
             // that resumes a system applet): the Nextendo logo instead, as single-channel masks the
             // layouts colour, of the size and GPU layout of the originals.
@@ -145,7 +176,7 @@ namespace Ryujinx.HLE.HOS
                         continue;
                     }
 
-                    byte[] layout = Yaz0Decode(Read(baseRom, path));
+                    byte[] layout = Yaz0Decode(changed.TryGetValue(path, out byte[] themedArchive) ? themedArchive : Read(baseRom, path));
                     bool replaced = ReplaceTexture(layout, texture, Ryujinx.Common.EmbeddedResources.Read("Ryujinx.HLE/HOS/NextendoAssets/" + asset));
 
                     if (replaced)
