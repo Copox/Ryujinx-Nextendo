@@ -8,7 +8,7 @@ namespace ARMeilleure.Signal
 {
     public static class NativeSignalHandlerGenerator
     {
-        public const int MaxTrackedRanges = 16;
+        public const int MaxTrackedRanges = 64; // [Nextendo, HOME Menu work] 16 (two per process) ran out with the HOME Menu, its applets and the overlay
 
         private const int StructAddressOffset = 0;
         private const int StructWriteOffset = 4;

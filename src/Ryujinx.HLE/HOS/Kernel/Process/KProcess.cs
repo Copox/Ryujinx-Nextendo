@@ -1165,6 +1165,43 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
             SetState(ProcessState.Exited);
 
             KernelContext.CriticalSection.Leave();
+
+            // [Nextendo, HOME Menu work] With the HOME Menu, applets and games come and go in one
+            // emulation: an exited process is never destroyed (references stay behind), and its
+            // address space kept two of the regions the fault handler can watch until none were
+            // left ("Number of allowed tracked regions exceeded" when the next applet started).
+            // Freed a moment after the exit, once its threads are surely out of it.
+            if (HomeMenuStatus.Running)
+            {
+                System.Threading.Tasks.Task.Delay(3000).ContinueWith(_ =>
+                {
+                    if (State == ProcessState.Exited)
+                    {
+                        DisposeContext("exited");
+                    }
+                });
+            }
+        }
+
+        private int _contextDisposed;
+
+        private void DisposeContext(string why)
+        {
+            if (System.Threading.Interlocked.Exchange(ref _contextDisposed, 1) != 0)
+            {
+                return;
+            }
+
+            Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.Kernel, $"[home] process {Pid} ({TitleId:X16}) {why}: address space freed");
+
+            try
+            {
+                Context.Dispose();
+            }
+            catch (Exception e)
+            {
+                Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Kernel, $"[home] process {Pid}: {e.Message}");
+            }
         }
 
         public Result ClearIfNotExited()
@@ -1263,7 +1300,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
             throw new UndefinedInstructionException(address, opCode);
         }
 
-        protected override void Destroy() => Context.Dispose();
+        protected override void Destroy() => DisposeContext("destroyed");
 
         public Result SetActivity(bool pause)
         {
