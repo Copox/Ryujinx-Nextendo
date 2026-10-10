@@ -19,8 +19,10 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
         private const string RequestUrl = "https://nextendo.network/connect/console";
         private const string CallbackUri = "nintendo://nextendo.link/callback";
 
-        // Found by trying the results the import compares with (see Register).
-        private const int AlreadyLinkedDescription = 0;
+        // 2124-0291: the Nintendo Account signed in already has a user on this console. Read in
+        // PlayerSelect (SceneApplyLoginResponse): this answer to the sign-in shows "This Nintendo
+        // Account is already being used on this console" before the confirmation, like a Switch.
+        private const int AlreadyLinkedDescription = 291;
 
         private bool _signedIn;
         private UserId _created;
@@ -74,14 +76,16 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
         // ApplyResponse(buffer<bytes, 9>)
         public ResultCode ApplyResponse(ServiceCtx context)
         {
-            return SignIn().GetAwaiter().GetResult();
+            return SignIn(context.Device.System.AccountManager).GetAwaiter().GetResult();
         }
 
         [CommandCmif(3)]
         // ApplyResponseAsync(buffer<bytes, 9>) -> object<nn::account::detail::IAsyncContext>
         public ResultCode ApplyResponseAsync(ServiceCtx context)
         {
-            MakeObject(context, Async(context, SignIn));
+            AccountManager accounts = context.Device.System.AccountManager;
+
+            MakeObject(context, Async(context, () => SignIn(accounts)));
 
             return ResultCode.Success;
         }
@@ -90,20 +94,22 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
         // ApplyResponseForUserCreationAsync(buffer<bytes, 9>) -> object<nn::account::detail::IAsyncContext>
         public ResultCode ApplyResponseForUserCreationAsync(ServiceCtx context)
         {
-            MakeObject(context, Async(context, SignIn));
+            AccountManager accounts = context.Device.System.AccountManager;
+
+            MakeObject(context, Async(context, () => SignIn(accounts)));
 
             return ResultCode.Success;
         }
 
         // The Nextendo sign-in in the browser of the computer.
-        private async Task<ResultCode> SignIn()
+        private async Task<ResultCode> SignIn(AccountManager accounts)
         {
             // Already signed in by the sign-in page of the console (NextendoLoginApplet).
             if (NextendoAccountLink.SignedIn && NextendoAccount.IsLinked)
             {
                 _signedIn = true;
 
-                return ResultCode.Success;
+                return AlreadyLinked(accounts) ? (ResultCode)((AlreadyLinkedDescription << 9) | 124) : ResultCode.Success;
             }
 
             if (NextendoAccountLink.SignIn == null)
@@ -117,7 +123,30 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
 
             _signedIn = ok && NextendoAccount.IsLinked;
 
-            return _signedIn ? ResultCode.Success : ResultCode.InternetRequestDenied;
+            if (!_signedIn)
+            {
+                return ResultCode.InternetRequestDenied;
+            }
+
+            return AlreadyLinked(accounts) ? (ResultCode)((AlreadyLinkedDescription << 9) | 124) : ResultCode.Success;
+        }
+
+        // The Nextendo account signed in already has its user on this emulator.
+        private static bool AlreadyLinked(AccountManager accounts)
+        {
+            foreach (UserProfile profile in accounts.GetAllUsers())
+            {
+                if (string.Equals(profile.UserId.ToString(), NextendoAccount.ProfileUserId, StringComparison.OrdinalIgnoreCase))
+                {
+                    NextendoAccountLink.AlreadyRegistered = true;
+
+                    Logger.Info?.Print(LogClass.ServiceAcc, $"[acc] user import: the Nextendo account already has the user {profile.UserId} (2124-0291)");
+
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         [CommandCmif(10)]
@@ -261,7 +290,7 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
 
                     // The answer that makes the import say "this account is already linked to a
                     // user of this console" (a description of the account module, 2124-xxxx).
-                    int description = int.TryParse(Environment.GetEnvironmentVariable("NEXTENDO_DUP_CODE"), out int forced) ? forced : AlreadyLinkedDescription;
+                    int description = AlreadyLinkedDescription;
 
                     return (ResultCode)((description << 9) | 124);
                 }

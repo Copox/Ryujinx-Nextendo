@@ -29,6 +29,8 @@ namespace Ryujinx.HLE.HOS
 
             _images[process] = bases;
 
+            Logger.Notice.Print(LogClass.Application, $"[memprobe] process {process.Pid} title {process.TitleId:X16} images {string.Join(",", Array.ConvertAll(bases, b => b.ToString("X")))}");
+
             if (_thread == null)
             {
                 _thread = new Thread(() => Run(config)) { IsBackground = true, Name = "Nextendo.MemProbe" };
@@ -41,13 +43,19 @@ namespace Ryujinx.HLE.HOS
             string[] parts = config.Split(':');
             ulong titleId = Convert.ToUInt64(parts[0], 16);
             ulong[] vtables = Array.ConvertAll(parts[1].Split(','), v => Convert.ToUInt64(v, 16));
-            int from = Convert.ToInt32(parts[2].Split('-')[0], 16);
-            int to = Convert.ToInt32(parts[2].Split('-')[1], 16);
+            // "from..to" (hex, signed: "-B38..-B00"), several separated by "/"; "a-b" still works.
+            static int Hex(string v) => v.StartsWith('-') ? -Convert.ToInt32(v[1..], 16) : Convert.ToInt32(v, 16);
+            (int From, int To)[] ranges = Array.ConvertAll(parts[2].Split('/'), r => r.Contains("..")
+                ? (Hex(r[..r.IndexOf("..")]), Hex(r[(r.IndexOf("..") + 2)..]))
+                : (Hex(r.Split('-')[0]), Hex(r.Split('-')[1])));
             Dictionary<ulong, string> last = new();
+            int round = 0;
 
             while (true)
             {
-                Thread.Sleep(3000);
+                round++;
+
+                Thread.Sleep(int.TryParse(Environment.GetEnvironmentVariable("NEXTENDO_MEMPROBE_MS"), out int ms) ? ms : 3000);
 
                 foreach ((KProcess process, ulong[] bases) in _images)
                 {
@@ -58,7 +66,37 @@ namespace Ryujinx.HLE.HOS
 
                     try
                     {
-                        Scan(process, bases, vtables, from, to, last);
+                        if (!last.ContainsKey(0))
+                        {
+                            last[0] = "";
+                            byte[] probe = new byte[32];
+                            process.CpuMemory.Read(bases[0] + vtables[0], probe);
+                            Logger.Notice.Print(LogClass.Application, $"[memprobe] at image+0x{vtables[0]:X}: {Convert.ToHexString(probe)} {System.Text.Encoding.ASCII.GetString(probe)}");
+                        }
+
+                        if (round % 30 == 1)
+                        {
+                            Scan(process, bases, vtables, ranges, last);
+                        }
+                        else
+                        {
+                            // Between two searches, the objects already found are read again.
+                            foreach (ulong address in new List<ulong>(last.Keys))
+                            {
+                                if (address == 0)
+                                {
+                                    continue;
+                                }
+
+                                string text = Describe(process, address, ranges);
+
+                                if (last[address] != text)
+                                {
+                                    last[address] = text;
+                                    Logger.Notice.Print(LogClass.Application, $"[memprobe] object 0x{address:X}:{text}");
+                                }
+                            }
+                        }
                     }
                     catch (Exception e)
                     {
@@ -68,7 +106,26 @@ namespace Ryujinx.HLE.HOS
             }
         }
 
-        private static void Scan(KProcess process, ulong[] bases, ulong[] vtables, int from, int to, Dictionary<ulong, string> last)
+        private static string Describe(KProcess process, ulong address, (int From, int To)[] ranges)
+        {
+            System.Text.StringBuilder sb = new();
+
+            foreach ((int from, int to) in ranges)
+            {
+                byte[] words = new byte[to - from];
+
+                process.CpuMemory.Read((ulong)((long)address + from), words);
+
+                for (int w = 0; w + 8 <= words.Length; w += 8)
+                {
+                    sb.Append($" {(from + w < 0 ? "-" : "+")}{Math.Abs(from + w):X}={BitConverter.ToUInt64(words, w):X}");
+                }
+            }
+
+            return sb.ToString();
+        }
+
+        private static void Scan(KProcess process, ulong[] bases, ulong[] vtables, (int From, int To)[] ranges, Dictionary<ulong, string> last)
         {
             ulong start = process.MemoryManager.HeapRegionStart;
             ulong size = process.MemoryManager.GetTotalHeapSize();
@@ -82,11 +139,18 @@ namespace Ryujinx.HLE.HOS
                 }
             }
 
-            byte[] chunk = new byte[0x100000];
+            byte[] chunk = new byte[0x1000];
+            List<(ulong Start, ulong End)> regions = [(start, start + size)];
 
-            for (ulong at = start; at < start + size; at += (ulong)chunk.Length)
+            foreach (ulong b in bases)
             {
-                int length = (int)Math.Min((ulong)chunk.Length, start + size - at);
+                regions.Add((b, b + 0x2000000)); // the images and their data
+            }
+
+            foreach ((ulong regionStart, ulong regionEnd) in regions)
+            for (ulong at = regionStart; at < regionEnd; at += (ulong)chunk.Length)
+            {
+                int length = (int)Math.Min((ulong)chunk.Length, regionEnd - at);
 
                 if (!process.CpuMemory.IsRangeMapped(at, (ulong)length))
                 {
@@ -103,22 +167,25 @@ namespace Ryujinx.HLE.HOS
                     }
 
                     ulong address = at + (ulong)i;
-                    byte[] words = new byte[to - from];
+                    System.Text.StringBuilder sb = new();
 
-                    process.CpuMemory.Read(address + (ulong)from, words);
+                    foreach ((int from, int to) in ranges)
+                    {
+                        byte[] words = new byte[to - from];
 
-                    string text = Convert.ToHexString(words);
+                        process.CpuMemory.Read((ulong)((long)address + from), words);
+
+                        for (int w = 0; w + 8 <= words.Length; w += 8)
+                        {
+                            sb.Append($" {(from + w < 0 ? "-" : "+")}{Math.Abs(from + w):X}={BitConverter.ToUInt64(words, w):X}");
+                        }
+                    }
+
+                    string text = sb.ToString();
 
                     if (!last.TryGetValue(address, out string previous) || previous != text)
                     {
                         last[address] = text;
-
-                        System.Text.StringBuilder sb = new();
-
-                        for (int w = 0; w + 8 <= words.Length; w += 8)
-                        {
-                            sb.Append($" +{from + w:X}={BitConverter.ToUInt64(words, w):X}");
-                        }
 
                         Logger.Notice.Print(LogClass.Application, $"[memprobe] object 0x{address:X} vtable 0x{BitConverter.ToUInt64(chunk, i):X}:{sb}");
                     }
