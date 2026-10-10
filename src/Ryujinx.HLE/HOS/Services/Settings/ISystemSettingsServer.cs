@@ -360,13 +360,56 @@ namespace Ryujinx.HLE.HOS.Services.Settings
             return ResultCode.Success;
         }
 
+        [CommandCmif(67)]
+        // GetBatteryLot() -> nn::settings::system::BatteryLot (0x18 characters)
+        public ResultCode GetBatteryLot(ServiceCtx context)
+        {
+            // [Nextendo, HOME Menu work] Shown in the console information of the settings.
+            byte[] lot = new byte[0x18];
+
+            Encoding.ASCII.GetBytes("QLAUNCH BY KAZU").CopyTo(lot, 0);
+            context.ResponseData.Write(lot);
+
+            return ResultCode.Success;
+        }
+
         [CommandCmif(68)]
         // GetSerialNumber() -> buffer<nn::settings::system::SerialNumber, 0x16>
         public ResultCode GetSerialNumber(ServiceCtx context)
         {
-            context.ResponseData.Write(Encoding.ASCII.GetBytes("RYU00000000000"));
+            context.ResponseData.Write(Encoding.ASCII.GetBytes(NextendoSerialNumber()));
 
             return ResultCode.Success;
+        }
+
+        // [Nextendo, HOME Menu work] "NEXT" and ten random digits, drawn once per installation
+        // and kept with its data (the serial of a console does not change).
+        private static string NextendoSerialNumber()
+        {
+            string path = System.IO.Path.Combine(Ryujinx.Common.Configuration.AppDataManager.BaseDirPath, "nextendo_serial.txt");
+
+            try
+            {
+                if (System.IO.File.Exists(path))
+                {
+                    string kept = System.IO.File.ReadAllText(path).Trim();
+
+                    if (kept.Length == 14 && kept.StartsWith("NEXT", StringComparison.Ordinal))
+                    {
+                        return kept;
+                    }
+                }
+
+                string serial = "NEXT" + System.Security.Cryptography.RandomNumberGenerator.GetInt32(0, 1_000_000_000).ToString("D9") + System.Security.Cryptography.RandomNumberGenerator.GetInt32(0, 10);
+
+                System.IO.File.WriteAllText(path, serial);
+
+                return serial;
+            }
+            catch (Exception)
+            {
+                return "NEXT0000000000";
+            }
         }
 
         [CommandCmif(75)]
