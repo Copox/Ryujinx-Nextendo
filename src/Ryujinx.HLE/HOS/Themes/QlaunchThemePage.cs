@@ -24,6 +24,17 @@ namespace Ryujinx.HLE.HOS.Themes
         public const uint DataSize = 0x8000;
         public const uint Size = CodeSize + DataSize;
 
+        private const int MaxEntries = 16;
+
+        // "ThemezerNX\Purple Skies ANIMATED by Hsushi (186B6)" -> "Purple Skies ANIMATED by Hsushi".
+        private static string DisplayName(string pack)
+        {
+            string name = System.IO.Path.GetFileNameWithoutExtension(pack.TrimEnd('\\', '/'));
+            int id = name.LastIndexOf(" (", StringComparison.Ordinal);
+
+            return id > 0 && name.EndsWith(')') ? name[..id] : name;
+        }
+
         // The page's "build" method in its vtable (relocated at start: the base is added to it).
         private const uint BuildSlot = 0x10D4020;
 
@@ -72,16 +83,33 @@ namespace Ryujinx.HLE.HOS.Themes
                 _pending[process] = baseAddress;
             }
 
-            // The slot holds an offset the program relocates itself (the base is added to it).
-            byte[] slot = new byte[8];
+            // The page's methods to ours (entry points at the start of the code, 4 bytes each). The
+            // slots hold offsets the program relocates itself (the base is added to them).
+            uint[] slots = [BuildSlot, BuildSlot + 0x08, BuildSlot + 0x40, BuildSlot + 0x48]; // build, refresh, deactivate, destroy
 
-            BinaryPrimitives.WriteUInt64LittleEndian(slot, Cave + 0); // entry 0: build
-            process.CpuMemory.Write(baseAddress + BuildSlot, slot);
+            for (int i = 0; i < slots.Length; i++)
+            {
+                byte[] slot = new byte[8];
+
+                BinaryPrimitives.WriteUInt64LittleEndian(slot, Cave + (uint)(4 * i));
+                process.CpuMemory.Write(baseAddress + slots[i], slot);
+            }
+
+            // The page's buttons: room for the added entries (the page reserves 2).
+            WriteCode(process, baseAddress + 0x98CEE0, 0x52800241); // mov w1, #18
 
             Logger.Info?.Print(LogClass.Loader, $"[theme] HOME Menu themes page: {code.Length} bytes of code added");
         }
 
         private static readonly Dictionary<KProcess, ulong> _pending = [];
+
+        private static void WriteCode(KProcess process, ulong address, uint instruction)
+        {
+            byte[] bytes = new byte[4];
+
+            BinaryPrimitives.WriteUInt32LittleEndian(bytes, instruction);
+            process.CpuMemory.Write(address, bytes);
+        }
 
         /// <summary>The program has started (its modules are known): the added code may run.</summary>
         internal static void Activate(KProcess process)
@@ -106,7 +134,20 @@ namespace Ryujinx.HLE.HOS.Themes
         {
             List<string> packs = NextendoThemes.Packs();
 
-            BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(0), packs.Count);
+            int count = Math.Min(packs.Count, MaxEntries);
+
+            BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(0), count);
+            BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(4), packs.IndexOf(NextendoThemes.Chosen ?? "") is int chosen and < MaxEntries ? chosen : -1);
+            BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(0x30), -2); // nothing picked yet
+
+            for (int i = 0; i < count; i++)
+            {
+                byte[] name = Encoding.Unicode.GetBytes(DisplayName(packs[i]));
+
+                name.AsSpan(0, Math.Min(name.Length, 0xFE)).CopyTo(data.AsSpan(0x400 + 0x100 * i));
+            }
+
+            Logger.Info?.Print(LogClass.Loader, $"[theme] themes for the HOME Menu page: {packs.Count} ({string.Join(", ", packs)})");
         }
     }
 }

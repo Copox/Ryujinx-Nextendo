@@ -17,7 +17,7 @@ DATA = CAVE + 0x8000  # the data page, written by the emulator before the progra
 
 here = os.path.dirname(os.path.abspath(__file__))
 source = open(os.path.join(here, 'theme_page.s'), encoding='utf-8').read()
-source = source.replace('@DATA', hex(DATA))
+source = source.replace('@DATA', '#' + hex(DATA))
 
 # Keystone wants plain lines; ';' starts a comment in the source.
 lines = []
