@@ -4,7 +4,6 @@ using Ryujinx.Common.Configuration;
 using Ryujinx.Common.Helper;
 using System;
 using System.IO;
-using System.Linq;
 
 namespace Ryujinx.Ava.UI.Windows
 {
@@ -51,7 +50,6 @@ namespace Ryujinx.Ava.UI.Windows
             ThemeBlackRadio.IsChecked = NextendoHomeMenuSettings.Theme == "black";
 
             ShowAlbumHint();
-            FillHomeThemes();
 
             AutoStartCheck.IsCheckedChanged += (_, _) =>
             {
@@ -92,31 +90,6 @@ namespace Ryujinx.Ava.UI.Windows
                 Close();
             };
             CloseButton.Click += (_, _) => Close();
-        }
-
-        // [Nextendo, HOME Menu themes] The packs of the SD card; the one chosen applies to every part.
-        private void FillHomeThemes()
-        {
-            const string None = "Aucun (l'apparence de la Switch)";
-            System.Collections.Generic.List<string> packs = Ryujinx.HLE.HOS.Themes.NextendoThemes.Packs();
-            string chosen = Ryujinx.HLE.HOS.Themes.NextendoThemes.Chosen;
-
-            HomeThemeCombo.ItemsSource = new[] { None }.Concat(packs).ToList();
-            HomeThemeCombo.SelectedIndex = chosen != null && packs.Contains(chosen) ? packs.IndexOf(chosen) + 1 : 0;
-
-            HomeThemeCombo.SelectionChanged += (_, _) =>
-            {
-                string pick = HomeThemeCombo.SelectedItem as string;
-
-                Ryujinx.HLE.HOS.Themes.NextendoThemes.Chosen = pick == None ? null : pick;
-
-                bool installed = Directory.Exists(Path.Combine(SdCard, "atmosphere", "contents", "0100000000001000", "romfs", "lyt"));
-
-                ShowStatus(pick == None
-                    ? "Le menu HOME reprendra l'apparence de la Switch au prochain démarrage."
-                    : "« " + pick + " » s'appliquera au prochain démarrage du menu HOME." +
-                      (installed ? " Un thème installé par NXThemes est aussi présent : retire-le pour que les deux ne se mélangent pas." : ""), ok: true);
-            };
         }
 
         private void ShowAlbumHint()

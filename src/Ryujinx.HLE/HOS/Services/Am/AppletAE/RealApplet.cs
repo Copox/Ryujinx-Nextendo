@@ -95,6 +95,11 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
 
                 HomeMenuStatus.Running = true;
 
+                if (system.KernelContext.Processes.TryGetValue(pid, out Kernel.Process.KProcess applet))
+                {
+                    Themes.QlaunchThemePage.Activate(applet);
+                }
+
                 if (first)
                 {
                     NextendoHomeResolution.HomeInFront(system);

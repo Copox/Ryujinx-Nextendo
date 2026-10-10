@@ -327,6 +327,7 @@ namespace Ryujinx.HLE.Loaders.Processes
             }
 
             ulong[] nsoBase = new ulong[executables.Length];
+            bool[] themePageAt = new bool[executables.Length];
 
             for (int index = 0; index < executables.Length; index++)
             {
@@ -349,6 +350,12 @@ namespace Ryujinx.HLE.Loaders.Processes
                 }
 
                 nsoSize = BitUtils.AlignUp<uint>(nsoSize, KPageTableBase.PageSize);
+
+                // [Nextendo, HOME Menu themes] Room after the HOME Menu's image for its themes page.
+                uint themePage = HOS.Themes.QlaunchThemePage.ExtraSize(buildIds[index], nsoSize);
+
+                themePageAt[index] = themePage != 0;
+                nsoSize += themePage;
 
                 nsoBase[index] = codeStart + codeSize;
 
@@ -473,6 +480,11 @@ namespace Ryujinx.HLE.Loaders.Processes
                     Logger.Error?.Print(LogClass.Loader, $"Process initialization returned error \"{result}\".");
 
                     return ProcessResult.Failed;
+                }
+
+                if (themePageAt[index])
+                {
+                    HOS.Themes.QlaunchThemePage.Apply(process, nsoBase[index]);
                 }
             }
 

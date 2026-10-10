@@ -65,6 +65,7 @@
     <EmbeddedResource Include="HOS\Services\Account\Acc\DefaultUserImage.jpg" />
     <EmbeddedResource Include="HOS\NextendoAssets\EntIcoLHUB.bc4" />
     <EmbeddedResource Include="HOS\NextendoAssets\RdtIcoLR_00.bc4" />
+    <EmbeddedResource Include="HOS\Themes\Qlaunch\theme_page.bin" />
     <EmbeddedResource Include="HOS\Services\Account\Acc\GuestUserImage.jpg" />
   </ItemGroup>
 
