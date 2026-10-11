@@ -157,6 +157,36 @@ namespace Ryujinx.HLE.HOS.Themes
             }
         }
 
+        /// <summary>The wallpaper of one part file, small (92x54 JPEG), or null.</summary>
+        public static byte[] PartThumbnail(string file)
+        {
+            try
+            {
+                byte[] wallpaper = ThemePart.Load(file).Wallpaper;
+
+                if (wallpaper == null)
+                {
+                    return null;
+                }
+
+                using SkiaSharp.SKBitmap image = SkiaSharp.SKBitmap.Decode(wallpaper);
+
+                if (image == null)
+                {
+                    return null;
+                }
+
+                using SkiaSharp.SKBitmap small = image.Resize(new SkiaSharp.SKImageInfo(92, 54, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Opaque), SkiaSharp.SKFilterQuality.High);
+                using SkiaSharp.SKData jpeg = small?.Encode(SkiaSharp.SKEncodedImageFormat.Jpeg, 90);
+
+                return jpeg?.ToArray();
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
         /// <summary>The parts of a pack: their target and file.</summary>
         public static List<(string Target, string File)> PartsOf(string pack)
         {

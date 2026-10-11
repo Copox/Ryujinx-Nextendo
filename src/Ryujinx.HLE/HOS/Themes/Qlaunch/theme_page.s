@@ -1333,10 +1333,33 @@ refresh_pictures:
     ldr w8, [x23, #0x3ec]
     cmp w24, w8
     b.ge refresh_pictures_done
+    ; the pages of a theme show the part's own picture: the holders load
+    ; only when entries are made, so reload it here (its path changes)
+    cbnz w25, refresh_pictures_show
+    add x8, x23, #0x1000
+    add x8, x8, #0x800
+    add x8, x8, x24, lsl #5
+    ldrb w8, [x8]
+    cbz w8, refresh_pictures_show
+    add x0, x23, #0x1000
+    add x0, x0, #0x400
+    add x0, x0, x24, lsl #6
+    bl release_picture
+    mov x0, x19
+    mov w1, w24
+    bl add_picture
+    adrp x23, @DATA
+    add x8, x23, #0x100
+    add x8, x8, x24, lsl #5
+    ldr x0, [x8, #0x10]
+    mov w1, #1
+    b refresh_pictures_button
+refresh_pictures_show:
     add x8, x23, #0x100
     add x8, x8, x24, lsl #5
     ldr x0, [x8, #0x10]
     mov w1, w25
+refresh_pictures_button:
     bl show_picture
     adrp x23, @DATA
     add x8, x23, #0x100

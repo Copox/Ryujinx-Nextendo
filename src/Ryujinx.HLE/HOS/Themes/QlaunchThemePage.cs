@@ -682,6 +682,9 @@ namespace Ryujinx.HLE.HOS.Themes
                     : Text("Supprimer tout le thème", "Delete the whole theme"));
             }
 
+            // Les lignes des parties montrent le fond d'ecran de leur page
+            // (meme mecanisme que la liste : chemins en 0x1800).
+            System.Text.StringBuilder picLog = new System.Text.StringBuilder();
             for (int i = 0; i < MaxEntries; i++)
             {
                 _pictures[i] ??= new byte[PictureSize];
@@ -689,8 +692,25 @@ namespace Ryujinx.HLE.HOS.Themes
                 lock (_pictures[i])
                 {
                     Array.Clear(_pictures[i]);
+
+                    if (i < _menuParts.Count)
+                    {
+                        byte[] thumb = NextendoThemes.PartThumbnail(_menuParts[i].File);
+
+                        if (thumb != null && thumb.Length <= PictureSize)
+                        {
+                            thumb.CopyTo(_pictures[i], 0);
+                            Encoding.ASCII.GetBytes(PicturePath(i)).CopyTo(data.AsSpan(0x1800 + 0x20 * i));
+                            picLog.Append(_menuParts[i].Target).Append('=').Append(thumb.Length).Append(' ');
+                        }
+                        else
+                        {
+                            picLog.Append(_menuParts[i].Target).Append("=RIEN ");
+                        }
+                    }
                 }
             }
+            Ryujinx.Common.Logging.Logger.Info?.Print(Ryujinx.Common.Logging.LogClass.ServiceSet, "[theme] menu pictures: " + picLog.ToString());
         }
     }
 }
