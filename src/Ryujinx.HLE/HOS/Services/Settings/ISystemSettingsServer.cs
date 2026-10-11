@@ -710,7 +710,34 @@ namespace Ryujinx.HLE.HOS.Services.Settings
         // GetAccountNotificationSettings() -> (s32 count, buffer<AccountNotificationSettings, 6>)
         public ResultCode GetAccountNotificationSettings(ServiceCtx context)
         {
-            context.ResponseData.Write(0);
+            // [Nextendo, HOME Menu work] Each user gets the notifications of the console (the
+            // overlay shows none for a user without settings): friends online and friend requests,
+            // for all friends. 0x18 bytes each: uid, flags (bit 0 online, bit 1 requests), then the
+            // presence and invitation overlay permissions (3 = friends).
+            ulong position = context.Request.ReceiveBuff.Count > 0 ? context.Request.ReceiveBuff[0].Position : 0;
+            ulong room = context.Request.ReceiveBuff.Count > 0 ? context.Request.ReceiveBuff[0].Size : 0;
+            int count = 0;
+
+            foreach (Account.Acc.UserProfile profile in context.Device.System.AccountManager.GetAllUsers())
+            {
+                if ((ulong)(count + 1) * 0x18 > room)
+                {
+                    break;
+                }
+
+                byte[] entry = new byte[0x18];
+
+                BitConverter.TryWriteBytes(entry.AsSpan(0, 8), profile.UserId.High);
+                BitConverter.TryWriteBytes(entry.AsSpan(8, 8), profile.UserId.Low);
+                BitConverter.TryWriteBytes(entry.AsSpan(0x10, 4), 3u);
+                entry[0x14] = 3;
+                entry[0x15] = 3;
+
+                context.Memory.Write(position + (ulong)count * 0x18, entry);
+                count++;
+            }
+
+            context.ResponseData.Write(count);
 
             return ResultCode.Success;
         }

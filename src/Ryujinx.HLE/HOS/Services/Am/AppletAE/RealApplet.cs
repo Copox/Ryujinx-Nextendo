@@ -534,8 +534,57 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
             return string.IsNullOrEmpty(path) ? null : VirtualFileSystem.SwitchPathToSystemPath(path);
         }
 
+        // [Nextendo] The homebrew the emulator puts on the SD card when it is not there, as on a
+        // console set up with Atmosphere: the homebrew menus (Sphaira, chosen by default, and
+        // switchbrew's hbmenu) and the theme tools (NXThemes Installer, Themezer-NX).
+        private static readonly (string Resource, string[] Path)[] _bundledHomebrew =
+        [
+            ("sphaira.nro", ["switch", "sphaira", "sphaira.nro"]),
+            ("hbmenu.nro", ["hbmenu.nro"]),
+            ("NXThemesInstaller.nro", ["switch", "NXThemesInstaller.nro"]),
+            ("themezer-nx.nro", ["switch", "themezer-nx.nro"]),
+        ];
+
+        private static bool _homebrewProvided;
+
+        public static void ProvideHomebrew()
+        {
+            if (_homebrewProvided)
+            {
+                return;
+            }
+
+            _homebrewProvided = true;
+
+            string sd = VirtualFileSystem.GetSdCardPath();
+
+            foreach ((string resource, string[] path) in _bundledHomebrew)
+            {
+                string file = System.IO.Path.Combine([sd, .. path]);
+
+                if (System.IO.File.Exists(file))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    System.IO.Directory.CreateDirectory(System.IO.Path.GetDirectoryName(file));
+                    System.IO.File.WriteAllBytes(file, Ryujinx.Common.EmbeddedResources.Read("Ryujinx.HLE/HOS/Services/Am/AppletAE/SdCard/" + resource));
+
+                    Logger.Notice.Print(LogClass.ServiceAm, $"[album] {resource} put on the SD card");
+                }
+                catch (Exception e)
+                {
+                    Logger.Warning?.Print(LogClass.ServiceAm, $"[album] {resource} not put on the SD card: {e.Message}");
+                }
+            }
+        }
+
         public static string HomebrewMenuPath()
         {
+            ProvideHomebrew();
+
             string sd = VirtualFileSystem.GetSdCardPath();
             string sphaira = System.IO.Path.Combine(sd, "switch", "sphaira", "sphaira.nro");
             string hbmenu = System.IO.Path.Combine(sd, "hbmenu.nro");

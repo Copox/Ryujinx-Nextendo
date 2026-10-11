@@ -392,6 +392,13 @@ namespace Ryujinx.HLE.HOS.Services.SurfaceFlinger
                     {
                         AndroidFence noFence = AndroidFence.NoFence;
 
+                        // The overlay applet's picture (notifications, volume...) is read back
+                        // from the GPU, then its buffer goes back: it is shown over the screen.
+                        if (pair.Key == OverlayLayerId && OverlayOn && EnqueueOverlay(pair.Value, hidden))
+                        {
+                            continue;
+                        }
+
                         pair.Value.Consumer.ReleaseBuffer(hidden, ref noFence);
                     }
                 }
@@ -425,6 +432,57 @@ namespace Ryujinx.HLE.HOS.Services.SurfaceFlinger
                     throw new InvalidOperationException();
                 }
             }
+        }
+
+        private static bool OverlayOn => HomeMenuStatus.OverlayWanted;
+
+        private byte[] _overlayLast;
+
+        private bool EnqueueOverlay(Layer layer, BufferItem item)
+        {
+            int nvMapHandle = item.GraphicBuffer.Object.Buffer.Surfaces[0].NvMapHandle;
+
+            if (nvMapHandle == 0)
+            {
+                nvMapHandle = item.GraphicBuffer.Object.Buffer.NvMapId;
+            }
+
+            NvMapHandle map = NvMapDeviceFile.GetMapFromHandle(layer.Owner, nvMapHandle);
+
+            if (map == null)
+            {
+                return false;
+            }
+
+            TextureCallbackInformation information = new()
+            {
+                Layer = layer,
+                Item = item,
+            };
+
+            return _device.Gpu.Window.EnqueueOverlayThreadSafe(
+                layer.Owner,
+                map.Address + (ulong)item.GraphicBuffer.Object.Buffer.Surfaces[0].Offset,
+                item.GraphicBuffer.Object.Width,
+                item.GraphicBuffer.Object.Height,
+                1 << item.GraphicBuffer.Object.Buffer.Surfaces[0].BlockHeightLog2,
+                ConvertColorFormat(item.GraphicBuffer.Object.Buffer.Surfaces[0].ColorFormat),
+                4,
+                AcquireBuffer,
+                ReleaseBuffer,
+                information,
+                (rgba, width, height) =>
+                {
+                    // Only a picture that changed goes on.
+                    if (_overlayLast != null && rgba.AsSpan().SequenceEqual(_overlayLast))
+                    {
+                        return;
+                    }
+
+                    _overlayLast = rgba;
+
+                    HomeMenuStatus.PublishOverlay(rgba, width, height);
+                });
         }
 
         private void PostFrameBuffer(Layer layer, BufferItem item)
