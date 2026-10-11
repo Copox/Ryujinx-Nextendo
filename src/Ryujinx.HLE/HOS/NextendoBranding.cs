@@ -365,9 +365,40 @@ namespace Ryujinx.HLE.HOS
             };
         }
 
+        // The title of the System Settings, which names the console: the emulator's (as "Paramètres de
+        // la console" -> "Paramètres de Ryujinx | Nextendo"). Japanese, Korean and Chinese only say
+        // "Settings".
+        private static readonly Dictionary<string, string> _settingsTitles = new()
+        {
+            ["System Settings"] = "Ryujinx | Nextendo Settings",
+            ["Systemeinstellungen"] = "Ryujinx | Nextendo-Einstellungen",
+            ["Configuración de la consola"] = "Configuración de Ryujinx | Nextendo",
+            ["Impostazioni di sistema"] = "Impostazioni di Ryujinx | Nextendo",
+            ["Systeeminstellingen"] = "Ryujinx | Nextendo-instellingen",
+            ["Definições da consola"] = "Definições de Ryujinx | Nextendo",
+        };
+
+        // Nintendo's postal address (after the name of the provider of the online services): ours
+        // is the website. "Nintendo Co., Ltd.[,] Kyoto 601-8501, Japan" in each language.
+        private static readonly Regex _nintendoProducts = new(
+            @"(produits|products|productos de|prodotti|produtos|продукты|Nintendo-(Produkte|producten))\s*Nintendo|Nintendo(?=-Produkte|-producten|\s+products)",
+            RegexOptions.Compiled);
+
+        private static readonly Regex _postalAddress = new(@"Nintendo Co\., Ltd\.,?\s+\S+\s+601-8501,\s*[^\s<|]+", RegexOptions.Compiled);
+
         public static string Rebrand(string text, string language)
         {
             string website = _website.TryGetValue(language, out string name) ? name : _website["en"];
+
+            if (_settingsTitles.TryGetValue(text, out string title))
+            {
+                return title;
+            }
+
+            text = _postalAddress.Replace(text, "Nextendo Network, nextendo.network");
+
+            // "Nintendo products" stay Nintendo's (the products, not the service).
+            text = _nintendoProducts.Replace(text, m => m.Value.Replace("Nintendo", ""));
 
             text = text.Replace("Nintendo Switch Online", website)
                        .Replace("Nintendo Switch&nbsp;Online", website);
@@ -389,6 +420,7 @@ namespace Ryujinx.HLE.HOS
             text = _katakana.Replace(text, "ネクステンドー");
             text = _kanji.Replace(text, "Nextendo");
             text = _hangul.Replace(text, "넥스텐도");
+            text = text.Replace(''.ToString(), "Nintendo");
 
             return text;
         }
