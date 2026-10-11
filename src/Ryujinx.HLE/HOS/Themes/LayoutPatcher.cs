@@ -65,6 +65,66 @@ namespace Ryujinx.HLE.HOS.Themes
             return true;
         }
 
+        /// <summary>
+        /// Where a pane is drawn: the centre of the screen at 0, as its parents place it (their
+        /// rotations left out), and whether it and its parents are shown. Null when not found.
+        /// </summary>
+        public static (float X, float Y, float ScaleX, float ScaleY, bool Visible)? ScreenPlace(LayoutFile layout, string paneName)
+        {
+            var parents = new Stack<(float X, float Y, float ScaleX, float ScaleY, bool Visible)>();
+            (float X, float Y, float ScaleX, float ScaleY, bool Visible) current = (0, 0, 1, 1, true);
+            (float X, float Y, float ScaleX, float ScaleY, bool Visible) last = current;
+
+            foreach (LayoutFile.Section section in layout.Sections)
+            {
+                if (section.Magic == "pas1")
+                {
+                    parents.Push(current);
+                    current = last;
+                    continue;
+                }
+
+                if (section.Magic == "pae1")
+                {
+                    current = parents.Count > 0 ? parents.Pop() : (0, 0, 1, 1, true);
+                    continue;
+                }
+
+                if (!section.IsPane)
+                {
+                    continue;
+                }
+
+                byte[] d = section.Data;
+                float x = BitConverter.ToSingle(d, Translate), y = BitConverter.ToSingle(d, Translate + 4);
+                float sx = BitConverter.ToSingle(d, Scale), sy = BitConverter.ToSingle(d, Scale + 4);
+
+                last = (current.X + current.ScaleX * x, current.Y + current.ScaleY * y, current.ScaleX * sx, current.ScaleY * sy, current.Visible && (d[Flags] & 1) != 0);
+
+                if (section.PaneName == paneName)
+                {
+                    return last;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>Hides a pane (false when not found).</summary>
+        public static bool Hide(LayoutFile layout, string paneName)
+        {
+            LayoutFile.Section pane = layout.Pane(paneName);
+
+            if (pane == null)
+            {
+                return false;
+            }
+
+            pane.Data[Flags] &= 0xFE;
+
+            return true;
+        }
+
         private static void Set3(byte[] data, int offset, Vector v)
         {
             // An axis a theme leaves out is 0, as the themes are written for.

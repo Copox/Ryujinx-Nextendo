@@ -190,11 +190,157 @@ namespace Ryujinx.HLE.HOS.Themes
 
         private static (string Pack, List<ThemePart> Parts) _loaded;
 
+        // The programs a theme changes, and where NXThemes Installer puts their layouts.
+        private static readonly ulong[] _themedPrograms = [0x0100000000001000, 0x0100000000001007, 0x0100000000001013];
+
+        private static string InstalledFolder(ulong programId) =>
+            Path.Combine(AppDataManager.BaseDirPath, "sdcard", "atmosphere", "contents", programId.ToString("X16"), "romfs", "lyt");
+
+        /// <summary>When a theme was last installed in atmosphere/contents (NXThemes Installer), or never.</summary>
+        private static DateTime InstalledTime()
+        {
+            DateTime last = DateTime.MinValue;
+
+            try
+            {
+                foreach (ulong programId in _themedPrograms)
+                {
+                    string folder = InstalledFolder(programId);
+
+                    if (!Directory.Exists(folder))
+                    {
+                        continue;
+                    }
+
+                    foreach (string file in Directory.GetFiles(folder, "*.szs"))
+                    {
+                        DateTime time = File.GetLastWriteTimeUtc(file);
+
+                        if (time > last)
+                        {
+                            last = time;
+                        }
+                    }
+                }
+            }
+            catch (Exception)
+            {
+            }
+
+            return last;
+        }
+
+        /// <summary>
+        /// True when the theme installed in atmosphere/contents (NXThemes Installer) is newer than
+        /// the choice made in the themes page: it is shown as it is, and the page follows it.
+        /// </summary>
+        public static bool InstalledWins => InstalledTime() > (File.Exists(ChoicePath) ? File.GetLastWriteTimeUtc(ChoicePath) : DateTime.MinValue);
+
+        private static string _identified;
+
+        /// <summary>The pack shown now (null: the system's own look).</summary>
+        public static string Current => InstalledWins ? _identified : Chosen;
+
+        /// <summary>
+        /// The pack the theme installed in atmosphere/contents comes from: the one whose parts,
+        /// applied here to the system's layouts, give the layouts installed (most of them: the
+        /// installer may have left some out).
+        /// </summary>
+        public static void Identify(ulong programId, Func<string, byte[]> system, Func<string, byte[]> installed)
+        {
+            string best = null;
+            double bestScore = 0;
+
+            foreach (string archiveName in new[] { "ResidentMenu.szs", "Entrance.szs", "Flaunch.szs", "Set.szs", "Notification.szs" })
+            {
+                byte[] stock = system(archiveName);
+                byte[] mods = installed(archiveName);
+
+                if (stock == null || mods == null)
+                {
+                    continue;
+                }
+
+                SarcArchive stockArchive = SarcArchive.Read(stock);
+                SarcArchive modsArchive = SarcArchive.Read(mods);
+                List<string> changed = modsArchive.Files
+                    .Where(f => f.Key.EndsWith(".bflyt", StringComparison.Ordinal) && (!stockArchive.Files.TryGetValue(f.Key, out byte[] o) || !o.AsSpan().SequenceEqual(f.Value)))
+                    .Select(f => f.Key)
+                    .ToList();
+
+                if (changed.Count == 0)
+                {
+                    continue;
+                }
+
+                foreach (string pack in Packs())
+                {
+                    foreach (ThemePart part in LoadParts(pack))
+                    {
+                        byte[] mine;
+
+                        try
+                        {
+                            mine = Apply(programId, archiveName, stock, [part]);
+                        }
+                        catch (Exception)
+                        {
+                            continue;
+                        }
+
+                        if (mine == null)
+                        {
+                            continue;
+                        }
+
+                        SarcArchive mineArchive = SarcArchive.Read(mine);
+                        double score = (double)changed.Count(n => mineArchive.Files.TryGetValue(n, out byte[] m) && m.AsSpan().SequenceEqual(modsArchive.Files[n])) / changed.Count;
+
+                        if (score > bestScore)
+                        {
+                            bestScore = score;
+                            best = pack;
+                        }
+                    }
+                }
+
+                if (best != null)
+                {
+                    break;
+                }
+            }
+
+            _identified = bestScore >= 0.5 ? best : null;
+
+            Logger.Info?.Print(LogClass.ModLoader, $"[theme] theme installed in atmosphere/contents: {_identified ?? "none of /Themes"} ({bestScore:P0} of its layouts)");
+        }
+
+        private static List<ThemePart> LoadParts(string pack)
+        {
+            string path = Path.Combine(ThemesFolder, pack);
+            IEnumerable<string> files = Directory.Exists(path) ? Directory.GetFiles(path, "*.nxtheme") : File.Exists(path) ? [path] : [];
+            List<ThemePart> parts = [];
+
+            foreach (string file in files)
+            {
+                try
+                {
+                    parts.Add(ThemePart.Load(file));
+                }
+                catch (Exception)
+                {
+                }
+            }
+
+            return parts;
+        }
+
         private static List<ThemePart> ChosenParts()
         {
             string chosen = Chosen;
 
-            if (chosen == null)
+            // A theme installed by NXThemes Installer after the choice: shown as it is.
+            if (chosen == null || InstalledWins)
             {
                 return [];
             }
@@ -324,6 +470,14 @@ namespace Ryujinx.HLE.HOS.Themes
                         });
                     }
 
+                    // The online button (the Nextendo button here) is placed by the system where the
+                    // theme put something else (made for a firmware where it was not there, or not
+                    // there): what the theme put there is seen, the button hidden.
+                    if (theme.Target == "home" && !skip.Contains("fix"))
+                    {
+                        HideCoveringOnlineButton(archive);
+                    }
+
                     Logger.Info?.Print(LogClass.ModLoader, $"[theme] {theme.Name} ({theme.Target}) applied to {archiveName}");
                 }
                 catch (Exception e)
@@ -390,6 +544,52 @@ namespace Ryujinx.HLE.HOS.Themes
                     archive.Files[name] = other.Write();
                 }
             }
+        }
+
+        /// <summary>
+        /// The HOME Menu layouts of a theme installed in atmosphere/contents (NXThemes Installer),
+        /// with the corrections made to the themes applied here (null when none is needed).
+        /// </summary>
+        public static byte[] FixInstalledHome(byte[] sarc)
+        {
+            SarcArchive archive = SarcArchive.Read(sarc);
+
+            return HideCoveringOnlineButton(archive) ? archive.Write() : null;
+        }
+
+        private static bool HideCoveringOnlineButton(SarcArchive archive)
+        {
+            const string Base = "blyt/RdtBase.bflyt";
+
+            if (!archive.Files.TryGetValue(Base, out byte[] data))
+            {
+                return false;
+            }
+
+            LayoutFile layout = new(data);
+
+            if (LayoutPatcher.ScreenPlace(layout, "L_BtnLR") is not { Visible: true } button)
+            {
+                return false;
+            }
+
+            string[] others = ["N_MyPage", "L_BtnNoti", "L_BtnShop", "L_BtnPvr", "L_BtnCtrl", "L_BtnSet", "L_BtnPow", "L_BtnSplay", "L_BtnVgc", "L_BtnFlc"];
+
+            foreach (string name in others)
+            {
+                if (LayoutPatcher.ScreenPlace(layout, name) is { Visible: true } other &&
+                    Math.Abs(other.X - button.X) < 40 && Math.Abs(other.Y - button.Y) < 40)
+                {
+                    LayoutPatcher.Hide(layout, "L_BtnLR");
+                    archive.Files[Base] = layout.Write();
+
+                    Logger.Info?.Print(LogClass.ModLoader, $"[theme] online button hidden: the theme put {name} where it is");
+
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>

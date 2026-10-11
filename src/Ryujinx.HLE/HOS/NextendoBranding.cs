@@ -105,7 +105,26 @@ namespace Ryujinx.HLE.HOS
             // [Nextendo, HOME Menu themes] With themes for the themes page, the layouts are the
             // system's own: a theme installed on top of them (NXThemes, in atmosphere/contents)
             // would be mixed with the one chosen, or stay with Basic White.
-            RomFsFileSystem layoutRom = originalStorage != null && originalStorage != baseStorage && Themes.NextendoThemes.Packs().Count > 0 ? new(originalStorage) : null;
+            // A theme installed there after the choice made in the page wins: shown as it is, and
+            // the page follows it.
+            bool installedWins = Themes.NextendoThemes.InstalledWins;
+            RomFsFileSystem originalRom = originalStorage != null && originalStorage != baseStorage ? new(originalStorage) : null;
+            RomFsFileSystem layoutRom = originalRom != null && !installedWins && Themes.NextendoThemes.Packs().Count > 0 ? originalRom : null;
+
+            if (installedWins && originalRom != null && programId == 0x0100000000001000)
+            {
+                try
+                {
+                    Themes.NextendoThemes.Identify(programId,
+                        name => Exists(originalRom, "/lyt/" + name) ? Yaz0Decode(Read(originalRom, "/lyt/" + name)) : null,
+                        name => Exists(baseRom, "/lyt/" + name) && Exists(originalRom, "/lyt/" + name) &&
+                                !Read(baseRom, "/lyt/" + name).AsSpan().SequenceEqual(Read(originalRom, "/lyt/" + name)) ? Yaz0Decode(Read(baseRom, "/lyt/" + name)) : null);
+                }
+                catch (Exception e)
+                {
+                    Logger.Warning?.Print(LogClass.ModLoader, $"[theme] installed theme not identified: {e.Message}");
+                }
+            }
             Dictionary<string, byte[]> changed = new();
 
             // NEXTENDO_ROMFS_DUMP=<folder>: the layouts of the system programs are written there (study).
@@ -163,6 +182,11 @@ namespace Ryujinx.HLE.HOS
                     if (themed != null)
                     {
                         changed[entry.FullPath] = Yaz0Encode(themed);
+                    }
+                    else if (installedWins && entry.Name == "ResidentMenu.szs" && !own.AsSpan().SequenceEqual(Read(originalRom ?? baseRom, entry.FullPath)) &&
+                             Themes.NextendoThemes.FixInstalledHome(Yaz0Decode(own)) is { } fixedHome)
+                    {
+                        changed[entry.FullPath] = Yaz0Encode(fixedHome);
                     }
                     else if (!own.AsSpan().SequenceEqual(packed))
                     {

@@ -207,7 +207,7 @@ namespace Ryujinx.HLE.HOS.Themes
 
             string theme = picked < 0 ? null : _packs[picked];
 
-            if (theme == NextendoThemes.Chosen)
+            if (theme == NextendoThemes.Current)
             {
                 return false;
             }
@@ -249,7 +249,7 @@ namespace Ryujinx.HLE.HOS.Themes
             int count = Math.Min(packs.Count, MaxEntries);
 
             BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(0), count);
-            BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(4), packs.IndexOf(NextendoThemes.Chosen ?? "") is int chosen and < MaxEntries ? chosen : -1);
+            BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(4), packs.IndexOf(NextendoThemes.Current ?? "") is int chosen and < MaxEntries ? chosen : -1);
             BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(0x30), -2); // nothing picked yet
             Encoding.ASCII.GetBytes(RefreshSignal).CopyTo(data.AsSpan(0x3F0));
 
