@@ -91,34 +91,80 @@ namespace Ryujinx.HLE.HOS.Services.News
         }
 
         public INewsService() { }
+        [CommandCmif(30201)]
+        // (u32 format, u32 semantics) -> bool: can this console show news data of that version? The
+        // channel page asks it for each article of a channel; no answer (false) made it say an
+        // update was needed. The news Nextendo serves is of a version this firmware shows.
+        public ResultCode IsVersionSupported(ServiceCtx context)
+        {
+            context.ResponseData.Write(true);
+
+            return ResultCode.Success;
+        }
+
         [CommandCmif(30500)] // 20.0.0+
         // (buffer) -> object, an event holder: Get() -> handle<copy>
         public ResultCode Unknown30500(ServiceCtx context)
         {
             // The HOME Menu's news page keeps the returned interface and calls into it: a bare
             // success leaves it with a null pointer.
-            // The transfer memory the download was to go to is not used: let go at once.
-            CloseReceivedHandles(context);
+            // The address to download (ptr buffer) and the memory it goes to (copy handle).
+            string url = "";
 
-            MakeObject(context, new IDownloadContext(context));
+            if (context.Request.PtrBuff.Count > 0)
+            {
+                byte[] raw = new byte[System.Math.Min(context.Request.PtrBuff[0].Size, 0x400UL)];
+
+                context.Memory.Read(context.Request.PtrBuff[0].Position, raw);
+
+                int end = System.Array.IndexOf(raw, (byte)0);
+
+                url = System.Text.Encoding.ASCII.GetString(raw, 0, end < 0 ? raw.Length : end);
+            }
+
+            Ryujinx.HLE.HOS.Kernel.Memory.KTransferMemory memory = null;
+
+            if (context.Request.HandleDesc != null && context.Request.HandleDesc.ToCopy.Length > 0)
+            {
+                memory = context.Process.HandleTable.GetObject<Ryujinx.HLE.HOS.Kernel.Memory.KTransferMemory>(context.Request.HandleDesc.ToCopy[0]);
+            }
+
+            MakeObject(context, new IDownloadContext(context, url, memory));
+
+            CloseReceivedHandles(context);
 
             return ResultCode.Success;
         }
     }
 
-    // [Nextendo, HOME Menu work] A download the news page starts by itself (channel list,
-    // pictures of a channel). Nothing is downloaded here: the context reports at once that it
-    // is over with nothing in it, which the page shows as "could not load". Left without an answer,
-    // the page waited for it for ever and the whole menu froze.
+    // [Nextendo, HOME Menu work] A download the news page starts by itself (the channel list,
+    // a channel's picture): fetched from Nextendo in the background, deciphered, written in the
+    // memory the page gave; the event says it is over. Nothing to be had: over, empty (the page
+    // shows "could not load"; left without an answer it waited for ever and the menu froze).
     class IDownloadContext : IpcService
     {
         private readonly Ryujinx.HLE.HOS.Kernel.Threading.KEvent _done;
         private int _doneHandle;
+        private long _size;
 
-        public IDownloadContext(ServiceCtx context)
+        public IDownloadContext(ServiceCtx context, string url, Ryujinx.HLE.HOS.Kernel.Memory.KTransferMemory memory)
         {
             _done = new Ryujinx.HLE.HOS.Kernel.Threading.KEvent(context.Device.System.KernelContext);
-            _done.WritableEvent.Signal();
+
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                byte[] data = url.Length > 0 && memory != null ? NextendoNews.Download(url) : null;
+
+                if (data != null && (ulong)data.Length <= memory.Size)
+                {
+                    memory.Creator.CpuMemory.Write(memory.Address, data);
+                    _size = data.Length;
+                }
+
+                Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.Service, $"[news] download {url} -> {_size} bytes");
+
+                _done.WritableEvent.Signal();
+            });
         }
 
         [CommandCmif(0)]
@@ -146,7 +192,7 @@ namespace Ryujinx.HLE.HOS.Services.News
         }
 
         [CommandCmif(2)]
-        // GetResult(): over, with nothing downloaded (GetSize says 0). An error here made the menu abort.
+        // GetResult(): over (GetSize says what came; an error here made the menu abort).
         public ResultCode GetResult(ServiceCtx context)
         {
             return ResultCode.Success;
@@ -156,7 +202,7 @@ namespace Ryujinx.HLE.HOS.Services.News
         // GetSize() -> u64
         public ResultCode GetSize(ServiceCtx context)
         {
-            context.ResponseData.Write(0L);
+            context.ResponseData.Write(_size);
 
             return ResultCode.Success;
         }

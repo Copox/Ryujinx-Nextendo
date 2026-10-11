@@ -194,6 +194,37 @@ namespace Ryujinx.HLE.HOS.Services.News
             return new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(20) };
         }
 
+        /// <summary>
+        /// A file of the delivery service the news page asks for itself (the channel list, a
+        /// channel's picture): from Nextendo, deciphered (the page reads it in clear). Null when it
+        /// cannot be had.
+        /// </summary>
+        public static byte[] Download(string url)
+        {
+            byte[] key = Key(out bool found);
+
+            if (!found || Sockets.Sfdnsres.Proxy.DnsMitmResolver.NextendoServerAddress is null)
+            {
+                return null;
+            }
+
+            // "bcat-topics-%.cdn.nintendo.net": the % is the environment, lp1 for the retail one.
+            url = url.Replace("-%.", "-lp1.");
+
+            try
+            {
+                using HttpClient http = Client();
+
+                return Decrypt(http.GetByteArrayAsync(url).GetAwaiter().GetResult(), key);
+            }
+            catch (Exception e)
+            {
+                Logger.Warning?.Print(LogClass.Service, $"[news] {url} not downloaded: {e.Message}");
+
+                return null;
+            }
+        }
+
         private static void Refresh()
         {
             byte[] key = Key(out bool found);
