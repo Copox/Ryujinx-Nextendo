@@ -33,7 +33,9 @@
 ;   +0x3E8  s32   the entry to focus when the page is rebuilt, -1 for the page's own choice
 ;   +0x3EC  u32   the added entries shown (refresh); +0x000 how many to show
 ;   +0x2400 the text of entry 0 in the pages of a theme (UTF-16), +0x2500 that of entry 1
+;   +0x2600 "Nx_FooterText_Customize", the label of the footer text of X on a theme
 ;   +0x3F0  "NxThemes", the debug string sent when the page is built
+;   +0x3F8  u32   the position of "X Customise" in the footer
 ;   +0x400  0x100 bytes per added entry: its name (UTF-16)
 ;   +0x1400 0x40 bytes per added entry: its picture (the page's picture holder, vtable 0x10E1118)
 ;   +0x1800 0x20 bytes per added entry: its picture's path in the program's files
@@ -55,6 +57,7 @@
     b current                     ; +0x20
     b entry_button                ; +0x24
     b main_poll                   ; +0x28
+    b footer_focus                ; +0x2C
 
 ; ---------------------------------------------------------------------------------------------
 ; helpers for the page's own code (patched to call them; see build.py)
@@ -947,6 +950,61 @@ show_picture_end:
     ldr x19, [sp, #0x10]
     ldp x29, x30, [sp], #0x20
 show_picture_done:
+    ret
+
+; ---------------------------------------------------------------------------------------------
+; the focus is on entry w2 of page x19: on a theme, "X Customise" in the footer (the page's
+; footer at page+0xB38, its data at +8: a byte set when changed, then entries of 0x20 bytes:
+; u32 position, u32 key (A 1, B 2, X 8), the text's label, ..., u16 shown); elsewhere not.
+; Only w2 and x19 are kept.
+footer_focus:
+    stp x29, x30, [sp, #-0x20]!
+    mov x29, sp
+    str w2, [sp, #0x10]
+    ldr x8, [x19, #0xb38]
+    cbz x8, footer_focus_done
+    ldr x8, [x8, #8]
+    cbz x8, footer_focus_done
+    add x10, x8, #0x48            ; the third entry
+    adrp x9, @DATA
+    ldr w11, [x9, #0x3dc]
+    cbnz w11, footer_focus_off
+    subs w11, w2, #2
+    b.lt footer_focus_off
+    ldr w12, [x9]
+    cmp w11, w12
+    b.ge footer_focus_off
+    adrp x9, @DATA
+    add x9, x9, #0x2000
+    add x9, x9, #0x600            ; its text: "Nx_FooterText_Customize"
+    adrp x12, @DATA
+    ldr w11, [x12, #0x3f8]        ; its position
+    mov w12, #8
+    stp w11, w12, [x10]
+    ldr x11, [x8, #0x18]
+    stp x9, x11, [x10, #8]
+    mov w11, #1
+    strh w11, [x10, #0x18]
+    strb wzr, [x10, #0x1a]
+    b footer_focus_changed
+footer_focus_off:
+    ldp x11, x12, [x8, #0x68]     ; as the fourth (not used)
+    stp x11, x12, [x10]
+    ldp x11, x12, [x8, #0x78]
+    stp x11, x12, [x10, #0x10]
+footer_focus_changed:
+    mov w11, #1
+    strb w11, [x8]
+    ; shown now (as the page does when it gets the focus: 0xB26A20)
+    mov x1, x8
+    adrp x8, #0x4254000
+    ldr x0, [x8, #0x370]
+    mov w2, wzr
+    cbz x0, footer_focus_done
+    bl #0xb26a20
+footer_focus_done:
+    ldr w2, [sp, #0x10]
+    ldp x29, x30, [sp], #0x20
     ret
 
 ; ---------------------------------------------------------------------------------------------

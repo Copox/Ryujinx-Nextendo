@@ -55,6 +55,9 @@ namespace Ryujinx.HLE.HOS.Themes
             }
         }
 
+        /// <summary>The message of the footer text of X on a theme (added to the HOME Menu's common.msbt).</summary>
+        public const string CustomizeLabel = "Nx_FooterText_Customize";
+
         /// <summary>The debug string the added code sends when the page is built.</summary>
         public const string RefreshSignal = "NxThemes";
 
@@ -119,7 +122,8 @@ namespace Ryujinx.HLE.HOS.Themes
                 process.CpuMemory.Write(at + 0x3E4, data.AsSpan(0x3E4, 4));
                 process.CpuMemory.Write(at + 0x400, data.AsSpan(0x400, 0x1000));
                 process.CpuMemory.Write(at + 0x1800, data.AsSpan(0x1800, 0x20 * MaxEntries));
-                process.CpuMemory.Write(at + 0x2400, data.AsSpan(0x2400, 0x200));
+                process.CpuMemory.Write(at + 0x2400, data.AsSpan(0x2400, 0x240));
+                process.CpuMemory.Write(at + 0x3F8, data.AsSpan(0x3F8, 4));
             }
             catch (Exception e)
             {
@@ -153,6 +157,16 @@ namespace Ryujinx.HLE.HOS.Themes
             {
                 ulong data = _base + Cave + CodeSize;
 
+                try // DEBUG
+                {
+                    ulong pgx = process.CpuMemory.Read<ulong>(data + 0x38);
+                    ulong fo = process.CpuMemory.Read<ulong>(pgx + 0xB38);
+                    ulong fd = process.CpuMemory.Read<ulong>(fo + 8);
+                    byte[] fb = new byte[0xD0];
+                    process.CpuMemory.Read(fd, fb);
+                    Logger.Info?.Print(LogClass.ServiceSet, $"[theme] DEBUG footer {fd:X}: {Convert.ToHexString(fb)}");
+                }
+                catch (Exception) { }
                 if (process.CpuMemory.Read<ulong>(data + 0x38) == 0)
                 {
                     return; // the page is not built
@@ -590,6 +604,8 @@ namespace Ryujinx.HLE.HOS.Themes
             BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(0x3E4), EntriesToMake(count));
             Encoding.ASCII.GetBytes(RefreshSignal).CopyTo(data.AsSpan(0x3F0));
             BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(0x3E8), -1); // no entry to focus
+            Encoding.ASCII.GetBytes(CustomizeLabel).CopyTo(data.AsSpan(0x2600));
+            BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(0x3F8), 0); // the kind of footer text (0, as B's; 1 is A's)
 
             for (int i = 0; i < count; i++)
             {

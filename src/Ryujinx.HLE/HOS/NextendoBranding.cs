@@ -130,7 +130,7 @@ namespace Ryujinx.HLE.HOS
             // NEXTENDO_ROMFS_DUMP=<folder>: the layouts of the system programs are written there (study).
             if (Environment.GetEnvironmentVariable("NEXTENDO_ROMFS_DUMP") is { Length: > 0 } dump)
             {
-                foreach (DirectoryEntryEx entry in baseRom.EnumerateEntries().Where(f => f.Type == DirectoryEntryType.File && f.FullPath.StartsWith("/lyt/", StringComparison.Ordinal)))
+                foreach (DirectoryEntryEx entry in baseRom.EnumerateEntries().Where(f => f.Type == DirectoryEntryType.File && (f.FullPath.StartsWith("/lyt/", StringComparison.Ordinal) || f.FullPath.StartsWith("/message/", StringComparison.Ordinal))))
                 {
                     string target = System.IO.Path.Combine(dump, programId.ToString("X16"), entry.FullPath.TrimStart('/'));
 
@@ -161,6 +161,14 @@ namespace Ryujinx.HLE.HOS
 
                     return Rebrand(text, language);
                 }, out int count);
+
+                // [Nextendo, HOME Menu themes] The footer text of the themes page's X button.
+                if (programId == 0x0100000000001000 && entry.FullPath.EndsWith("/common.msbt.szs", StringComparison.Ordinal) &&
+                    AddMsbtLabel(patched, Themes.QlaunchThemePage.CustomizeLabel, CustomizeText(language), "Cmn_FooterText_Back") is { } withCustomize)
+                {
+                    patched = withCustomize;
+                    count++;
+                }
 
                 if (count > 0)
                 {
@@ -512,6 +520,189 @@ namespace Ryujinx.HLE.HOS
             WriteU32(result, 0x12, (uint)result.Length, little);
 
             return result;
+        }
+
+        private static string CustomizeText(string language) => language switch
+        {
+            "fr" => "Personnaliser",
+            "de" => "Anpassen",
+            "es" => "Personalizar",
+            "it" => "Personalizza",
+            "nl" => "Aanpassen",
+            "pt" => "Personalizar",
+            "ru" => "Настроить",
+            "ja" => "カスタマイズ",
+            "ko" => "사용자 지정",
+            "zh-CN" => "自定义",
+            "zh-TW" => "自訂",
+            _ => "Customize",
+        };
+
+        /// <summary>
+        /// A message added to an MSBT (UTF-16): its label in the label table (LBL1, by the hash
+        /// the format uses), its attributes copied from another message (ATR1), its text at the
+        /// end (TXT2). Null when it cannot be added (or is there already).
+        /// </summary>
+        private static byte[] AddMsbtLabel(byte[] msbt, string label, string text, string attributesOf)
+        {
+            if (msbt.Length < 0x20 || Encoding.ASCII.GetString(msbt, 0, 8) != "MsgStdBn" || msbt[0x0C] != 1)
+            {
+                return null;
+            }
+
+            bool little = msbt[8] == 0xFF && msbt[9] == 0xFE;
+            int sections = U16(msbt, 0x0E, little);
+            int offset = 0x20;
+            List<(string Magic, byte[] Header, byte[] Body)> parts = [];
+
+            for (int i = 0; i < sections && offset + 16 <= msbt.Length; i++)
+            {
+                int size = (int)U32(msbt, offset + 4, little);
+
+                parts.Add((Encoding.ASCII.GetString(msbt, offset, 4), msbt[offset..(offset + 16)], msbt[(offset + 16)..(offset + 16 + size)]));
+                offset += 16 + ((size + 15) & ~15);
+            }
+
+            int lbl = parts.FindIndex(x => x.Magic == "LBL1");
+            int atr = parts.FindIndex(x => x.Magic == "ATR1");
+            int txt = parts.FindIndex(x => x.Magic == "TXT2");
+
+            if (lbl < 0 || txt < 0)
+            {
+                return null;
+            }
+
+            // The labels, by bucket.
+            byte[] lb = parts[lbl].Body;
+            int buckets = (int)U32(lb, 0, little);
+            List<List<(string Name, uint Index)>> table = [];
+
+            for (int k = 0; k < buckets; k++)
+            {
+                int count = (int)U32(lb, 4 + 8 * k, little);
+                int at = (int)U32(lb, 8 + 8 * k, little);
+                List<(string, uint)> bucket = [];
+
+                for (int e = 0; e < count; e++)
+                {
+                    int length = lb[at];
+                    string name = Encoding.ASCII.GetString(lb, at + 1, length);
+
+                    bucket.Add((name, U32(lb, at + 1 + length, little)));
+                    at += 5 + length;
+                }
+
+                table.Add(bucket);
+            }
+
+            if (table.Any(b => b.Any(x => x.Name == label)))
+            {
+                return null;
+            }
+
+            byte[] tb = parts[txt].Body;
+            uint messages = U32(tb, 0, little);
+            uint hash = 0;
+
+            foreach (byte c in Encoding.ASCII.GetBytes(label))
+            {
+                hash = hash * 0x492 + c;
+            }
+
+            table[(int)(hash % (uint)buckets)].Add((label, messages));
+
+            using (MemoryStream o = new())
+            {
+                byte[] head = new byte[4 + 8 * buckets];
+                int at = head.Length;
+
+                WriteU32(head, 0, (uint)buckets, little);
+
+                for (int k = 0; k < buckets; k++)
+                {
+                    WriteU32(head, 4 + 8 * k, (uint)table[k].Count, little);
+                    WriteU32(head, 8 + 8 * k, (uint)at, little);
+                    at += table[k].Sum(x => 5 + x.Name.Length);
+                }
+
+                o.Write(head);
+
+                foreach ((string name, uint index) in table.SelectMany(b => b))
+                {
+                    byte[] id = new byte[4];
+
+                    WriteU32(id, 0, index, little);
+                    o.WriteByte((byte)name.Length);
+                    o.Write(Encoding.ASCII.GetBytes(name));
+                    o.Write(id);
+                }
+
+                parts[lbl] = (parts[lbl].Magic, parts[lbl].Header, o.ToArray());
+            }
+
+            // The attributes: those of another message.
+            if (atr >= 0)
+            {
+                byte[] ab = parts[atr].Body;
+                uint size = U32(ab, 4, little);
+                uint source = table.SelectMany(b => b).FirstOrDefault(x => x.Name == attributesOf).Index;
+                byte[] attributes = new byte[size];
+
+                if (8 + (source + 1) * size <= ab.Length)
+                {
+                    ab.AsSpan((int)(8 + source * size), (int)size).CopyTo(attributes);
+                }
+
+                byte[] nb = new byte[8 + (messages + 1) * size];
+
+                ab.AsSpan(0, (int)Math.Min(ab.Length, 8 + messages * size)).CopyTo(nb);
+                WriteU32(nb, 0, messages + 1, little);
+                attributes.CopyTo(nb, (int)(8 + messages * size));
+                parts[atr] = (parts[atr].Magic, parts[atr].Header, nb);
+            }
+
+            // The text, at the end: the offsets move by the new one's 4 bytes.
+            {
+                byte[] value = (little ? Encoding.Unicode : Encoding.BigEndianUnicode).GetBytes(text + "\0");
+                byte[] nb = new byte[tb.Length + 4 + value.Length];
+
+                WriteU32(nb, 0, messages + 1, little);
+
+                for (uint m = 0; m < messages; m++)
+                {
+                    WriteU32(nb, (int)(4 + 4 * m), U32(tb, (int)(4 + 4 * m), little) + 4, little);
+                }
+
+                WriteU32(nb, (int)(4 + 4 * messages), (uint)(tb.Length + 4), little);
+                tb.AsSpan((int)(4 + 4 * messages)).CopyTo(nb.AsSpan((int)(8 + 4 * messages)));
+                value.CopyTo(nb, tb.Length + 4);
+                parts[txt] = (parts[txt].Magic, parts[txt].Header, nb);
+            }
+
+            using MemoryStream result = new();
+
+            result.Write(msbt.AsSpan(0, 0x20));
+
+            foreach ((string _, byte[] header, byte[] body) in parts)
+            {
+                byte[] h = (byte[])header.Clone();
+                int padded = (body.Length + 15) & ~15;
+
+                WriteU32(h, 4, (uint)body.Length, little);
+                result.Write(h);
+                result.Write(body);
+
+                for (int i = body.Length; i < padded; i++)
+                {
+                    result.WriteByte(0xAB);
+                }
+            }
+
+            byte[] bytes = result.ToArray();
+
+            WriteU32(bytes, 0x12, (uint)bytes.Length, little);
+
+            return bytes;
         }
 
         private static byte[] PatchTxt2(byte[] body, bool little, Rewriter rewrite, ref int count)

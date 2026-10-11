@@ -37,13 +37,13 @@ open(os.path.join(here, 'theme_page.bin'), 'wb').write(code)
 
 # Changes to the program's own code, assembled at their place: (address, instructions).
 ENTRY = {'index_of_button': CAVE + 0x10, 'index_of_focus': CAVE + 0x14, 'get_focused': CAVE + 0x18,
-         'pick': CAVE + 0x1C, 'current': CAVE + 0x20, 'entry_button': CAVE + 0x24, 'main_poll': CAVE + 0x28}
+         'pick': CAVE + 0x1C, 'current': CAVE + 0x20, 'entry_button': CAVE + 0x24, 'main_poll': CAVE + 0x28, 'footer_focus': CAVE + 0x2C}
 PATCHES = [
     # the page's buttons: room for the added entries (it reserves 2)
     (0x98CEE0, ['mov w1, #18']),
     # focus callback: the focused entry, whichever it is
     (0x98DD90, ['mov x19, x0', f'bl #{ENTRY["index_of_focus"]:#x}', 'tbnz w0, #31, #0x98ddb4',
-                'mov w2, w0', 'str w2, [x19, #0xd64]', 'b #0x98ddd0']),
+                'mov w2, w0', 'str w2, [x19, #0xd64]', f'bl #{ENTRY["footer_focus"]:#x}', 'b #0x98ddd0']),
     # check group callback: the picked entry, whichever it is
     (0x98DFD0, ['mov x0, x19', f'bl #{ENTRY["index_of_button"]:#x}', 'tbnz w0, #31, #0x98df34',
                 'mov w20, w0', 'b #0x98dff4']),
