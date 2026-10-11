@@ -135,9 +135,16 @@ namespace Ryujinx.Audio.Renderer.Server
         public const int Revision15 = 15 << 24;
 
         /// <summary>
+        /// REV16:
+        /// [Nextendo] Asked by the programs of system update 21.0.0 and later (the initial setup of
+        /// 22.5.0). Nothing is known of what it adds: it is served like REV15.
+        /// </summary>
+        public const int Revision16 = 16 << 24;
+
+        /// <summary>
         /// Last revision supported by the implementation.
         /// </summary>
-        public const int LastRevision = Revision15;
+        public const int LastRevision = Revision16;
 
         /// <summary>
         /// Get the revision number from the revision magic.

@@ -56,6 +56,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
 
         public volatile bool Exited;
         public volatile bool TerminateRequested;
+        public bool WasDocked; // the initial setup: the docked mode to give back
         public Action OnExited;
     }
 
@@ -170,28 +171,60 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
             };
 
             _application = application;
-            Ryujinx.Common.Configuration.NextendoGames.Playing = title.Id;
+
+            // A program of the firmware (the initial setup) is not a game: friends and Discord
+            // keep seeing the HOME Menu.
+            if (!IsSystemProgram(title))
+            {
+                Ryujinx.Common.Configuration.NextendoGames.Playing = title.Id;
+            }
+
+            // The initial setup asks to take the console out of its dock and shows the Joy-Con
+            // being attached: done for the player, the docked mode back once it is over.
+            if (title.Id == StarterId)
+            {
+                application.WasDocked = system.State.DockedMode;
+                Hid.NpadDevices.VirtualJoyCons = true;
+                system.ChangeDockedModeState(false);
+            }
+
             NextendoHomeResolution.GameInFront();
 
             Thread thread = new(() =>
             {
                 bool isXci = title.Path.EndsWith(".xci", StringComparison.OrdinalIgnoreCase);
+                bool isSystem = IsSystemProgram(title);
                 bool started;
+                ulong systemPid = 0;
 
                 device.Processes.SetFallback(callerPid);
 
                 try
                 {
-                    started = isXci ? device.Processes.LoadXci(title.Path, title.Id) : device.Processes.LoadNsp(title.Path, title.Id);
+                    if (isSystem)
+                    {
+                        // A program of the firmware: started like an applet, then followed like a game.
+                        systemPid = device.Processes.LoadApplet(title.Path, null);
+                        started = systemPid != 0;
+
+                        if (started)
+                        {
+                            device.Processes.SetActive(systemPid);
+                        }
+                    }
+                    else
+                    {
+                        started = isXci ? device.Processes.LoadXci(title.Path, title.Id) : device.Processes.LoadNsp(title.Path, title.Id);
+                    }
                 }
                 catch (Exception e)
                 {
-                    Logger.Error?.Print(LogClass.ServiceAm, $"HOME Menu: {title.Name} could not be loaded: {e.Message}");
+                    Logger.Error?.Print(LogClass.ServiceAm, $"HOME Menu: {title.Name} could not be loaded: {e}");
 
                     started = false;
                 }
 
-                ulong pid = started ? device.Processes.ActiveApplication?.ProcessId ?? 0 : 0;
+                ulong pid = started ? (isSystem ? systemPid : device.Processes.ActiveApplication?.ProcessId ?? 0) : 0;
 
                 if (pid == 0 || pid == callerPid)
                 {
@@ -214,7 +247,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
                 StateFor(system, callerPid).SetFocus(false);
                 system.AppletState.SetFocus(true);
 
-                HomeMenuStatus.Set("Application:" + title.Name);
+                HomeMenuStatus.Set(StatusOf(title));
 
                 System.Diagnostics.Stopwatch appRunning = System.Diagnostics.Stopwatch.StartNew();
                 bool appDumped = false;
@@ -264,6 +297,12 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
             Logger.Notice.Print(LogClass.ServiceAm, $"HOME Menu: {application.Title.Name} is over.");
 
             application.Exited = true;
+
+            if (application.Title.Id == StarterId)
+            {
+                Hid.NpadDevices.VirtualJoyCons = false;
+                system.ChangeDockedModeState(application.WasDocked);
+            }
 
             if (_application == application)
             {
@@ -321,12 +360,20 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
             StateFor(device.System, application.CallerPid).SetFocus(false);
             device.System.AppletState.SetFocus(true);
 
-            HomeMenuStatus.Set("Application:" + application.Title.Name);
+            HomeMenuStatus.Set(StatusOf(application.Title));
         }
 
         // The HOME button: the game goes to the background, the HOME Menu is told.
         public static bool PressHome(Switch device)
         {
+            // The last screen of the initial setup says "Press the HOME button": the setup is
+            // done. The HOME Menu is told as for any HOME press; it reads the setup as done and
+            // ends the setup itself.
+            if (_application is { Exited: false } setup && setup.Title.Id == StarterId)
+            {
+                Settings.ISystemSettingsServer.MarkInitialSetupDone();
+            }
+
             foreach ((ulong pid, AppletStateMgr state) in _systemApplets)
             {
                 RunningApplication application = _application;
@@ -404,6 +451,32 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
                 _ => 0,
             };
         }
+
+        /// <summary>
+        /// A program of the firmware the HOME Menu starts in the place of a game (the initial
+        /// setup), as a title of its own; null when the firmware does not have it.
+        /// </summary>
+        public static HomeMenuTitle SystemProgram(Switch device, ulong programId)
+        {
+            string path = device.System.ContentManager.GetInstalledContentPath(programId, StorageId.BuiltInSystem, NcaContentType.Program);
+
+            if (string.IsNullOrEmpty(path))
+            {
+                return null;
+            }
+
+            return new HomeMenuTitle { Id = programId, Name = programId == 0x0100000000001012 ? "Starter" : $"{programId:X16}", Path = VirtualFileSystem.SwitchPathToSystemPath(path) };
+        }
+
+        // Programs of the firmware are below 0100000000010000, games above.
+        private static bool IsSystemProgram(HomeMenuTitle title) => title.Id < 0x0100000000010000;
+
+        // What the HOME Menu status says of a title in front: "Application:<name>" for a game,
+        // the program's own name for one of the firmware ("Starter").
+        private static string StatusOf(HomeMenuTitle title) => IsSystemProgram(title) ? title.Name : "Application:" + title.Name;
+
+        /// <summary>The initial setup of the console (starter).</summary>
+        public const ulong StarterId = 0x0100000000001012;
 
         public static string PathOf(Switch device, AppletId appletId)
         {

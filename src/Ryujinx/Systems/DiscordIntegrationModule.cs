@@ -96,7 +96,11 @@ namespace Ryujinx.Ava.Systems
 
         /// <summary>[Nextendo] The HOME Menu is not a game: it gets its own wording.</summary>
         private static bool EstMenuHome(string titleId) =>
-            string.Equals(titleId, Ryujinx.HLE.HOS.HomeMenuStatus.ProgramIdText, StringComparison.OrdinalIgnoreCase);
+            string.Equals(titleId, Ryujinx.HLE.HOS.HomeMenuStatus.ProgramIdText, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(titleId, StarterIdText, StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>The initial setup of the console, started by the HOME Menu on the first launch.</summary>
+        private const string StarterIdText = "0100000000001012";
 
         /// <summary>Second line while on the HOME Menu: the screen the player is on.</summary>
         private static string EcranMenuHome() => Ryujinx.HLE.HOS.HomeMenuStatus.Applet switch
@@ -112,6 +116,7 @@ namespace Ryujinx.Ava.Systems
                 _ => "On their user page",
             },
             "Settings" => "In System Settings",
+            "Starter" => "Setting up the console",
             "Error" => "Reading an error message",
             "" when NextendoActivity.Detail == "NewsArticle" => "Reading Nextendo News",
             "" when NextendoActivity.Detail == "News" => "Browsing Nextendo News",

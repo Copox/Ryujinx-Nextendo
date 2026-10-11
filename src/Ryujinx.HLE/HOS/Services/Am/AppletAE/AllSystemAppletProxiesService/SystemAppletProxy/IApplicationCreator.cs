@@ -19,5 +19,18 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
 
             return ResultCode.Success;
         }
+
+        [CommandCmif(10)]
+        // CreateSystemApplication(nn::ncm::SystemApplicationId) -> object<nn::am::service::IApplicationAccessor>
+        public ResultCode CreateSystemApplication(ServiceCtx context)
+        {
+            // [Nextendo, HOME Menu work] The HOME Menu starts a program of the firmware in the place
+            // of a game: the initial setup (starter, 0100000000001012) on the first launch.
+            ulong programId = context.RequestData.ReadUInt64();
+
+            MakeObject(context, new IApplicationAccessor(context, programId, _pid, systemProgram: true));
+
+            return ResultCode.Success;
+        }
     }
 }

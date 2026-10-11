@@ -446,7 +446,8 @@ namespace Ryujinx.HLE.HOS.Services.Settings
         {
             // Flags: bit 0 completion, bit 8 user addition, bit 16 timestamp. All set: the console
             // has been through its first-boot setup, so the HOME Menu goes straight to its menu.
-            context.ResponseData.Write(0x00010101u);
+            // None on the first launch: the HOME Menu starts the initial setup of the firmware.
+            context.ResponseData.Write(InitialSetupDone ? 0x00010101u : 0u);
             context.ResponseData.Write(0u);          // Reserved
             context.ResponseData.Write(0L);          // SteadyClockTimePoint.TimePoint
             context.ResponseData.Write(0L);          // SteadyClockTimePoint.ClockSourceId (low)
@@ -459,9 +460,42 @@ namespace Ryujinx.HLE.HOS.Services.Settings
         // SetInitialLaunchSettings(nn::settings::system::InitialLaunchSettings)
         public ResultCode SetInitialLaunchSettings(ServiceCtx context)
         {
-            Logger.Stub?.PrintStub(LogClass.ServiceSet);
+            if ((context.RequestData.ReadUInt32() & 1) != 0)
+            {
+                MarkInitialSetupDone();
+            }
 
             return ResultCode.Success;
+        }
+
+        // [Nextendo, HOME Menu work] The initial setup of the console (the firmware's starter)
+        // runs on the first launch only. Decided once per run: the setup itself writes settings
+        // (the colour set) that would otherwise make it look done halfway. Data the HOME Menu
+        // already ran on (its colour set saved) counts as set up: testers are not sent through it
+        // again. NEXTENDO_FIRST_SETUP=1 sends any data through it (tests).
+        private static bool? _initialSetupDone;
+
+        private static string InitialSetupPath => System.IO.Path.Combine(Ryujinx.Common.Configuration.AppDataManager.BaseDirPath, "nextendo_initial_setup.txt");
+
+        public static bool InitialSetupDone => _initialSetupDone ??=
+            System.Environment.GetEnvironmentVariable("NEXTENDO_FIRST_SETUP") != "1" &&
+            (System.IO.File.Exists(InitialSetupPath) ||
+             System.IO.File.Exists(System.IO.Path.Combine(Ryujinx.Common.Configuration.AppDataManager.BaseDirPath, "nextendo_color_set.txt")));
+
+        public static void MarkInitialSetupDone()
+        {
+            _initialSetupDone = true;
+
+            try
+            {
+                System.IO.File.WriteAllText(InitialSetupPath, System.DateTimeOffset.UtcNow.ToString("O"));
+            }
+            catch (System.Exception e)
+            {
+                Logger.Warning?.Print(LogClass.ServiceSet, $"[setup] not kept: {e.Message}");
+            }
+
+            Logger.Notice.Print(LogClass.ServiceSet, "[setup] initial setup of the console done");
         }
 
         [CommandCmif(77)]

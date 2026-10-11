@@ -61,7 +61,12 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletOE.ApplicationProxyService
         // GetLibraryAppletCreator() -> object<nn::am::service::ILibraryAppletCreator>
         public ResultCode GetLibraryAppletCreator(ServiceCtx context)
         {
-            MakeObject(context, new ILibraryAppletCreator());
+            // [Nextendo, HOME Menu work] A program of the firmware run in the place of a game (the
+            // initial setup) opens the applets of the firmware, as the HOME Menu does; games keep
+            // the emulator's own.
+            bool firmware = AppletAE.RealAppletManager.CallerIsSystemApplet(context.Device, _pid);
+
+            MakeObject(context, new ILibraryAppletCreator(firmware ? _pid : 0));
 
             return ResultCode.Success;
         }

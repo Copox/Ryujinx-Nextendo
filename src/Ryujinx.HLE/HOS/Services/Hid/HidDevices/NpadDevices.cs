@@ -156,6 +156,13 @@ namespace Ryujinx.HLE.HOS.Services.Hid
         // thread. With two programs running (the HOME Menu and an applet) the two overlapped
         // and left the state buffers in disorder: one writer at a time.
         private readonly object _updateLock = new();
+
+        /// <summary>
+        /// [Nextendo, HOME Menu work] Joy-Con attached to the console, whatever the controller
+        /// configured: the initial setup of the firmware waits for them (it shows how to attach
+        /// them). They follow the first controller.
+        /// </summary>
+        public static volatile bool VirtualJoyCons;
         private ControllerKeys _lastTraced;
 
         public void Update(IList<GamepadInput> states)
@@ -201,6 +208,25 @@ namespace Ryujinx.HLE.HOS.Services.Hid
                 }
             }
 
+            // [Nextendo] The virtual Joy-Con attached to the console get the first controller's input.
+            if (VirtualJoyCons && _configuredTypes[(int)PlayerIndex.Handheld] == ControllerType.None && states.Count > 0)
+            {
+                bool handheldGiven = false;
+
+                for (int i = 0; i < states.Count; ++i)
+                {
+                    handheldGiven |= states[i].PlayerId == PlayerIndex.Handheld;
+                }
+
+                if (!handheldGiven)
+                {
+                    GamepadInput mirror = states[0];
+
+                    mirror.PlayerId = PlayerIndex.Handheld;
+                    states = new List<GamepadInput>(states) { mirror };
+                }
+            }
+
             // Update configured inputs
             for (int i = 0; i < states.Count; ++i)
             {
@@ -226,6 +252,12 @@ namespace Ryujinx.HLE.HOS.Services.Hid
             for (int i = 0; i < MaxControllers; ++i)
             {
                 ControllerType config = _configuredTypes[i];
+
+                // [Nextendo] The Joy-Con of the initial setup, attached to the console.
+                if (VirtualJoyCons && i == (int)PlayerIndex.Handheld && config == ControllerType.None)
+                {
+                    config = ControllerType.Handheld;
+                }
 
                 // Remove Handheld config when Docked
                 if (config == ControllerType.Handheld && _device.System.State.DockedMode)

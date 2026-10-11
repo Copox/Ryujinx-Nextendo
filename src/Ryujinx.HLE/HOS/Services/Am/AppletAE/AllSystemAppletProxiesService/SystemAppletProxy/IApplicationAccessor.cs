@@ -17,9 +17,12 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         private int _stateChangedEventHandle;
         private RunningApplication _application;
 
-        public IApplicationAccessor(ServiceCtx context, ulong applicationId, ulong callerPid)
+        private readonly bool _systemProgram;
+
+        public IApplicationAccessor(ServiceCtx context, ulong applicationId, ulong callerPid, bool systemProgram = false)
         {
             _applicationId = applicationId;
+            _systemProgram = systemProgram;
             _callerPid = callerPid;
             _stateChangedEvent = new KEvent(context.Device.System.KernelContext);
         }
@@ -54,7 +57,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         // Start()
         public ResultCode Start(ServiceCtx context)
         {
-            HomeMenuTitle title = HomeMenuLibrary.Find(_applicationId);
+            HomeMenuTitle title = _systemProgram ? RealAppletManager.SystemProgram(context.Device, _applicationId) : HomeMenuLibrary.Find(_applicationId);
 
             if (title == null)
             {
