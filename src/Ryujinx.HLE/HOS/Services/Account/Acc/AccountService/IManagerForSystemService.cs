@@ -171,6 +171,13 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
 
         private bool IsNextendoUser()
         {
+            // NEXTENDO_TEST_LINKED=<user id>: that user is taken as linked (tests without a session).
+            if (System.Environment.GetEnvironmentVariable("NEXTENDO_TEST_LINKED") is { Length: > 0 } test &&
+                string.Equals(_userId.ToString(), test, System.StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
             return Ryujinx.Common.Configuration.NextendoAccount.IsLinked &&
                 string.Equals(_userId.ToString(), Ryujinx.Common.Configuration.NextendoAccount.ProfileUserId, System.StringComparison.OrdinalIgnoreCase);
         }
