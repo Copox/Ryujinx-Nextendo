@@ -151,10 +151,29 @@ namespace Ryujinx.HLE.HOS.Themes
                     Logger.Warning?.Print(LogClass.ModLoader, $"[theme] no picture for {pack}: {e.Message}");
                 }
 
+                picture = PadThumbnail(picture);
                 _pictures[pack] = picture;
 
                 return picture;
             }
+        }
+
+        // qlaunch n'affiche pas les tout petits JPEG (constate : < ~500 o -> case
+        // noire, ex. test-theme 495 o, Switch 2 320-481 o) : on bourre apres le
+        // marqueur de fin (ignore par les decodeurs) pour rester au-dessus.
+        private const int MinThumbnail = 2048;
+
+        private static byte[] PadThumbnail(byte[] jpeg)
+        {
+            if (jpeg == null || jpeg.Length >= MinThumbnail)
+            {
+                return jpeg;
+            }
+
+            byte[] padded = new byte[MinThumbnail];
+            Array.Copy(jpeg, padded, jpeg.Length);
+
+            return padded;
         }
 
         /// <summary>The wallpaper of one part file, small (92x54 JPEG), or null.</summary>
@@ -179,7 +198,7 @@ namespace Ryujinx.HLE.HOS.Themes
                 using SkiaSharp.SKBitmap small = image.Resize(new SkiaSharp.SKImageInfo(92, 54, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Opaque), SkiaSharp.SKFilterQuality.High);
                 using SkiaSharp.SKData jpeg = small?.Encode(SkiaSharp.SKEncodedImageFormat.Jpeg, 90);
 
-                return jpeg?.ToArray();
+                return PadThumbnail(jpeg?.ToArray());
             }
             catch (Exception)
             {

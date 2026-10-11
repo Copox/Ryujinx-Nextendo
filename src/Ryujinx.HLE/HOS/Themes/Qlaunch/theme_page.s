@@ -34,6 +34,7 @@
 ;   +0x3EC  u32   the added entries shown (refresh); +0x000 how many to show
 ;   +0x2400 the text of entry 0 in the pages of a theme (UTF-16), +0x2500 that of entry 1
 ;   +0x2600 "Nx_FooterText_Customize", the label of the footer text of X on a theme
+;   +0x2800 0x40 bytes per entry of the pages of a theme: its picture's holder
 ;   +0x3F0  "NxThemes", the debug string sent when the page is built
 ;   +0x3F8  u32   the position of "X Customise" in the footer
 ;   +0x400  0x100 bytes per added entry: its name (UTF-16)
@@ -744,6 +745,13 @@ add_line:
 ; the picture of an added entry (as the page loads theme/ThemeIcon_00.jpg)
 ; x0 = the page, w1 = added entry number
 add_picture:
+    adrp x2, @DATA
+    add x2, x2, #0x1000
+    add x2, x2, #0x400
+    add x2, x2, x1, lsl #6
+; the same, in the holder x2 (the pages of a theme have holders of their own: a picture freed
+; and made again in the same place is drawn as the one before)
+add_picture_at:
     sub sp, sp, #0xe0
     stp x29, x30, [sp, #0xd0]
     add x29, sp, #0xd0
@@ -752,6 +760,7 @@ add_picture:
     stp x23, x24, [sp, #0xc0]
     mov x19, x0
     mov w23, w1
+    mov x20, x2
 
     ; none when the theme has no picture
     adrp x24, @DATA
@@ -761,9 +770,6 @@ add_picture:
     ldrb w8, [x8]
     cbz w8, add_picture_done
     ; the holder: vtable, the rest zero
-    add x20, x24, #0x1000
-    add x20, x20, #0x400
-    add x20, x20, x23, lsl #6
     adrp x8, #0x10e1000
     add x8, x8, #0x118
     stp x8, xzr, [x20]
@@ -844,6 +850,33 @@ add_picture_done:
     ldp x19, x20, [sp, #0xa0]
     ldp x29, x30, [sp, #0xd0]
     add sp, sp, #0xe0
+    ret
+
+; the picture of holder x2 shown in entry w1 (added entry number) of page x0
+show_holder:
+    stp x29, x30, [sp, #-0x20]!
+    mov x29, sp
+    str x19, [sp, #0x10]
+    mov x19, x2
+    ldr x8, [x19]
+    cbz x8, show_holder_done
+    add w1, w1, #2
+    bl entry_button
+    cbz x0, show_holder_done
+    ldr x8, [x0, #0x20]
+    ldr x0, [x8, #0x18]
+    adrp x1, #0xbe4000
+    add x1, x1, #0x8cc            ; "P_Icon"
+    bl #0xb94e20
+    cbz x0, show_holder_done
+    bl #0x1c99d0
+    ldr x8, [x19, #0x38]
+    cbz x8, show_holder_done
+    ldr x9, [x0, #0x18]
+    str x8, [x9, #8]
+show_holder_done:
+    ldr x19, [sp, #0x10]
+    ldp x29, x30, [sp], #0x20
     ret
 
 ; the picture of an added entry released (as the page releases its own)
@@ -1333,33 +1366,41 @@ refresh_pictures:
     ldr w8, [x23, #0x3ec]
     cmp w24, w8
     b.ge refresh_pictures_done
-    ; the pages of a theme show the part's own picture: the holders load
-    ; only when entries are made, so reload it here (its path changes)
-    cbnz w25, refresh_pictures_show
+    cbz w25, refresh_pictures_page
+    ; the themes: the picture made with the entry (never freed while the page lives)
+    add x2, x23, #0x1000
+    add x2, x2, #0x400
+    add x2, x2, x24, lsl #6
+    mov x0, x19
+    mov w1, w24
+    bl show_holder
+    mov w1, #1
+    b refresh_pictures_button
+refresh_pictures_page:
+    ; the pages of a theme: the part's own picture, in the holders of the pages
     add x8, x23, #0x1000
     add x8, x8, #0x800
     add x8, x8, x24, lsl #5
     ldrb w8, [x8]
-    cbz w8, refresh_pictures_show
-    add x0, x23, #0x1000
-    add x0, x0, #0x400
+    mov w1, wzr
+    cbz w8, refresh_pictures_button
+    add x0, x23, #0x2000
+    add x0, x0, #0x800
     add x0, x0, x24, lsl #6
     bl release_picture
+    adrp x2, @DATA
+    add x2, x2, #0x2000
+    add x2, x2, #0x800
+    add x2, x2, x24, lsl #6
     mov x0, x19
     mov w1, w24
-    bl add_picture
+    bl add_picture_at
+    mov w1, #1
+refresh_pictures_button:
     adrp x23, @DATA
     add x8, x23, #0x100
     add x8, x8, x24, lsl #5
     ldr x0, [x8, #0x10]
-    mov w1, #1
-    b refresh_pictures_button
-refresh_pictures_show:
-    add x8, x23, #0x100
-    add x8, x8, x24, lsl #5
-    ldr x0, [x8, #0x10]
-    mov w1, w25
-refresh_pictures_button:
     bl show_picture
     adrp x23, @DATA
     add x8, x23, #0x100
@@ -1706,6 +1747,16 @@ destroy_next:
     b destroy_entry
 
 destroy_page:
+    mov w24, wzr
+destroy_page_picture:
+    adrp x23, @DATA
+    add x0, x23, #0x2000
+    add x0, x0, #0x800
+    add x0, x0, x24, lsl #6
+    bl release_picture
+    add w24, w24, #1
+    cmp w24, #16
+    b.lt destroy_page_picture
     adrp x8, @DATA
     str wzr, [x8, #0x3e0]
     mov x0, x19

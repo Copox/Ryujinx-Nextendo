@@ -39,10 +39,17 @@ namespace Ryujinx.HLE.HOS.Themes
         /// <summary>Where the picture of an added entry is in the HOME Menu's files (as it names its own).</summary>
         public static string PicturePath(int entry) => $"theme/NxThemeIcon_{entry:D2}.jpg";
 
+        /// <summary>
+        /// Where the picture of an entry of the pages of a theme is: files of their own (the HOME
+        /// Menu keeps what it read of a file, a file read in both lists would show the other's).
+        /// </summary>
+        public static string PagePicturePath(int entry) => $"theme/NxPageIcon_{entry:D2}.jpg";
+
         // The pictures, one place per entry, of a fixed size (a JPEG followed by zeros): their
         // bytes change when the themes do, the HOME Menu's files stay as they are.
         private const int PictureSize = 0x8000;
         private static readonly byte[][] _pictures = new byte[MaxEntries][];
+        private static readonly byte[][] _pagePictures = new byte[MaxEntries][];
 
         /// <summary>The places of the pictures of the added entries, to add to the HOME Menu's files.</summary>
         public static IEnumerable<(string Path, byte[] Data)> Pictures()
@@ -52,6 +59,13 @@ namespace Ryujinx.HLE.HOS.Themes
                 _pictures[i] ??= new byte[PictureSize];
 
                 yield return ("/" + PicturePath(i), _pictures[i]);
+            }
+
+            for (int i = 0; i < MaxEntries; i++)
+            {
+                _pagePictures[i] ??= new byte[PictureSize];
+
+                yield return ("/" + PagePicturePath(i), _pagePictures[i]);
             }
         }
 
@@ -157,16 +171,6 @@ namespace Ryujinx.HLE.HOS.Themes
             {
                 ulong data = _base + Cave + CodeSize;
 
-                try // DEBUG
-                {
-                    ulong pgx = process.CpuMemory.Read<ulong>(data + 0x38);
-                    ulong fo = process.CpuMemory.Read<ulong>(pgx + 0xB38);
-                    ulong fd = process.CpuMemory.Read<ulong>(fo + 8);
-                    byte[] fb = new byte[0xD0];
-                    process.CpuMemory.Read(fd, fb);
-                    Logger.Info?.Print(LogClass.ServiceSet, $"[theme] DEBUG footer {fd:X}: {Convert.ToHexString(fb)}");
-                }
-                catch (Exception) { }
                 if (process.CpuMemory.Read<ulong>(data + 0x38) == 0)
                 {
                     return; // the page is not built
@@ -315,6 +319,7 @@ namespace Ryujinx.HLE.HOS.Themes
             process.CpuMemory.Write(at, data.AsSpan(0, 8));
             process.CpuMemory.Write(at + 0x3DC, data.AsSpan(0x3DC, 4));
             process.CpuMemory.Write(at + 0x400, data.AsSpan(0x400, 0x1000));
+            process.CpuMemory.Write(at + 0x1800, data.AsSpan(0x1800, 0x20 * MaxEntries));
             process.CpuMemory.Write(at + 0x2400, data.AsSpan(0x2400, 0x200));
             process.CpuMemory.Write(at + 0x3E8, focus);
             process.CpuMemory.Write(at + 0x3D4, 1);
@@ -682,16 +687,15 @@ namespace Ryujinx.HLE.HOS.Themes
                     : Text("Supprimer tout le thème", "Delete the whole theme"));
             }
 
-            // Les lignes des parties montrent le fond d'ecran de leur page
-            // (meme mecanisme que la liste : chemins en 0x1800).
-            System.Text.StringBuilder picLog = new System.Text.StringBuilder();
+            // The entries of the parts show the wallpaper of their page (paths at 0x1800, as the
+            // themes, in files of their own).
             for (int i = 0; i < MaxEntries; i++)
             {
-                _pictures[i] ??= new byte[PictureSize];
+                _pagePictures[i] ??= new byte[PictureSize];
 
-                lock (_pictures[i])
+                lock (_pagePictures[i])
                 {
-                    Array.Clear(_pictures[i]);
+                    Array.Clear(_pagePictures[i]);
 
                     if (i < _menuParts.Count)
                     {
@@ -699,18 +703,12 @@ namespace Ryujinx.HLE.HOS.Themes
 
                         if (thumb != null && thumb.Length <= PictureSize)
                         {
-                            thumb.CopyTo(_pictures[i], 0);
-                            Encoding.ASCII.GetBytes(PicturePath(i)).CopyTo(data.AsSpan(0x1800 + 0x20 * i));
-                            picLog.Append(_menuParts[i].Target).Append('=').Append(thumb.Length).Append(' ');
-                        }
-                        else
-                        {
-                            picLog.Append(_menuParts[i].Target).Append("=RIEN ");
+                            thumb.CopyTo(_pagePictures[i], 0);
+                            Encoding.ASCII.GetBytes(PagePicturePath(i)).CopyTo(data.AsSpan(0x1800 + 0x20 * i));
                         }
                     }
                 }
             }
-            Ryujinx.Common.Logging.Logger.Info?.Print(Ryujinx.Common.Logging.LogClass.ServiceSet, "[theme] menu pictures: " + picLog.ToString());
         }
     }
 }
