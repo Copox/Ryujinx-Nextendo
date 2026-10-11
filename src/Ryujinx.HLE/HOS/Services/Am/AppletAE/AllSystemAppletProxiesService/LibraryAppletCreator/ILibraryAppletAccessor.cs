@@ -84,6 +84,13 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Lib
         // Returns what tells when that applet is over.
         public Func<bool> StartInPlaceOf(Switch device, ulong callerPid)
         {
+            if (_eshop)
+            {
+                AnswerEshop(device.System);
+
+                return () => true;
+            }
+
             if (_real == null)
             {
                 // An applet of the emulator (the Nextendo sign-in page): over when it says so.
@@ -105,6 +112,22 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Lib
             RealAppletManager.Start(device, _real, _realPath);
 
             return () => _real.Exited;
+        }
+
+        private bool _eshop;
+
+        // The eShop: the store opened in the browser, the user selection answered as cancelled
+        // (ResultCancelledByUser 0x27C and no user, as the selection answers B): the HOME Menu
+        // stays where it was.
+        private void AnswerEshop(Horizon system)
+        {
+            Applets.Browser.BrowserApplet.OpenNintendoStore(system);
+
+            byte[] answer = new byte[0x18];
+
+            BitConverter.TryWriteBytes(answer.AsSpan(0, 8), 0x27CUL);
+            _normalSession.GetConsumer().Push(answer);
+            _stateChangedEvent.ReadableEvent.Signal();
         }
 
         // The accessor handed again to the applet that wound, in its new process: the handles
@@ -163,6 +186,13 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Lib
         // Start()
         public ResultCode Start(ServiceCtx context)
         {
+            if (_eshop)
+            {
+                AnswerEshop(context.Device.System);
+
+                return ResultCode.Success;
+            }
+
             if (_real != null)
             {
                 RealAppletManager.Start(context.Device, _real, _realPath);
@@ -244,6 +274,15 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Lib
         public ResultCode PushInData(ServiceCtx context)
         {
             IStorage data = GetObject<IStorage>(context, 0);
+
+            // [Nextendo] The HOME Menu asks who visits the eShop: the user selection's settings
+            // (0xA0 bytes) with no application (+0x88) and the purpose 2 (+0x98; 0x10 when a
+            // game is started). The Nintendo website's store is opened instead (no account needed).
+            if (_appletId == AppletId.PlayerSelect && _real != null && data.Data.Length == 0xA0 &&
+                BitConverter.ToUInt64(data.Data, 0x88) == 0 && BitConverter.ToUInt32(data.Data, 0x98) == 2)
+            {
+                _eshop = true;
+            }
 
             _normalSession.Push(data.Data);
 

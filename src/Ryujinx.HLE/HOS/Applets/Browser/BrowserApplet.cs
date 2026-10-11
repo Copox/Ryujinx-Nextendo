@@ -108,39 +108,7 @@ namespace Ryujinx.HLE.HOS.Applets.Browser
             // Ryujinx.exe to point it anywhere (Nextendo, your own store, or any URL).
             if (_shimKind == ShimKind.Shop)
             {
-                // The Nintendo website of the console's language, where games are bought.
-                string url = NintendoStoreUrl(_system?.State.DesiredLanguageCode ?? 0);
-                try
-                {
-                    string exeDir = Path.GetDirectoryName(Environment.ProcessPath ?? "") ?? "";
-                    string cfg = Path.Combine(exeDir, "eshop_url.txt");
-                    if (File.Exists(cfg))
-                    {
-                        string content = File.ReadAllText(cfg).Trim();
-                        if (content.Length > 0)
-                        {
-                            url = content;
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warning?.Print(LogClass.ServiceAm, $"[eShop redirect] config read failed: {ex.Message}");
-                }
-
-                try
-                {
-                    // NEXTENDO_ESHOP_DRYRUN=1: the address is only written in the log (tests).
-                    if (Environment.GetEnvironmentVariable("NEXTENDO_ESHOP_DRYRUN") != "1")
-                    {
-                        Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
-                    }
-                    Logger.Info?.Print(LogClass.ServiceAm, $"[eShop redirect] opened {url} in host browser");
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warning?.Print(LogClass.ServiceAm, $"[eShop redirect] failed to open {url}: {ex.Message}");
-                }
+                OpenNintendoStore(_system);
             }
 
             if ((_commonArguments.AppletVersion >= 0x80000 && _shimKind == ShimKind.Web) || (_commonArguments.AppletVersion >= 0x30000 && _shimKind == ShimKind.Share))
@@ -165,6 +133,46 @@ namespace Ryujinx.HLE.HOS.Applets.Browser
             AppletStateChanged?.Invoke(this, null);
 
             return ResultCode.Success;
+        }
+
+        /// <summary>
+        /// [Nextendo] The eShop: the store of the Nintendo website (where games are bought), in
+        /// the language of the console, in the computer's browser. "eshop_url.txt" next to
+        /// Ryujinx.exe gives another address.
+        /// </summary>
+        public static void OpenNintendoStore(Horizon system)
+        {
+            string url = NintendoStoreUrl(system?.State.DesiredLanguageCode ?? 0);
+
+            try
+            {
+                string exeDir = Path.GetDirectoryName(Environment.ProcessPath ?? "") ?? "";
+                string cfg = Path.Combine(exeDir, "eshop_url.txt");
+
+                if (File.Exists(cfg) && File.ReadAllText(cfg).Trim() is { Length: > 0 } content)
+                {
+                    url = content;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning?.Print(LogClass.ServiceAm, $"[eShop redirect] config read failed: {ex.Message}");
+            }
+
+            try
+            {
+                // NEXTENDO_ESHOP_DRYRUN=1: the address is only written in the log (tests).
+                if (Environment.GetEnvironmentVariable("NEXTENDO_ESHOP_DRYRUN") != "1")
+                {
+                    Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
+                }
+
+                Logger.Info?.Print(LogClass.ServiceAm, $"[eShop redirect] opened {url} in host browser");
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning?.Print(LogClass.ServiceAm, $"[eShop redirect] failed to open {url}: {ex.Message}");
+            }
         }
 
         // [Nextendo] The eShop button opens the store of the Nintendo website, in the language of
