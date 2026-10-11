@@ -397,6 +397,28 @@ namespace Ryujinx.HLE.HOS
 
         public void ChangeDockedModeState(bool newState)
         {
+            // [Nextendo, HOME Menu work] During the initial setup the Joy-Con are virtual: put in
+            // the dock, they are first taken off the console (the setup asks for it), then the
+            // console goes into the dock; taken out of the dock, they are put back on it.
+            if (Services.Hid.NpadDevices.VirtualJoyCons && newState != State.DockedMode)
+            {
+                if (newState)
+                {
+                    Services.Hid.NpadDevices.VirtualJoyConsDetached = true;
+
+                    System.Threading.Tasks.Task.Delay(1500).ContinueWith(_ => SetDockedMode(true));
+
+                    return;
+                }
+
+                Services.Hid.NpadDevices.VirtualJoyConsDetached = false;
+            }
+
+            SetDockedMode(newState);
+        }
+
+        private void SetDockedMode(bool newState)
+        {
             if (newState != State.DockedMode)
             {
                 State.DockedMode = newState;

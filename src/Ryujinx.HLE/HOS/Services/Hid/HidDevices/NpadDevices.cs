@@ -163,6 +163,9 @@ namespace Ryujinx.HLE.HOS.Services.Hid
         /// them). They follow the first controller.
         /// </summary>
         public static volatile bool VirtualJoyCons;
+
+        /// <summary>The virtual Joy-Con are taken off the console (on the way to the dock).</summary>
+        public static volatile bool VirtualJoyConsDetached;
         private ControllerKeys _lastTraced;
 
         public void Update(IList<GamepadInput> states)
@@ -209,7 +212,7 @@ namespace Ryujinx.HLE.HOS.Services.Hid
             }
 
             // [Nextendo] The virtual Joy-Con attached to the console get the first controller's input.
-            if (VirtualJoyCons && _configuredTypes[(int)PlayerIndex.Handheld] == ControllerType.None && states.Count > 0)
+            if (VirtualJoyCons && !VirtualJoyConsDetached && _configuredTypes[(int)PlayerIndex.Handheld] == ControllerType.None && states.Count > 0)
             {
                 bool handheldGiven = false;
 
@@ -254,7 +257,7 @@ namespace Ryujinx.HLE.HOS.Services.Hid
                 ControllerType config = _configuredTypes[i];
 
                 // [Nextendo] The Joy-Con of the initial setup, attached to the console.
-                if (VirtualJoyCons && i == (int)PlayerIndex.Handheld && config == ControllerType.None)
+                if (VirtualJoyCons && !VirtualJoyConsDetached && i == (int)PlayerIndex.Handheld && config == ControllerType.None)
                 {
                     config = ControllerType.Handheld;
                 }

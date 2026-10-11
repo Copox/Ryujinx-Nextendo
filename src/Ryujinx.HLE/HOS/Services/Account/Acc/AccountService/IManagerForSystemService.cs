@@ -191,6 +191,32 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
             return ResultCode.Success;
         }
 
+        [CommandCmif(201)]
+        // RegisterAsync() -> object<nn::account::detail::IAsyncContext>
+        public ResultCode RegisterAsync(ServiceCtx context)
+        {
+            // [Nextendo, HOME Menu work] A user just made (the initial setup, "Add User") is put on
+            // the network service: nothing to do here, done at once (a user becomes a Nextendo one
+            // by signing in to its account).
+            Ryujinx.HLE.HOS.Kernel.Threading.KEvent asyncEvent = new(context.Device.System.KernelContext);
+            AsyncContext.AsyncExecution asyncExecution = new(asyncEvent);
+
+            asyncExecution.Initialize(1000, _ => System.Threading.Tasks.Task.CompletedTask);
+
+            MakeObject(context, new IAsyncContext(asyncExecution));
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(251)]
+        // CreateProcedureToLinkWithNintendoAccount() -> object<nn::account::nas::IOAuthProcedureForNintendoAccountLinkage>
+        public ResultCode CreateProcedureToLinkWithNintendoAccount(ServiceCtx context)
+        {
+            MakeObject(context, new IOAuthProcedureForNintendoAccountLinkage(_userId));
+
+            return ResultCode.Success;
+        }
+
         [CommandCmif(250)]
         // IsLinkedWithNintendoAccount() -> bool
         public ResultCode IsLinkedWithNintendoAccount(ServiceCtx context)

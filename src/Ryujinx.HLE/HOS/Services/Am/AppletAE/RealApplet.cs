@@ -184,7 +184,9 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
             if (title.Id == StarterId)
             {
                 application.WasDocked = system.State.DockedMode;
+                system.AccountManager.HideDefaultUserForSetup();
                 Hid.NpadDevices.VirtualJoyCons = true;
+                Hid.NpadDevices.VirtualJoyConsDetached = false;
                 system.ChangeDockedModeState(false);
             }
 
@@ -300,6 +302,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
 
             if (application.Title.Id == StarterId)
             {
+                system.AccountManager.EndSetup();
                 Hid.NpadDevices.VirtualJoyCons = false;
                 system.ChangeDockedModeState(application.WasDocked);
             }
@@ -373,6 +376,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
             if (_application is { Exited: false } setup && setup.Title.Id == StarterId)
             {
                 Settings.ISystemSettingsServer.MarkInitialSetupDone();
+                device.System.AccountManager.EndSetup();
                 HomeMenuStatus.RequestRelaunch();
 
                 return true;

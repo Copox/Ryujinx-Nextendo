@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using System.Linq;
 using Avalonia.Data;
 using Avalonia.Interactivity;
 using FluentAvalonia.UI.Controls;
@@ -20,7 +21,9 @@ namespace Ryujinx.Ava.UI.Views.User
         private bool _isNewUser;
 
         public static uint MaxProfileNameLength => 0x20;
-        public bool IsDeletable => _profile.UserId != AccountManager.DefaultUserId;
+        // [Nextendo] RyuPlayer can go too, as long as another user is left (the emulator only
+        // makes it again when there is no user at all).
+        public bool IsDeletable => _profile.UserId != AccountManager.DefaultUserId || (_parent?.AccountManager?.GetAllUsers().Skip(1).Any() ?? false);
 
         public UserEditorView()
         {

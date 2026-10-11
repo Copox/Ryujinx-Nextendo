@@ -58,6 +58,11 @@ namespace Ryujinx.Input.HLE
                 {
                     _homeTimes.Add(time);
                 }
+                else if (parts[1].Equals("Dock", StringComparison.OrdinalIgnoreCase) || parts[1].Equals("Handheld", StringComparison.OrdinalIgnoreCase))
+                {
+                    // The console put in its dock or taken out of it.
+                    (_dockSteps ??= []).Add((time, parts[1].Equals("Dock", StringComparison.OrdinalIgnoreCase)));
+                }
                 else if (Enum.TryParse(parts[1], true, out ControllerKeys keys))
                 {
                     // An optional third field is how long the button stays down.
@@ -94,6 +99,25 @@ namespace Ryujinx.Input.HLE
             }
 
             return false;
+        }
+
+        private static List<(double Time, bool Docked)> _dockSteps;
+
+        // The dock state of a "Dock"/"Handheld" step whose time has come, once.
+        public static bool? DockStep()
+        {
+            if (_dockSteps == null || _dockSteps.Count == 0 || !_clock.IsRunning || _clock.Elapsed.TotalSeconds < _dockSteps[0].Time)
+            {
+                return null;
+            }
+
+            bool docked = _dockSteps[0].Docked;
+
+            Logger.Notice.Print(LogClass.Hid, $"[script] {(docked ? "Dock" : "Handheld")} at {_dockSteps[0].Time:F1}s");
+
+            _dockSteps.RemoveAt(0);
+
+            return docked;
         }
 
         // True once for each "Home" step of the script whose time has come.

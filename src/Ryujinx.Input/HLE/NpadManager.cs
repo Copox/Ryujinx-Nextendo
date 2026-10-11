@@ -451,6 +451,11 @@ namespace Ryujinx.Input.HLE
                     _device.System.PressHomeButton();
                 }
 
+                if (ScriptedInput.DockStep() is bool docked)
+                {
+                    _device.System.ChangeDockedModeState(docked);
+                }
+
                 _device.Hid.Npads.Update(_hleInputStates);
                 _device.Hid.Npads.UpdateSixAxis(_hleMotionStates);
 
