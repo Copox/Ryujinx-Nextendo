@@ -485,12 +485,17 @@ namespace Ryujinx.HLE.HOS.Services.Settings
 
         private static bool DecideInitialSetupDone()
         {
+            if (System.IO.File.Exists(InitialSetupPath))
+            {
+                return true;
+            }
+
             if (System.Environment.GetEnvironmentVariable("NEXTENDO_FIRST_SETUP") == "1")
             {
                 return false;
             }
 
-            if (!StarterReady || System.IO.File.Exists(InitialSetupPath))
+            if (!StarterReady)
             {
                 return true;
             }

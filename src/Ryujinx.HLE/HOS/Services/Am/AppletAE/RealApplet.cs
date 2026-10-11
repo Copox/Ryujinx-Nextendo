@@ -367,11 +367,15 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
         public static bool PressHome(Switch device)
         {
             // The last screen of the initial setup says "Press the HOME button": the setup is
-            // done. The HOME Menu is told as for any HOME press; it reads the setup as done and
-            // ends the setup itself.
+            // done. The HOME Menu started in setup mode never builds its own screens (HOME only
+            // makes it read the setup as done): the console restarts, as after the setup of a
+            // real one, and the HOME Menu then starts as usual.
             if (_application is { Exited: false } setup && setup.Title.Id == StarterId)
             {
                 Settings.ISystemSettingsServer.MarkInitialSetupDone();
+                HomeMenuStatus.RequestRelaunch();
+
+                return true;
             }
 
             foreach ((ulong pid, AppletStateMgr state) in _systemApplets)

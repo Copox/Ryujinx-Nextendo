@@ -18,6 +18,24 @@ namespace Ryujinx.HLE.HOS
         /// <summary>The console is asked to restart (true) or to turn off (false).</summary>
         public static event Action<bool> PowerRequested;
 
+        /// <summary>
+        /// The emulator is asked to start again from scratch, on the HOME Menu (after the initial
+        /// setup: a restart inside the same run does not get through the end of the emulation).
+        /// </summary>
+        public static event Action RelaunchRequested;
+
+        public static void RequestRelaunch()
+        {
+            try
+            {
+                RelaunchRequested?.Invoke();
+            }
+            catch (Exception)
+            {
+                // the request is lost, nothing else
+            }
+        }
+
         public static void RequestPower(bool reboot)
         {
             try

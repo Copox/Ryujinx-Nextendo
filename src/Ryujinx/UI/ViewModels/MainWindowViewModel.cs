@@ -248,6 +248,35 @@ namespace Ryujinx.Ava.UI.ViewModels
 
             // [Nextendo, HOME Menu work] A program asks the console to restart or to turn off
             // (a homebrew's reboot button, the power menu): the emulation restarts or stops.
+            // [Nextendo, HOME Menu work] The initial setup is over: the emulator starts again, on the
+            // HOME Menu, with the same command line (a new process: a restart inside this one does
+            // not get through the end of the emulation).
+            Ryujinx.HLE.HOS.HomeMenuStatus.RelaunchRequested += () => Dispatcher.UIThread.Post(() =>
+            {
+                List<string> arguments = Environment.GetCommandLineArgs().Skip(1).ToList();
+
+                if (!arguments.Contains("@home-menu"))
+                {
+                    arguments.Add("@home-menu");
+                }
+
+                System.Diagnostics.ProcessStartInfo start = new(Environment.ProcessPath ?? "Ryujinx.exe")
+                {
+                    UseShellExecute = false,
+                    WorkingDirectory = AppContext.BaseDirectory,
+                };
+
+                foreach (string argument in arguments)
+                {
+                    start.ArgumentList.Add(argument);
+                }
+
+                Logger.Notice.Print(LogClass.Application, $"[setup] starting again: {string.Join(' ', arguments)}");
+
+                System.Diagnostics.Process.Start(start);
+                System.Diagnostics.Process.GetCurrentProcess().Kill();
+            });
+
             Ryujinx.HLE.HOS.HomeMenuStatus.PowerRequested += reboot => Dispatcher.UIThread.Post(() =>
             {
                 if (reboot)
