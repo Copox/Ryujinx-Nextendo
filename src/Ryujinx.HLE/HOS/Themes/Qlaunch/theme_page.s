@@ -25,6 +25,7 @@
 ;   +0x080  char  line template layout name
 ;   +0x100  0x20 bytes per added entry: its object
 ;   +0x300  u64   per added entry: its line
+;   +0x3F0  "NxThemes", the debug string sent when the page is built
 ;   +0x400  0x100 bytes per added entry: its name (UTF-16)
 ;   +0x1400 0x40 bytes per added entry: its picture (the page's picture holder, vtable 0x10E1118)
 ;   +0x1800 0x20 bytes per added entry: its picture's path in the program's files
@@ -199,6 +200,13 @@ build:
     stp x27, x28, [sp, #0xf0]
     mov x19, x0
     mov x20, x1
+    ; the emulator is told (debug string "NxThemes"): it lists the themes as they are now
+    adrp x0, @DATA
+    add x0, x0, #0x3f0
+    mov x1, #8
+    svc #0x27
+    mov x0, x19
+    mov x1, x20
     bl #0x98ceb0                  ; Basic White, Basic Black
 
     adrp x23, @DATA

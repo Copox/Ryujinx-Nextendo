@@ -1962,6 +1962,13 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
 
             string str = MemoryHelper.ReadAsciiString(process.CpuMemory, strPtr, (long)size);
 
+            // [Nextendo, HOME Menu themes] The HOME Menu's themes page is being built: the themes
+            // installed since it started are listed too.
+            if (str == HOS.Themes.QlaunchThemePage.RefreshSignal && HOS.Themes.QlaunchThemePage.Refresh(process))
+            {
+                return;
+            }
+
             Logger.Warning?.Print(LogClass.KernelSvc, str);
         }
 

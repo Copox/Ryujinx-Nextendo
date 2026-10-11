@@ -203,11 +203,6 @@ namespace Ryujinx.HLE.HOS
             // [Nextendo, HOME Menu themes] The pictures of the themes added to its themes page.
             List<(string Path, byte[] Data)> added = programId == 0x0100000000001000 ? Themes.QlaunchThemePage.Pictures().ToList() : [];
 
-            if (added.Count > 0)
-            {
-                Logger.Info?.Print(LogClass.ModLoader, $"[theme] {added.Count} picture(s) for the themes page (system one present: {Exists(baseRom, "/theme/ThemeIcon_00.jpg")})");
-            }
-
             if (changed.Count == 0 && added.Count == 0)
             {
                 return baseStorage;
@@ -218,6 +213,11 @@ namespace Ryujinx.HLE.HOS
             foreach ((string path, byte[] data) in added)
             {
                 builder.AddFile(path, new StorageFile(new MemoryStorage(data), OpenMode.Read));
+            }
+
+            if (added.Count > 0)
+            {
+                Logger.Info?.Print(LogClass.ModLoader, $"[theme] {added.Count} picture place(s) for the themes page (system one present: {Exists(baseRom, "/theme/ThemeIcon_00.jpg")})");
             }
 
             foreach (DirectoryEntryEx entry in baseRom.EnumerateEntries().Where(f => f.Type == DirectoryEntryType.File).OrderBy(f => f.FullPath, StringComparer.Ordinal))

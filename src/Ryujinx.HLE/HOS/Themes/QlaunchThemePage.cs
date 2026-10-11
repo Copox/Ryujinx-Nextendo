@@ -38,18 +38,54 @@ namespace Ryujinx.HLE.HOS.Themes
         /// <summary>Where the picture of an added entry is in the HOME Menu's files (as it names its own).</summary>
         public static string PicturePath(int entry) => $"theme/NxThemeIcon_{entry:D2}.jpg";
 
-        /// <summary>The pictures of the added entries, to add to the HOME Menu's files.</summary>
+        // The pictures, one place per entry, of a fixed size (a JPEG followed by zeros): their
+        // bytes change when the themes do, the HOME Menu's files stay as they are.
+        private const int PictureSize = 0x8000;
+        private static readonly byte[][] _pictures = new byte[MaxEntries][];
+
+        /// <summary>The places of the pictures of the added entries, to add to the HOME Menu's files.</summary>
         public static IEnumerable<(string Path, byte[] Data)> Pictures()
         {
-            List<string> packs = NextendoThemes.Packs();
-
-            for (int i = 0; i < Math.Min(packs.Count, MaxEntries); i++)
+            for (int i = 0; i < MaxEntries; i++)
             {
-                if (NextendoThemes.Picture(packs[i]) is { } picture)
-                {
-                    yield return ("/" + PicturePath(i), picture);
-                }
+                _pictures[i] ??= new byte[PictureSize];
+
+                yield return ("/" + PicturePath(i), _pictures[i]);
             }
+        }
+
+        /// <summary>The debug string the added code sends when the page is built.</summary>
+        public const string RefreshSignal = "NxThemes";
+
+        /// <summary>
+        /// The themes page is being built: the themes, their names and pictures as they are now
+        /// (the parts the code uses for the entries it made are left as they are).
+        /// </summary>
+        internal static bool Refresh(KProcess process)
+        {
+            if (process != _process)
+            {
+                return false;
+            }
+
+            try
+            {
+                byte[] data = new byte[DataSize];
+
+                WriteData(data);
+
+                ulong at = _base + Cave + CodeSize;
+
+                process.CpuMemory.Write(at, data.AsSpan(0, 8));
+                process.CpuMemory.Write(at + 0x400, data.AsSpan(0x400, 0x1000));
+                process.CpuMemory.Write(at + 0x1800, data.AsSpan(0x1800, 0x20 * MaxEntries));
+            }
+            catch (Exception e)
+            {
+                Logger.Warning?.Print(LogClass.Loader, $"[theme] themes page not refreshed: {e.Message}");
+            }
+
+            return true;
         }
 
         // The page's "build" method in its vtable (relocated at start: the base is added to it).
@@ -215,6 +251,7 @@ namespace Ryujinx.HLE.HOS.Themes
             BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(0), count);
             BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(4), packs.IndexOf(NextendoThemes.Chosen ?? "") is int chosen and < MaxEntries ? chosen : -1);
             BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(0x30), -2); // nothing picked yet
+            Encoding.ASCII.GetBytes(RefreshSignal).CopyTo(data.AsSpan(0x3F0));
 
             for (int i = 0; i < count; i++)
             {
@@ -222,9 +259,19 @@ namespace Ryujinx.HLE.HOS.Themes
 
                 name.AsSpan(0, Math.Min(name.Length, 0xFE)).CopyTo(data.AsSpan(0x400 + 0x100 * i));
 
-                if (NextendoThemes.Picture(packs[i]) != null)
+                byte[] picture = NextendoThemes.Picture(packs[i]);
+
+                _pictures[i] ??= new byte[PictureSize];
+
+                lock (_pictures[i])
                 {
-                    Encoding.ASCII.GetBytes(PicturePath(i)).CopyTo(data.AsSpan(0x1800 + 0x20 * i));
+                    Array.Clear(_pictures[i]);
+
+                    if (picture != null && picture.Length <= PictureSize)
+                    {
+                        picture.CopyTo(_pictures[i], 0);
+                        Encoding.ASCII.GetBytes(PicturePath(i)).CopyTo(data.AsSpan(0x1800 + 0x20 * i));
+                    }
                 }
             }
 
