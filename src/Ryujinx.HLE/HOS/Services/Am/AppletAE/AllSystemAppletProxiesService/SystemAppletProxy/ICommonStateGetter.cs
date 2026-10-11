@@ -63,6 +63,17 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             return ResultCode.Success;
         }
 
+        [CommandCmif(20)]
+        // PushToGeneralChannel(object<nn::am::service::IStorage>)
+        public ResultCode PushToGeneralChannel(ServiceCtx context)
+        {
+            // [Nextendo, HOME Menu work] A message for the HOME Menu (the initial setup asks it to
+            // open the parental controls, for instance): kept until the HOME Menu takes it.
+            RealAppletManager.PushToGeneralChannel(GetObject<IStorage>(context, 0).Data);
+
+            return ResultCode.Success;
+        }
+
         [CommandCmif(1)]
         // ReceiveMessage() -> nn::am::AppletMessage
         public ResultCode ReceiveMessage(ServiceCtx context)

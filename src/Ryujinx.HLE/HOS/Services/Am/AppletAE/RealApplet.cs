@@ -483,6 +483,24 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
         // the program's own name for one of the firmware ("Starter").
         private static string StatusOf(HomeMenuTitle title) => IsSystemProgram(title) ? title.Name : "Application:" + title.Name;
 
+        // The general channel: messages of the programs for the HOME Menu (am PushToGeneralChannel,
+        // read by the HOME Menu with PopFromGeneralChannel when its event says one waits).
+        private static readonly ConcurrentQueue<byte[]> _generalChannel = new();
+
+        public static event Action GeneralChannelPushed;
+
+        public static int GeneralChannelCount => _generalChannel.Count;
+
+        public static void PushToGeneralChannel(byte[] data)
+        {
+            Logger.Notice.Print(LogClass.ServiceAm, $"[channel] message of {data.Length} bytes for the HOME Menu: {Convert.ToHexString(data.AsSpan(0, Math.Min(data.Length, 0x40)))}");
+
+            _generalChannel.Enqueue(data);
+            GeneralChannelPushed?.Invoke();
+        }
+
+        public static bool TryPopFromGeneralChannel(out byte[] data) => _generalChannel.TryDequeue(out data);
+
         /// <summary>The initial setup of the console (starter).</summary>
         public const ulong StarterId = 0x0100000000001012;
 

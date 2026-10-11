@@ -31,8 +31,36 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         public IHomeMenuFunctions(Horizon system, ulong pid = 0)
         {
             _pid = pid;
-            // TODO: Signal this Event somewhere in future.
+            // Signalled while a message waits in the general channel (RealAppletManager).
             _channelEvent = new KEvent(system.KernelContext);
+
+            RealAppletManager.GeneralChannelPushed += () => _channelEvent.ReadableEvent.Signal();
+
+            if (RealAppletManager.GeneralChannelCount > 0)
+            {
+                _channelEvent.ReadableEvent.Signal();
+            }
+        }
+
+        [CommandCmif(20)]
+        // PopFromGeneralChannel() -> object<nn::am::service::IStorage>
+        public ResultCode PopFromGeneralChannel(ServiceCtx context)
+        {
+            if (!RealAppletManager.TryPopFromGeneralChannel(out byte[] data))
+            {
+                _channelEvent.ReadableEvent.Clear();
+
+                return ResultCode.NotAvailable;
+            }
+
+            if (RealAppletManager.GeneralChannelCount == 0)
+            {
+                _channelEvent.ReadableEvent.Clear();
+            }
+
+            MakeObject(context, new IStorage(data));
+
+            return ResultCode.Success;
         }
 
         [CommandCmif(10)]

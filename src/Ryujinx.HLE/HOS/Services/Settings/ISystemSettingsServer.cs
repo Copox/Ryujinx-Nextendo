@@ -474,8 +474,8 @@ namespace Ryujinx.HLE.HOS.Services.Settings
         // is "used" when it holds the mark of a finished setup, or when the emulator's own files
         // (its configuration, its users) were there before this run started. Decided once per run:
         // the setup itself writes those files halfway.
-        // Off until it is finished (StarterReady); NEXTENDO_FIRST_SETUP=1 runs it on any data (tests).
-        private const bool StarterReady = false;
+        // StarterReady turns it off for a build that must not have it; NEXTENDO_FIRST_SETUP=1 runs it on any data never set up (tests).
+        private const bool StarterReady = true;
 
         private static bool? _initialSetupDone;
 
