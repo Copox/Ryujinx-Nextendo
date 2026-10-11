@@ -870,7 +870,7 @@ namespace Ryujinx.Ava.UI.Windows
             // The menu draws through the shared frame buffers of the system applets.
             Environment.SetEnvironmentVariable("NEXTENDO_SHARED_FB", "1");
 
-            Ryujinx.Ava.Utilities.AppletMetadata homeMenu = new(ViewModel.ContentManager, "HOME Menu", 0x0100000000001000);
+            Ryujinx.Ava.Utilities.AppletMetadata homeMenu = new(ViewModel.ContentManager, LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_HomeMenuName], 0x0100000000001000);
             Logger.Notice.Print(LogClass.Application, $"[home-menu] resolving qlaunch, content path={homeMenu.GetContentPath(ViewModel.ContentManager)}");
             // No firmware installed (or one without the menu): say so instead of going on.
             if (string.IsNullOrEmpty(homeMenu.GetContentPath(ViewModel.ContentManager)))
@@ -880,8 +880,8 @@ namespace Ryujinx.Ava.UI.Windows
                 RevealAfterBackgroundLoad();
 
                 _ = Ryujinx.Ava.UI.Helpers.ContentDialogHelper.CreateWarningDialog(
-                    "HOME Menu",
-                    "The HOME Menu comes with the system firmware. Install a firmware first (Actions > Install Firmware).");
+                    LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_HomeMenuName],
+                    LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_HomeMenuNoFirmware]);
 
                 return;
             }

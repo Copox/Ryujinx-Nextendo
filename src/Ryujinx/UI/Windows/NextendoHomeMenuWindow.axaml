@@ -5,6 +5,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:window="clr-namespace:Ryujinx.Ava.UI.Windows"
+             xmlns:ext="clr-namespace:Ryujinx.Ava.Common.Markup"
              mc:Ignorable="d"
              Width="520"
              Height="640"
@@ -16,38 +17,38 @@
         <StackPanel Margin="18,18,18,8" Spacing="14">
             <TextBlock Classes="h1" Text="qLaunch" />
             <TextBlock TextWrapping="Wrap" Opacity="0.75" FontSize="12"
-                       Text="Le vrai menu HOME de la Switch, tiré du firmware installé." />
+                       Text="{ext:Locale Dialog_Nextendo_QLaunchSubtitle}" />
 
             <StackPanel Spacing="6">
-                <TextBlock FontWeight="SemiBold" Text="Démarrage" />
-                <CheckBox Name="AutoStartCheck" Content="Lancer le menu HOME au démarrage de l'émulateur" />
+                <TextBlock FontWeight="SemiBold" Text="{ext:Locale Dialog_Nextendo_QLaunchStartupHeader}" />
+                <CheckBox Name="AutoStartCheck" Content="{ext:Locale Dialog_Nextendo_QLaunchAutoStart}" />
                 <CheckBox Name="BackgroundCheck" Margin="24,0,0,0"
-                          Content="Le charger en arrière-plan (la fenêtre s'affiche avec le menu, sans l'écran de chargement)" />
-                <CheckBox Name="FullscreenCheck" Content="Ouvrir le menu HOME en plein écran" />
+                          Content="{ext:Locale Dialog_Nextendo_QLaunchBackground}" />
+                <CheckBox Name="FullscreenCheck" Content="{ext:Locale Dialog_Nextendo_QLaunchFullscreen}" />
             </StackPanel>
 
             <StackPanel Spacing="6">
-                <TextBlock FontWeight="SemiBold" Text="Menu homebrew de l'album" />
+                <TextBlock FontWeight="SemiBold" Text="{ext:Locale Dialog_Nextendo_QLaunchAlbumHeader}" />
                 <RadioButton Name="SphairaRadio" GroupName="AlbumMenu" Content="Sphaira" />
-                <RadioButton Name="HbmenuRadio" GroupName="AlbumMenu" Content="hbmenu classique" />
+                <RadioButton Name="HbmenuRadio" GroupName="AlbumMenu" Content="{ext:Locale Dialog_Nextendo_QLaunchHbmenuClassic}" />
                 <TextBlock Name="AlbumHint" TextWrapping="Wrap" Opacity="0.7" FontSize="12" />
             </StackPanel>
 
             <StackPanel Spacing="6">
-                <TextBlock FontWeight="SemiBold" Text="Thème de couleur" />
-                <RadioButton Name="ThemeAutoRadio" GroupName="Theme" Content="Automatique (noir avec un thème personnalisé)" />
-                <RadioButton Name="ThemeWhiteRadio" GroupName="Theme" Content="Blanc basique" />
-                <RadioButton Name="ThemeBlackRadio" GroupName="Theme" Content="Noir basique" />
+                <TextBlock FontWeight="SemiBold" Text="{ext:Locale Dialog_Nextendo_QLaunchThemeHeader}" />
+                <RadioButton Name="ThemeAutoRadio" GroupName="Theme" Content="{ext:Locale Dialog_Nextendo_QLaunchThemeAuto}" />
+                <RadioButton Name="ThemeWhiteRadio" GroupName="Theme" Content="{ext:Locale Dialog_Nextendo_QLaunchThemeWhite}" />
+                <RadioButton Name="ThemeBlackRadio" GroupName="Theme" Content="{ext:Locale Dialog_Nextendo_QLaunchThemeBlack}" />
                 <TextBlock TextWrapping="Wrap" Opacity="0.7" FontSize="12"
-                           Text="S'applique au prochain démarrage du menu HOME." />
+                           Text="{ext:Locale Dialog_Nextendo_QLaunchThemeNextStart}" />
             </StackPanel>
 
             <StackPanel Spacing="6">
-                <TextBlock FontWeight="SemiBold" Text="Carte SD" />
+                <TextBlock FontWeight="SemiBold" Text="{ext:Locale Dialog_Nextendo_QLaunchSdHeader}" />
                 <WrapPanel>
-                    <Button Name="OpenSdButton" Margin="0,0,8,8" Content="Ouvrir la carte SD" />
-                    <Button Name="OpenThemesButton" Margin="0,0,8,8" Content="Ouvrir les thèmes installés" />
-                    <Button Name="ResetThemeButton" Margin="0,0,8,8" Content="Retirer le thème installé" />
+                    <Button Name="OpenSdButton" Margin="0,0,8,8" Content="{ext:Locale Dialog_Nextendo_QLaunchOpenSd}" />
+                    <Button Name="OpenThemesButton" Margin="0,0,8,8" Content="{ext:Locale Dialog_Nextendo_QLaunchOpenThemes}" />
+                    <Button Name="ResetThemeButton" Margin="0,0,8,8" Content="{ext:Locale Dialog_Nextendo_QLaunchResetTheme}" />
                 </WrapPanel>
                 <TextBlock Name="StatusText" TextWrapping="Wrap" FontSize="12" IsVisible="False" />
             </StackPanel>
@@ -57,8 +58,8 @@
     <!-- Toujours visibles, hors de la zone qui defile. -->
     <Border Grid.Row="1" Padding="18,10" BorderThickness="0,1,0,0" BorderBrush="#30FFFFFF">
         <Grid ColumnDefinitions="*,Auto,Auto">
-            <Button Grid.Column="1" Name="LaunchButton" Margin="0,0,8,0" Classes="accent" Content="Lancer le menu HOME" />
-            <Button Grid.Column="2" Name="CloseButton" Content="Fermer" />
+            <Button Grid.Column="1" Name="LaunchButton" Margin="0,0,8,0" Classes="accent" Content="{ext:Locale Dialog_Nextendo_QLaunchLaunchButton}" />
+            <Button Grid.Column="2" Name="CloseButton" Content="{ext:Locale Dialog_Nextendo_QLaunchCloseButton}" />
         </Grid>
     </Border>
     </Grid>

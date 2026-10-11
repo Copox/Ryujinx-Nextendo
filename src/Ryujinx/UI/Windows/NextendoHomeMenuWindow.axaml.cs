@@ -1,4 +1,5 @@
 using Avalonia.Media;
+using Ryujinx.Ava.Common.Locale;
 using Ryujinx.Ava.UI.Helpers;
 using Ryujinx.Common.Configuration;
 using Ryujinx.Common.Helper;
@@ -100,8 +101,8 @@ namespace Ryujinx.Ava.UI.Windows
             string wanted = NextendoHomeMenuSettings.AlbumMenu;
 
             AlbumHint.Text = wanted == "hbmenu"
-                ? (hbmenu ? "hbmenu.nro est présent à la racine de la carte SD." : "hbmenu.nro est absent de la carte SD : l'album ouvrira Sphaira.")
-                : (sphaira ? "Sphaira est présent (switch/sphaira/sphaira.nro)." : "Sphaira est absent de la carte SD : l'album ouvrira hbmenu.");
+                ? (hbmenu ? LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_QLaunchHbmenuPresent] : LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_QLaunchHbmenuMissing])
+                : (sphaira ? LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_QLaunchSphairaPresent] : LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_QLaunchSphairaMissing]);
         }
 
         private static void OpenFolder(string path)
@@ -140,12 +141,12 @@ namespace Ryujinx.Ava.UI.Windows
                 }
 
                 ShowStatus(moved == 0
-                    ? "Aucun thème installé."
-                    : "Thème retiré (mis de côté dans atmosphere/themes_retires). Redémarre le menu HOME pour retrouver le thème d'origine.", ok: true);
+                    ? LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_QLaunchNoTheme]
+                    : LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_QLaunchThemeRemoved], ok: true);
             }
             catch (Exception ex)
             {
-                ShowStatus("Impossible de retirer le thème : " + ex.Message, ok: false);
+                ShowStatus(LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_QLaunchThemeRemoveFailed] + ex.Message, ok: false);
             }
         }
 
