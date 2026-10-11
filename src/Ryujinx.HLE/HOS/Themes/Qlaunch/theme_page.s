@@ -21,10 +21,18 @@
 ;   +0x020  u64   entry template layout name (pointer)
 ;   +0x028  u64   line template layout name (pointer)
 ;   +0x030  s32   theme picked on the page (added entry number), -1 for Basic White/Black
+;   +0x038  u64   the page while built (0 otherwise)
 ;   +0x040  char  entry template layout name
 ;   +0x080  char  line template layout name
 ;   +0x100  0x20 bytes per added entry: its object
 ;   +0x300  u64   per added entry: its line
+;   +0x3D4  u32   set by the emulator: the page is to be rebuilt (main_poll)
+;   +0x3D8  s32   the entry last picked (0 and 1: the page's own)
+;   +0x3DC  u32   the pages of a theme are shown (the page's own two entries named by the emulator)
+;   +0x3E0  u32   the added entries made (build), +0x3E4 how many to make
+;   +0x3E8  s32   the entry to focus when the page is rebuilt, -1 for the page's own choice
+;   +0x3EC  u32   the added entries shown (refresh); +0x000 how many to show
+;   +0x2400 the text of entry 0 in the pages of a theme (UTF-16), +0x2500 that of entry 1
 ;   +0x3F0  "NxThemes", the debug string sent when the page is built
 ;   +0x400  0x100 bytes per added entry: its name (UTF-16)
 ;   +0x1400 0x40 bytes per added entry: its picture (the page's picture holder, vtable 0x10E1118)
@@ -46,6 +54,7 @@
     b pick                        ; +0x1C
     b current                     ; +0x20
     b entry_button                ; +0x24
+    b main_poll                   ; +0x28
 
 ; ---------------------------------------------------------------------------------------------
 ; helpers for the page's own code (patched to call them; see build.py)
@@ -138,6 +147,7 @@ get_focused:
     mov x29, sp
     stp x19, x20, [sp, #0x10]
     mov x19, x0
+    mov x0, x19
     ldr x9, [x0, #0xb68]
     ldr x9, [x9, #0x18]
     ldr x1, [x9, #0x18]
@@ -160,6 +170,14 @@ get_focused_done:
 ; (it replaces one instruction: only x0, x16 and x17 may change)
 pick:
     adrp x16, @DATA
+    str w20, [x16, #0x3d8]
+    ldr w17, [x16, #0x3dc]
+    cbz w17, pick_entry
+    adrp x17, #0x425a000          ; the pages of a theme: the colour set in use stays
+    ldr x17, [x17, #0xd80]
+    ldr w0, [x17, #8]
+    ret
+pick_entry:
     subs w17, w20, #2
     b.ge pick_theme
     mov w17, #-1
@@ -176,6 +194,12 @@ pick_done:
 ; caller's colour state, at x9+8) -> w0
 current:
     adrp x8, @DATA
+    ldr w10, [x8, #0x3dc]
+    cbz w10, current_theme
+    ldr w0, [x8, #0x3e0]          ; the pages of a theme: the last entry made, never shown
+    add w0, w0, #1
+    ret
+current_theme:
     ldr w10, [x8, #4]
     tbnz w10, #31, current_colour
     add w0, w10, #2
@@ -210,7 +234,8 @@ build:
     bl #0x98ceb0                  ; Basic White, Basic Black
 
     adrp x23, @DATA
-    ldr w8, [x23]
+    str x19, [x23, #0x38]         ; the page, for the main loop hook
+    ldr w8, [x23, #0x3e4]
     cbz w8, build_done
     str x20, [x23, #8]
 
@@ -243,7 +268,7 @@ build:
     mov w24, wzr
 build_entry:
     adrp x23, @DATA
-    ldr w8, [x23]
+    ldr w8, [x23, #0x3e4]
     cmp w24, w8
     b.ge build_done
     cmp w24, #16
@@ -261,6 +286,12 @@ build_entry:
     b build_entry
 
 build_done:
+    adrp x8, @DATA                ; the entries made
+    ldr w9, [x8, #0x3e4]
+    cmp w9, #16
+    mov w10, #16
+    csel w9, w9, w10, le
+    str w9, [x8, #0x3e0]
     ldp x27, x28, [sp, #0xf0]
     ldp x25, x26, [sp, #0xe0]
     ldp x23, x24, [sp, #0xd0]
@@ -862,6 +893,175 @@ release_picture_done:
     ret
 
 ; ---------------------------------------------------------------------------------------------
+; an entry unchecked (as the page checks one: button+0x6C0 bit 0, then its functor at +0x690
+; given {button, 0, checked}): x0 = its button
+uncheck:
+    cbz x0, uncheck_done
+    ldrh w8, [x0, #0x6c0]
+    stp x29, x30, [sp, #-0x20]!
+    mov x29, sp
+    and w8, w8, #0xfffe
+    strh w8, [x0, #0x6c0]
+    mov x1, x0
+    ldr x0, [x0, #0x690]
+    cbz x0, uncheck_end
+    str x1, [sp, #0x10]
+    str wzr, [sp, #0x18]
+    strb wzr, [sp, #0x1c]
+    add x1, sp, #0x10
+    ldr x8, [x0]
+    ldr x8, [x8, #0x20]
+    blr x8
+uncheck_end:
+    ldp x29, x30, [sp], #0x20
+uncheck_done:
+    ret
+
+; ---------------------------------------------------------------------------------------------
+; the picture of an entry shown or not: x0 = its button, w1 = shown
+show_picture:
+    adrp x2, #0xbe4000
+    add x2, x2, #0x8cc            ; "P_Icon"
+    b show_pane
+; its check shown or not
+show_check:
+    adrp x2, #0xc12000
+    add x2, x2, #0xe89            ; "N_Check"
+; a pane of an entry shown or not: x0 = its button, w1 = shown, x2 = the pane's name
+show_pane:
+    cbz x0, show_picture_done
+    stp x29, x30, [sp, #-0x20]!
+    mov x29, sp
+    str x19, [sp, #0x10]
+    mov w19, w1
+    ldr x8, [x0, #0x20]
+    ldr x0, [x8, #0x18]
+    mov x1, x2
+    bl #0xb94e20
+    cbz x0, show_picture_end
+    ldrb w9, [x0, #0x58]
+    and w9, w9, #0xfe
+    orr w9, w9, w19
+    strb w9, [x0, #0x58]
+show_picture_end:
+    ldr x19, [sp, #0x10]
+    ldp x29, x30, [sp], #0x20
+show_picture_done:
+    ret
+
+; ---------------------------------------------------------------------------------------------
+; the text of an entry: x0 = its button, x1 = the text (UTF-16)
+set_text:
+    cbz x0, set_text_done
+    stp x29, x30, [sp, #-0x30]!
+    mov x29, sp
+    str x19, [sp, #0x20]
+    mov x19, x1
+    ldr x8, [x0, #0x20]
+    ldr x0, [x8, #0x18]
+    adrp x1, #0xbfe000
+    add x1, x1, #0xc8a            ; "T_00"
+    bl #0xb94e20
+    cbz x0, set_text_end
+    str x0, [sp, #0x10]
+    str x19, [sp, #0x18]
+    add x0, sp, #0x10
+    add x1, sp, #0x18
+    bl #0xb98e80
+set_text_end:
+    ldr x19, [sp, #0x20]
+    ldp x29, x30, [sp], #0x30
+set_text_done:
+    ret
+
+; ---------------------------------------------------------------------------------------------
+; the main loop, once a frame after the keys are handled (it replaces "ldr x8, [x19]" at
+; 0xBB90A4): the page rebuilt when the emulator asks (+0x3D4), its focus given back.
+main_poll:
+    stp x29, x30, [sp, #-0x50]!
+    mov x29, sp
+    stp x19, x20, [sp, #0x10]
+    stp x21, x22, [sp, #0x20]
+    adrp x20, @DATA
+    ldr w8, [x20, #0x3d4]
+    cbz w8, main_poll_done
+    str wzr, [x20, #0x3d4]
+    ldr x19, [x20, #0x38]
+    cbz x19, main_poll_done
+    ; the scrolling list's place kept (+0x30, +0x38, +0x98 the top, +0x40 the bottom, +0xA0)
+    ldr x8, [x19, #0xbc0]
+    ldr x22, [x8, #0x28]
+    cbz x22, main_poll_hide
+    ldr w8, [x22, #0x160]
+    str w8, [sp, #0x30]
+    ldr w8, [x22, #0x30]
+    str w8, [sp, #0x34]
+    ldr w8, [x22, #0x40]
+    str w8, [sp, #0x38]
+    ldr w8, [x22, #0xa0]
+    str w8, [sp, #0x3c]
+main_poll_hide:
+    ; the page left and shown again: its entries as the emulator wrote them (none is destroyed:
+    ; what was drawn with them may still be in use)
+    ldr x8, [x19]
+    ldr x8, [x8, #0x400]
+    mov x0, x19
+    blr x8                        ; deactivate
+    cbz x22, main_poll_show
+    mov x0, x22
+    bl #0xb30cb0                  ; the scrolling list emptied
+main_poll_show:
+    ldr x8, [x19]
+    ldr x8, [x8, #0x3c8]
+    mov x0, x19
+    blr x8                        ; refresh
+    ; the list back where it was, when it has as many entries or more
+    cbz x22, main_poll_focus
+    ldr w8, [x22, #0x160]
+    ldr w9, [sp, #0x30]
+    cmp w8, w9
+    b.lt main_poll_focus
+    ldr w8, [sp, #0x34]
+    str w8, [x22, #0x30]
+    str w8, [x22, #0x38]
+    str w8, [x22, #0x98]
+    ldr w8, [sp, #0x38]
+    str w8, [x22, #0x40]
+    ldr w8, [sp, #0x3c]
+    str w8, [x22, #0xa0]
+    mov x0, x22
+    movi d0, #0
+    movi d1, #0
+    bl #0xb30460
+main_poll_focus:
+    ; the focus on the entry the emulator asks for (as the page puts it on its first: 0xB05530)
+    ldr w1, [x20, #0x3e8]
+    tbnz w1, #31, main_poll_done
+    mov w8, #-1
+    str w8, [x20, #0x3e8]
+    mov x0, x19
+    bl entry_button
+    cbz x0, main_poll_done
+    ldr x21, [x0, #0x430]
+    ldr x8, [x19]
+    ldr x8, [x8, #0x368]
+    mov x0, x19
+    blr x8
+    ldr x0, [x0, #0x18]
+    mov x1, x21
+    mov w2, wzr
+    mov w3, wzr
+    bl #0xb05530
+main_poll_done:
+    ldp x21, x22, [sp, #0x20]
+    ldp x19, x20, [sp, #0x10]
+    ldp x29, x30, [sp], #0x50
+    ldr x8, [x19]
+    ret
+
+
+
+; ---------------------------------------------------------------------------------------------
 ; the page is shown: the original, then the added entries
 ; x0 = the page
 refresh:
@@ -875,6 +1075,17 @@ refresh:
     bl #0x98e2b0
 
     adrp x23, @DATA
+    ldr w8, [x23, #0x3dc]
+    cbz w8, refresh_own
+    ldr x0, [x19, #0xcd0]
+    add x1, x23, #0x2000
+    add x1, x1, #0x400
+    bl set_text
+    ldr x0, [x19, #0xcf0]
+    add x1, x23, #0x2000
+    add x1, x1, #0x500
+    bl set_text
+refresh_own:
     ldr w8, [x23]
     cbz w8, refresh_done
 
@@ -1027,6 +1238,75 @@ refresh_list_entry:
     b refresh_list_entry
 
 refresh_done:
+    ; the scrolling list placed again, the added entries with the page's (it places its own
+    ; before they are added)
+    ldr x8, [x19, #0xbc0]
+    ldr x0, [x8, #0x28]
+    cbz x0, refresh_placed
+    movi d0, #0
+    movi d1, #0
+    bl #0xb30460
+refresh_placed:
+    ; the entries shown (their pictures: not in the pages of a theme)
+    adrp x23, @DATA
+    ldr w9, [x23]
+    cmp w9, #16
+    mov w10, #16
+    csel w9, w9, w10, le
+    str w9, [x23, #0x3ec]
+    ldr w8, [x23, #0x3dc]
+    cmp w8, #0
+    cset w25, eq
+    ldr x0, [x19, #0xcd0]
+    mov w1, w25
+    bl show_picture
+    ldr x0, [x19, #0xcf0]
+    mov w1, w25
+    bl show_picture
+    ldr x0, [x19, #0xcd0]
+    mov w1, w25
+    bl show_check
+    ldr x0, [x19, #0xcf0]
+    mov w1, w25
+    bl show_check
+    mov w24, wzr
+refresh_pictures:
+    adrp x23, @DATA
+    ldr w8, [x23, #0x3ec]
+    cmp w24, w8
+    b.ge refresh_pictures_done
+    add x8, x23, #0x100
+    add x8, x8, x24, lsl #5
+    ldr x0, [x8, #0x10]
+    mov w1, w25
+    bl show_picture
+    adrp x23, @DATA
+    add x8, x23, #0x100
+    add x8, x8, x24, lsl #5
+    ldr x0, [x8, #0x10]
+    mov w1, w25
+    bl show_check
+    add w24, w24, #1
+    b refresh_pictures
+refresh_pictures_done:
+    cbnz w25, refresh_checks_done
+    ldr x0, [x19, #0xcd0]
+    bl uncheck
+    ldr x0, [x19, #0xcf0]
+    bl uncheck
+    mov w24, wzr
+refresh_checks:
+    adrp x23, @DATA
+    ldr w8, [x23, #0x3e0]
+    cmp w24, w8
+    b.ge refresh_checks_done
+    add x8, x23, #0x100
+    add x8, x8, x24, lsl #5
+    ldr x0, [x8, #0x10]
+    bl uncheck
+    add w24, w24, #1
+    b refresh_checks
+refresh_checks_done:
     ldp x25, x26, [sp, #0x130]
     ldp x23, x24, [sp, #0x120]
     ldp x21, x22, [sp, #0x110]
@@ -1221,11 +1501,16 @@ deactivate:
     mov w24, wzr
 deactivate_entry:
     adrp x23, @DATA
-    ldr w8, [x23]
+    ldr w8, [x23, #0x3ec]
     cmp w24, w8
     b.ge deactivate_done
     cmp w24, #16
     b.ge deactivate_done
+    ; hidden (the scrolling list may have shown it; emptied, it does not hide it)
+    mov x0, x19
+    add w1, w24, #2
+    bl hide_entry
+    adrp x23, @DATA
     ; the line off the page
     add x8, x23, #0x300
     ldr x20, [x8, x24, lsl #3]
@@ -1270,6 +1555,8 @@ deactivate_next:
     add w24, w24, #1
     b deactivate_entry
 deactivate_done:
+    adrp x8, @DATA
+    str wzr, [x8, #0x3ec]
     ldp x25, x26, [sp, #0x40]
     ldp x23, x24, [sp, #0x30]
     ldp x21, x22, [sp, #0x20]
@@ -1286,11 +1573,13 @@ destroy:
     stp x21, x22, [sp, #0x20]
     stp x23, x24, [sp, #0x30]
     mov x19, x0
+    adrp x8, @DATA
+    str xzr, [x8, #0x38]
 
     mov w24, wzr
 destroy_entry:
     adrp x23, @DATA
-    ldr w8, [x23]
+    ldr w8, [x23, #0x3e0]
     cmp w24, w8
     b.ge destroy_page
     cmp w24, #16
@@ -1336,6 +1625,8 @@ destroy_next:
     b destroy_entry
 
 destroy_page:
+    adrp x8, @DATA
+    str wzr, [x8, #0x3e0]
     mov x0, x19
     ldp x23, x24, [sp, #0x30]
     ldp x21, x22, [sp, #0x20]

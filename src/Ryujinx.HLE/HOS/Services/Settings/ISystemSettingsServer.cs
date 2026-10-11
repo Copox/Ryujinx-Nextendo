@@ -195,6 +195,8 @@ namespace Ryujinx.HLE.HOS.Services.Settings
                 }
             }
 
+            Ryujinx.HLE.HOS.Themes.QlaunchThemePage.SetLanguage(context.Device.System.State.DesiredSystemLanguage);
+
             return context.Device.System.State.ThemeColor;
         }
 

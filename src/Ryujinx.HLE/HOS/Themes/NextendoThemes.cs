@@ -157,6 +157,84 @@ namespace Ryujinx.HLE.HOS.Themes
             }
         }
 
+        /// <summary>The parts of a pack: their target and file.</summary>
+        public static List<(string Target, string File)> PartsOf(string pack)
+        {
+            List<(string Target, string File)> parts = [];
+            string path = Path.Combine(ThemesFolder, pack);
+            IEnumerable<string> files = Directory.Exists(path) ? Directory.GetFiles(path, "*.nxtheme") : File.Exists(path) ? [path] : [];
+            string[] order = ["home", "lock", "apps", "set", "news", "user", "psl"];
+
+            foreach (string file in files)
+            {
+                try
+                {
+                    parts.Add((ThemePart.Load(file).Target, file));
+                }
+                catch (Exception)
+                {
+                }
+            }
+
+            return parts.OrderBy(p => Array.IndexOf(order, p.Target) is int i and >= 0 ? i : order.Length).ToList();
+        }
+
+        /// <summary>The parts of the pack chosen left out (their targets), from the themes page.</summary>
+        public static HashSet<string> ExcludedTargets
+        {
+            get
+            {
+                try
+                {
+                    string[] lines = File.Exists(ChoicePath) ? File.ReadAllLines(ChoicePath) : [];
+
+                    return lines.Length > 1 && lines[1].StartsWith("exclude=", StringComparison.Ordinal)
+                        ? lines[1]["exclude=".Length..].Split(',', StringSplitOptions.RemoveEmptyEntries).ToHashSet()
+                        : [];
+                }
+                catch (Exception)
+                {
+                    return [];
+                }
+            }
+        }
+
+        /// <summary>A pack chosen with some of its parts left out.</summary>
+        public static void SetChoice(string pack, IEnumerable<string> excluded)
+        {
+            string left = string.Join(",", excluded ?? []);
+
+            Chosen = left.Length > 0 ? pack + "\nexclude=" + left : pack;
+        }
+
+        /// <summary>Files of a pack deleted (the pack's folder too once empty).</summary>
+        public static void Delete(string pack, IEnumerable<string> files)
+        {
+            string root = Path.GetFullPath(ThemesFolder);
+
+            foreach (string file in files)
+            {
+                string full = Path.GetFullPath(file);
+
+                if (full.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) && File.Exists(full))
+                {
+                    File.Delete(full);
+                }
+            }
+
+            string folder = Path.GetFullPath(Path.Combine(ThemesFolder, pack));
+
+            if (folder.StartsWith(root + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) && Directory.Exists(folder) && !Directory.EnumerateFileSystemEntries(folder).Any())
+            {
+                Directory.Delete(folder);
+            }
+
+            lock (_pictures)
+            {
+                _pictures.Remove(pack);
+            }
+        }
+
         /// <summary>The pack chosen (relative to /Themes), or null for the system's own look.</summary>
         public static string Chosen
         {
@@ -164,7 +242,7 @@ namespace Ryujinx.HLE.HOS.Themes
             {
                 try
                 {
-                    string chosen = File.Exists(ChoicePath) ? File.ReadAllText(ChoicePath).Trim() : "";
+                    string chosen = File.Exists(ChoicePath) ? File.ReadAllLines(ChoicePath).FirstOrDefault()?.Trim() ?? "" : "";
 
                     return chosen.Length > 0 ? chosen : null;
                 }
@@ -345,6 +423,8 @@ namespace Ryujinx.HLE.HOS.Themes
                 return [];
             }
 
+            HashSet<string> excluded = ExcludedTargets;
+
             if (_loaded.Pack == chosen)
             {
                 return _loaded.Parts;
@@ -371,6 +451,9 @@ namespace Ryujinx.HLE.HOS.Themes
             {
                 parts = parts.Where(p => only.Split(',').Contains(p.Target)).ToList();
             }
+
+            // The pages left out in the themes page.
+            parts = parts.Where(p => !excluded.Contains(p.Target)).ToList();
 
             _loaded = (chosen, parts);
 

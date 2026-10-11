@@ -37,7 +37,7 @@ open(os.path.join(here, 'theme_page.bin'), 'wb').write(code)
 
 # Changes to the program's own code, assembled at their place: (address, instructions).
 ENTRY = {'index_of_button': CAVE + 0x10, 'index_of_focus': CAVE + 0x14, 'get_focused': CAVE + 0x18,
-         'pick': CAVE + 0x1C, 'current': CAVE + 0x20, 'entry_button': CAVE + 0x24}
+         'pick': CAVE + 0x1C, 'current': CAVE + 0x20, 'entry_button': CAVE + 0x24, 'main_poll': CAVE + 0x28}
 PATCHES = [
     # the page's buttons: room for the added entries (it reserves 2)
     (0x98CEE0, ['mov w1, #18']),
@@ -52,9 +52,11 @@ PATCHES = [
     (0x98E064, ['str w0, [x8, #8]']),
     # page shown: the entry to check (the theme in use)
     (0x98E69C, [f'bl #{ENTRY["current"]:#x}', 'mov w8, w0', 'str w8, [x19, #0xd64]', 'b #0x98e6f8']),
-    (0x98E6F8, ['mov x0, x19', 'mov w1, w8', f'bl #{ENTRY["entry_button"]:#x}', 'mov x19, x0', 'b #0x98e710']),
+    (0x98E6F8, ['tbnz w8, #31, #0x98e7a0', 'mov x0, x19', 'mov w1, w8', f'bl #{ENTRY["entry_button"]:#x}', 'mov x19, x0', 'cbz x0, #0x98e7a0']),
     # the focused button
     (0x98EEF0, [f'b #{ENTRY["get_focused"]:#x}']),
+    # the main loop, once a frame after the keys: main_poll (it does "ldr x8, [x19]")
+    (0xBB90A4, [f'bl #{ENTRY["main_poll"]:#x}']),
 ]
 
 with open(os.path.join(here, 'theme_page.patches'), 'wb') as f:

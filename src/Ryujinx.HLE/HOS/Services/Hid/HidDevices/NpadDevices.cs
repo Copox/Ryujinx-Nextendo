@@ -172,6 +172,35 @@ namespace Ryujinx.HLE.HOS.Services.Hid
 
             Span<bool> updated = stackalloc bool[10];
 
+            // [Nextendo, HOME Menu themes] X on the themes page of the HOME Menu: the theme's pages.
+            bool x = false;
+
+            for (int i = 0; i < states.Count; ++i)
+            {
+                x |= states[i].Buttons.HasFlag(ControllerKeys.X);
+            }
+
+            HOS.Themes.QlaunchThemePage.OnPadX(x);
+
+            // ... and B there, back from the pages of a theme to the themes (not given to the HOME Menu).
+            bool b = false;
+
+            for (int i = 0; i < states.Count; ++i)
+            {
+                b |= states[i].Buttons.HasFlag(ControllerKeys.B);
+            }
+
+            if (HOS.Themes.QlaunchThemePage.OnPadB(b))
+            {
+                for (int i = 0; i < states.Count; ++i)
+                {
+                    GamepadInput state = states[i];
+
+                    state.Buttons &= ~ControllerKeys.B;
+                    states[i] = state;
+                }
+            }
+
             // Update configured inputs
             for (int i = 0; i < states.Count; ++i)
             {
