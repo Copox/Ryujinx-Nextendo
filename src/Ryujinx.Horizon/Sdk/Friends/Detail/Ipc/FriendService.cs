@@ -860,6 +860,13 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                         }
                     }
 
+                    // Two flags the "Trending With Friends" page reads before the entries (myPage
+                    // 22.5.0, 0x4DDC18): the record is valid (0x608) and the play history is
+                    // there (0x4A0, the history starting at 0x10). Either one at 0 and the friend's
+                    // games were left out: the page stayed empty.
+                    info[0x608] = 1;
+                    info[0x4A0] = (byte)(played.Count > 0 ? 1 : 0);
+
                     // The game being played now, for the top line of the page: its id sits at
                     // 0x570 (found by probing: the menu asks the title card of what is there).
                     if (entry.Status > 0 && entry.AppId != 0)
