@@ -41,7 +41,13 @@ namespace Ryujinx.Horizon.Ovln
             }
         }
 
-        /// <summary>A notification the emulator makes itself (tag and data as the overlay reads them).</summary>
+        private static readonly System.Collections.Concurrent.ConcurrentQueue<byte[]> _pending = new();
+
+        /// <summary>
+        /// A notification the emulator makes itself (tag and data as the overlay reads them). Kept
+        /// until a thread of the system sends it (OvlnNotifierMain): the receivers' events can only
+        /// be signalled from one.
+        /// </summary>
         public static void Notify(uint tag, ReadOnlySpan<byte> data)
         {
             byte[] message = new byte[0x80];
@@ -50,7 +56,16 @@ namespace Ryujinx.Horizon.Ovln
             BitConverter.TryWriteBytes(message.AsSpan(4, 4), (uint)Math.Min(data.Length, 0x78));
             data[..Math.Min(data.Length, 0x78)].CopyTo(message.AsSpan(8));
 
-            Send(message, false);
+            _pending.Enqueue(message);
+        }
+
+        /// <summary>The notifications made by the emulator, sent (from a thread of the system).</summary>
+        public static void SendPending()
+        {
+            while (_pending.TryDequeue(out byte[] message))
+            {
+                Send(message, false);
+            }
         }
     }
 }

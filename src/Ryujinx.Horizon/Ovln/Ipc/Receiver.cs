@@ -18,6 +18,20 @@ namespace Ryujinx.Horizon.Ovln.Ipc
             Os.CreateSystemEvent(out _receiveEvent, EventClearMode.AutoClear, interProcess: true).AbortOnFailure();
 
             OvlnQueue.Add(this);
+
+            // NX_OVLN_TEST="secs:tag:hexdata;secs:tag:hexdata": test messages (study of the overlay).
+            if (System.Environment.GetEnvironmentVariable("NX_OVLN_TEST") is { Length: > 0 } test)
+            {
+                new System.Threading.Thread(() =>
+                {
+                    foreach (string item in test.Split(';'))
+                    {
+                        string[] f = item.Split(':');
+                        System.Threading.Thread.Sleep((int)(double.Parse(f[0], System.Globalization.CultureInfo.InvariantCulture) * 1000));
+                        OvlnQueue.Notify(System.Convert.ToUInt32(f[1], 16), System.Convert.FromHexString(f.Length > 2 ? f[2] : ""));
+                    }
+                }) { IsBackground = true }.Start();
+            }
         }
 
         // [Nextendo, HOME Menu work] A notification for this receiver: kept, and the event signalled.

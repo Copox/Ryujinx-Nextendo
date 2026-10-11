@@ -164,7 +164,14 @@ namespace Ryujinx.Horizon.Sdk.Sf.Hipc
                 {
                     ProcessWaitList();
 
-                    MultiWaitHolder selected = _multiWait.WaitAny();
+                    MultiWaitHolder selected = Idle != null ? _multiWait.TimedWaitAny(IdleTimeout) : _multiWait.WaitAny();
+
+                    if (selected == null)
+                    {
+                        Idle?.Invoke();
+
+                        continue;
+                    }
 
                     if (selected == _requestStopEventHolder)
                     {
@@ -183,6 +190,14 @@ namespace Ryujinx.Horizon.Sdk.Sf.Hipc
                 }
             }
         }
+
+        /// <summary>
+        /// [Nextendo] Called on the server's thread when no request came for <see cref="IdleTimeout"/>
+        /// (nanoseconds): work of the server that does not come from a request.
+        /// </summary>
+        public Action Idle { get; set; }
+
+        public long IdleTimeout { get; set; } = 50_000_000;
 
         public void ResumeProcessing()
         {

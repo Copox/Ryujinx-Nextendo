@@ -37,6 +37,9 @@ namespace Ryujinx.Horizon.Ovln
 
         public void ServiceRequests()
         {
+            // [Nextendo] The notifications the emulator makes, sent from this thread (the receivers' events are this process's).
+            _serverManager.Idle = OvlnQueue.SendPending;
+
             _serverManager.ServiceRequests();
         }
 
