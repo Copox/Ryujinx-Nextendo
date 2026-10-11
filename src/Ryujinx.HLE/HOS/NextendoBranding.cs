@@ -39,6 +39,8 @@ namespace Ryujinx.HLE.HOS
             ["ko"] = "Nextendo 웹사이트",
             ["zh-CN"] = "Nextendo 网站",
             ["zh-TW"] = "Nextendo 網站",
+            ["pl"] = "Strona Nextendo",
+            ["th"] = "เว็บไซต์ Nextendo",
         };
 
         private static readonly Regex _address = new(
@@ -567,6 +569,8 @@ namespace Ryujinx.HLE.HOS
             "ko" => "사용자 지정",
             "zh-CN" => "自定义",
             "zh-TW" => "自訂",
+            "pl" => "Dostosuj",
+            "th" => "ปรับแต่ง",
             _ => "Customize",
         };
 

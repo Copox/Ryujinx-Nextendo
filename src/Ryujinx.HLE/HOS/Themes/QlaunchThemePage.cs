@@ -81,27 +81,298 @@ namespace Ryujinx.HLE.HOS.Themes
         private static List<(string Target, string File)> _menuParts = [];
         private static bool[] _menuOn = [];
         private static int _confirm = -1;
-        private static bool _french = true;
+        // The texts of the pages of a theme, in each language of the system (an entry shows
+        // about 21 characters: kept short).
+        private static string _language = "en";
 
-        private static readonly Dictionary<string, (string Fr, string En)> _targetNames = new()
+        private static readonly Dictionary<string, Dictionary<string, string>> _texts = new()
         {
-            ["home"] = ("Menu HOME", "HOME Menu"),
-            ["lock"] = ("Écran de verrouillage", "Lock screen"),
-            ["apps"] = ("Tous les logiciels", "All software"),
-            ["set"] = ("Paramètres de la console", "System Settings"),
-            ["news"] = ("Actualités", "News"),
-            ["user"] = ("Page utilisateur", "User page"),
-            ["psl"] = ("Choix de l'utilisateur", "User selection"),
+            ["en"] = new()
+            {
+                ["apply"] = "Apply this theme",
+                ["back"] = "Back to themes",
+                ["on"] = "on",
+                ["off"] = "off",
+                ["confirm"] = "Confirm deletion",
+                ["deleteOff"] = "Delete pages set off",
+                ["deleteAll"] = "Delete whole theme",
+                ["home"] = "HOME Menu",
+                ["lock"] = "Lock screen",
+                ["apps"] = "All software",
+                ["set"] = "System Settings",
+                ["news"] = "News",
+                ["user"] = "User page",
+                ["psl"] = "User selection",
+            },
+            ["fr"] = new()
+            {
+                ["apply"] = "Appliquer ce thème",
+                ["back"] = "Retour aux thèmes",
+                ["on"] = "oui",
+                ["off"] = "non",
+                ["confirm"] = "Confirmer la suppression",
+                ["deleteOff"] = "Supprimer les pages « non »",
+                ["deleteAll"] = "Supprimer tout le thème",
+                ["home"] = "Menu HOME",
+                ["lock"] = "Écran de verrouillage",
+                ["apps"] = "Tous les logiciels",
+                ["set"] = "Paramètres de la console",
+                ["news"] = "Actualités",
+                ["user"] = "Page utilisateur",
+                ["psl"] = "Choix de l'utilisateur",
+            },
+            ["de"] = new()
+            {
+                ["apply"] = "Design anwenden",
+                ["back"] = "Zurück zu Designs",
+                ["on"] = "an",
+                ["off"] = "aus",
+                ["confirm"] = "Löschen bestätigen",
+                ["deleteOff"] = "Inaktive Seiten löschen",
+                ["deleteAll"] = "Ganzes Design löschen",
+                ["home"] = "HOME-Menü",
+                ["lock"] = "Sperrbildschirm",
+                ["apps"] = "Alle Software",
+                ["set"] = "Systemeinstellungen",
+                ["news"] = "Neuigkeiten",
+                ["user"] = "Nutzerseite",
+                ["psl"] = "Nutzerauswahl",
+            },
+            ["es"] = new()
+            {
+                ["apply"] = "Aplicar este tema",
+                ["back"] = "Volver a los temas",
+                ["on"] = "sí",
+                ["off"] = "no",
+                ["confirm"] = "Confirmar borrado",
+                ["deleteOff"] = "Borrar páginas en «no»",
+                ["deleteAll"] = "Borrar todo el tema",
+                ["home"] = "Menú HOME",
+                ["lock"] = "Pantalla de bloqueo",
+                ["apps"] = "Todos los programas",
+                ["set"] = "Configuración",
+                ["news"] = "Noticias",
+                ["user"] = "Página de usuario",
+                ["psl"] = "Elegir usuario",
+            },
+            ["it"] = new()
+            {
+                ["apply"] = "Applica questo tema",
+                ["back"] = "Torna ai temi",
+                ["on"] = "sì",
+                ["off"] = "no",
+                ["confirm"] = "Conferma eliminazione",
+                ["deleteOff"] = "Elimina pagine «no»",
+                ["deleteAll"] = "Elimina tutto il tema",
+                ["home"] = "Menu HOME",
+                ["lock"] = "Schermata di blocco",
+                ["apps"] = "Tutti i software",
+                ["set"] = "Impostazioni",
+                ["news"] = "Notizie",
+                ["user"] = "Pagina utente",
+                ["psl"] = "Scelta utente",
+            },
+            ["nl"] = new()
+            {
+                ["apply"] = "Thema toepassen",
+                ["back"] = "Terug naar thema's",
+                ["on"] = "aan",
+                ["off"] = "uit",
+                ["confirm"] = "Verwijderen bevestigen",
+                ["deleteOff"] = "Pagina's 'uit' wissen",
+                ["deleteAll"] = "Heel thema wissen",
+                ["home"] = "HOME-menu",
+                ["lock"] = "Vergrendelscherm",
+                ["apps"] = "Alle software",
+                ["set"] = "Systeeminstellingen",
+                ["news"] = "Nieuws",
+                ["user"] = "Gebruikerspagina",
+                ["psl"] = "Gebruiker kiezen",
+            },
+            ["pt"] = new()
+            {
+                ["apply"] = "Aplicar este tema",
+                ["back"] = "Voltar aos temas",
+                ["on"] = "sim",
+                ["off"] = "não",
+                ["confirm"] = "Confirmar eliminação",
+                ["deleteOff"] = "Apagar páginas «não»",
+                ["deleteAll"] = "Apagar todo o tema",
+                ["home"] = "Menu HOME",
+                ["lock"] = "Ecrã de bloqueio",
+                ["apps"] = "Todo o software",
+                ["set"] = "Definições",
+                ["news"] = "Notícias",
+                ["user"] = "Página do utilizador",
+                ["psl"] = "Escolher utilizador",
+            },
+            ["pt-BR"] = new()
+            {
+                ["apply"] = "Aplicar este tema",
+                ["back"] = "Voltar aos temas",
+                ["on"] = "sim",
+                ["off"] = "não",
+                ["confirm"] = "Confirmar exclusão",
+                ["deleteOff"] = "Excluir páginas «não»",
+                ["deleteAll"] = "Excluir todo o tema",
+                ["home"] = "Menu HOME",
+                ["lock"] = "Tela de bloqueio",
+                ["apps"] = "Todos os softwares",
+                ["set"] = "Configurações",
+                ["news"] = "Notícias",
+                ["user"] = "Página do usuário",
+                ["psl"] = "Escolher usuário",
+            },
+            ["ru"] = new()
+            {
+                ["apply"] = "Применить тему",
+                ["back"] = "Назад к темам",
+                ["on"] = "вкл.",
+                ["off"] = "выкл.",
+                ["confirm"] = "Подтвердить удаление",
+                ["deleteOff"] = "Удалить выкл. страницы",
+                ["deleteAll"] = "Удалить всю тему",
+                ["home"] = "Меню HOME",
+                ["lock"] = "Экран блокировки",
+                ["apps"] = "Все программы",
+                ["set"] = "Настройки системы",
+                ["news"] = "Новости",
+                ["user"] = "Страница пользователя",
+                ["psl"] = "Выбор пользователя",
+            },
+            ["ja"] = new()
+            {
+                ["apply"] = "このテーマを適用",
+                ["back"] = "テーマ一覧に戻る",
+                ["on"] = "オン",
+                ["off"] = "オフ",
+                ["confirm"] = "削除を確定",
+                ["deleteOff"] = "オフのページを削除",
+                ["deleteAll"] = "テーマをすべて削除",
+                ["home"] = "HOMEメニュー",
+                ["lock"] = "ロック画面",
+                ["apps"] = "すべてのソフト",
+                ["set"] = "設定",
+                ["news"] = "ニュース",
+                ["user"] = "ユーザーページ",
+                ["psl"] = "ユーザー選択",
+            },
+            ["ko"] = new()
+            {
+                ["apply"] = "이 테마 적용",
+                ["back"] = "테마로 돌아가기",
+                ["on"] = "켜짐",
+                ["off"] = "꺼짐",
+                ["confirm"] = "삭제 확인",
+                ["deleteOff"] = "꺼진 페이지 삭제",
+                ["deleteAll"] = "테마 전체 삭제",
+                ["home"] = "HOME 메뉴",
+                ["lock"] = "잠금 화면",
+                ["apps"] = "모든 소프트웨어",
+                ["set"] = "설정",
+                ["news"] = "뉴스",
+                ["user"] = "유저 페이지",
+                ["psl"] = "유저 선택",
+            },
+            ["zh-Hans"] = new()
+            {
+                ["apply"] = "应用此主题",
+                ["back"] = "返回主题",
+                ["on"] = "开",
+                ["off"] = "关",
+                ["confirm"] = "确认删除",
+                ["deleteOff"] = "删除关闭的页面",
+                ["deleteAll"] = "删除整个主题",
+                ["home"] = "HOME菜单",
+                ["lock"] = "锁定画面",
+                ["apps"] = "所有软件",
+                ["set"] = "设置",
+                ["news"] = "新闻",
+                ["user"] = "用户页面",
+                ["psl"] = "选择用户",
+            },
+            ["zh-Hant"] = new()
+            {
+                ["apply"] = "套用此主題",
+                ["back"] = "返回主題",
+                ["on"] = "開",
+                ["off"] = "關",
+                ["confirm"] = "確認刪除",
+                ["deleteOff"] = "刪除關閉的頁面",
+                ["deleteAll"] = "刪除整個主題",
+                ["home"] = "HOME選單",
+                ["lock"] = "鎖定畫面",
+                ["apps"] = "所有軟體",
+                ["set"] = "設定",
+                ["news"] = "新聞",
+                ["user"] = "使用者頁面",
+                ["psl"] = "選擇使用者",
+            },
+            ["pl"] = new()
+            {
+                ["apply"] = "Zastosuj motyw",
+                ["back"] = "Wróć do motywów",
+                ["on"] = "wł.",
+                ["off"] = "wył.",
+                ["confirm"] = "Potwierdź usunięcie",
+                ["deleteOff"] = "Usuń wyłączone strony",
+                ["deleteAll"] = "Usuń cały motyw",
+                ["home"] = "Menu HOME",
+                ["lock"] = "Ekran blokady",
+                ["apps"] = "Całe oprogramowanie",
+                ["set"] = "Ustawienia",
+                ["news"] = "Aktualności",
+                ["user"] = "Strona użytkownika",
+                ["psl"] = "Wybór użytkownika",
+            },
+            ["th"] = new()
+            {
+                ["apply"] = "ใช้ธีมนี้",
+                ["back"] = "กลับไปที่ธีม",
+                ["on"] = "เปิด",
+                ["off"] = "ปิด",
+                ["confirm"] = "ยืนยันการลบ",
+                ["deleteOff"] = "ลบหน้าที่ปิด",
+                ["deleteAll"] = "ลบทั้งธีม",
+                ["home"] = "เมนู HOME",
+                ["lock"] = "หน้าจอล็อก",
+                ["apps"] = "ซอฟต์แวร์ทั้งหมด",
+                ["set"] = "การตั้งค่า",
+                ["news"] = "ข่าว",
+                ["user"] = "หน้าผู้ใช้",
+                ["psl"] = "เลือกผู้ใช้",
+            },
         };
 
         /// <summary>The language of the system, for the texts of the pages of a theme.</summary>
-        public static void SetLanguage(SystemState.SystemLanguage language) =>
-            _french = language is SystemState.SystemLanguage.French or SystemState.SystemLanguage.CanadianFrench;
+        public static void SetLanguage(SystemState.SystemLanguage language) => _language = language switch
+        {
+            SystemState.SystemLanguage.French => "fr",
+            SystemState.SystemLanguage.CanadianFrench => "fr",
+            SystemState.SystemLanguage.German => "de",
+            SystemState.SystemLanguage.Spanish => "es",
+            SystemState.SystemLanguage.LatinAmericanSpanish => "es",
+            SystemState.SystemLanguage.Italian => "it",
+            SystemState.SystemLanguage.Dutch => "nl",
+            SystemState.SystemLanguage.Portuguese => "pt",
+            SystemState.SystemLanguage.BrazilianPortuguese => "pt-BR",
+            SystemState.SystemLanguage.Russian => "ru",
+            SystemState.SystemLanguage.Japanese => "ja",
+            SystemState.SystemLanguage.Korean => "ko",
+            SystemState.SystemLanguage.Chinese => "zh-Hans",
+            SystemState.SystemLanguage.SimplifiedChinese => "zh-Hans",
+            SystemState.SystemLanguage.Taiwanese => "zh-Hant",
+            SystemState.SystemLanguage.TraditionalChinese => "zh-Hant",
+            SystemState.SystemLanguage.Polish => "pl",
+            SystemState.SystemLanguage.Thai => "th",
+            _ => "en",
+        };
 
-        private static string Text(string fr, string en) => _french ? fr : en;
+        private static string Text(string key) =>
+            (_texts.TryGetValue(_language, out var texts) && texts.TryGetValue(key, out string text)) ? text : _texts["en"][key];
 
-        private static string TargetName(string target) =>
-            _targetNames.TryGetValue(target ?? "", out var name) ? Text(name.Fr, name.En) : target;
+        private static string TargetName(string target) => target is "home" or "lock" or "apps" or "set" or "news" or "user" or "psl" ? Text(target) : target;
+
 
         // The entries of the pages of a theme after its parts (added entry numbers).
         private static int DeleteOffRow => _menuParts.Count;
@@ -663,12 +934,12 @@ namespace Ryujinx.HLE.HOS.Themes
             Encoding.ASCII.GetBytes(RefreshSignal).CopyTo(data.AsSpan(0x3F0));
             BinaryPrimitives.WriteInt32LittleEndian(data.AsSpan(0x3E8), -1);
 
-            WriteName(data, 0x2400, Text("Appliquer ce thème", "Apply this theme"));
-            WriteName(data, 0x2500, Text("Retour aux thèmes", "Back to themes"));
+            WriteName(data, 0x2400, Text("apply"));
+            WriteName(data, 0x2500, Text("back"));
 
             for (int i = 0; i < _menuParts.Count && i < count; i++)
             {
-                string state = _menuOn[i] ? Text("oui", "on") : Text("non", "off");
+                string state = _menuOn[i] ? Text("on") : Text("off");
 
                 WriteName(data, 0x400 + 0x100 * i, $"{TargetName(_menuParts[i].Target)} : {state}");
             }
@@ -676,15 +947,15 @@ namespace Ryujinx.HLE.HOS.Themes
             if (DeleteOffRow < count)
             {
                 WriteName(data, 0x400 + 0x100 * DeleteOffRow, _confirm == DeleteOffRow
-                    ? Text("Confirmer la suppression", "Confirm deletion")
-                    : Text("Supprimer les pages « non »", "Delete the pages set off"));
+                    ? Text("confirm")
+                    : Text("deleteOff"));
             }
 
             if (DeleteAllRow < count)
             {
                 WriteName(data, 0x400 + 0x100 * DeleteAllRow, _confirm == DeleteAllRow
-                    ? Text("Confirmer la suppression", "Confirm deletion")
-                    : Text("Supprimer tout le thème", "Delete the whole theme"));
+                    ? Text("confirm")
+                    : Text("deleteAll"));
             }
 
             // The entries of the parts show the wallpaper of their page (paths at 0x1800, as the

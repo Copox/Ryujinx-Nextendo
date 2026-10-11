@@ -469,18 +469,50 @@ namespace Ryujinx.HLE.HOS.Services.Settings
         }
 
         // [Nextendo, HOME Menu work] The initial setup of the console (the firmware's starter)
-        // runs on the first launch only. Decided once per run: the setup itself writes settings
-        // (the colour set) that would otherwise make it look done halfway. Data the HOME Menu
-        // already ran on (its colour set saved) counts as set up: testers are not sent through it
-        // again. NEXTENDO_FIRST_SETUP=1 sends any data through it (tests).
+        // runs once, on data never used before: an update of the emulator (from the HOME Menu or
+        // the emulator) changes the program, never the data, so it does not bring it back. Data
+        // is "used" when it holds the mark of a finished setup, or when the emulator's own files
+        // (its configuration, its users) were there before this run started. Decided once per run:
+        // the setup itself writes those files halfway.
+        // Off until it is finished (StarterReady); NEXTENDO_FIRST_SETUP=1 runs it on any data (tests).
+        private const bool StarterReady = false;
+
         private static bool? _initialSetupDone;
 
         private static string InitialSetupPath => System.IO.Path.Combine(Ryujinx.Common.Configuration.AppDataManager.BaseDirPath, "nextendo_initial_setup.txt");
 
-        public static bool InitialSetupDone => _initialSetupDone ??=
-            System.Environment.GetEnvironmentVariable("NEXTENDO_FIRST_SETUP") != "1" &&
-            (System.IO.File.Exists(InitialSetupPath) ||
-             System.IO.File.Exists(System.IO.Path.Combine(Ryujinx.Common.Configuration.AppDataManager.BaseDirPath, "nextendo_color_set.txt")));
+        public static bool InitialSetupDone => _initialSetupDone ??= DecideInitialSetupDone();
+
+        private static bool DecideInitialSetupDone()
+        {
+            if (System.Environment.GetEnvironmentVariable("NEXTENDO_FIRST_SETUP") == "1")
+            {
+                return false;
+            }
+
+            if (!StarterReady || System.IO.File.Exists(InitialSetupPath))
+            {
+                return true;
+            }
+
+            string baseDir = Ryujinx.Common.Configuration.AppDataManager.BaseDirPath;
+            System.DateTime started = System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime();
+
+            foreach (string file in new[] { "Config.json", System.IO.Path.Combine("system", "Profiles.json"), "nextendo_color_set.txt" })
+            {
+                string path = System.IO.Path.Combine(baseDir, file);
+
+                if (System.IO.File.Exists(path) && System.IO.File.GetCreationTimeUtc(path) < started)
+                {
+                    // Used before: kept as set up, without asking again.
+                    MarkInitialSetupDone();
+
+                    return true;
+                }
+            }
+
+            return false;
+        }
 
         public static void MarkInitialSetupDone()
         {
