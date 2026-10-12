@@ -52,6 +52,7 @@ namespace Ryujinx.HLE.HOS.Themes
                 ["shadercache"] = "Shader cache", ["recompression"] = "Tex. recompress", ["macrohle"] = "Macro HLE",
                 ["on"] = "On", ["off"] = "Off", ["auto"] = "Auto", ["native"] = "Native", ["tv"] = "TV", ["handheld"] = "Handheld",
                 ["stretch"] = "Stretched",
+                ["restart"] = "To apply these settings, Ryujinx | Nextendo needs to restart:",
             },
             ["fr"] = new()
             {
@@ -60,6 +61,7 @@ namespace Ryujinx.HLE.HOS.Themes
                 ["shadercache"] = "Cache shaders", ["recompression"] = "Recomp. textures", ["macrohle"] = "Macro HLE",
                 ["on"] = "Oui", ["off"] = "Non", ["auto"] = "Auto", ["native"] = "Native", ["tv"] = "TV", ["handheld"] = "Portable",
                 ["stretch"] = "Étiré",
+                ["restart"] = "Pour appliquer ces paramètres, Ryujinx | Nextendo doit redémarrer :",
             },
             ["es"] = new()
             {
@@ -68,6 +70,7 @@ namespace Ryujinx.HLE.HOS.Themes
                 ["shadercache"] = "Caché shaders", ["recompression"] = "Recomp. texturas", ["macrohle"] = "Macro HLE",
                 ["on"] = "Sí", ["off"] = "No", ["auto"] = "Auto", ["native"] = "Nativa", ["tv"] = "TV", ["handheld"] = "Portátil",
                 ["stretch"] = "Estirado",
+                ["restart"] = "Para aplicar estos ajustes, Ryujinx | Nextendo debe reiniciarse:",
             },
             ["de"] = new()
             {
@@ -76,6 +79,7 @@ namespace Ryujinx.HLE.HOS.Themes
                 ["shadercache"] = "Shader-Cache", ["recompression"] = "Textur-Komp.", ["macrohle"] = "Macro HLE",
                 ["on"] = "An", ["off"] = "Aus", ["auto"] = "Auto", ["native"] = "Nativ", ["tv"] = "TV", ["handheld"] = "Handheld",
                 ["stretch"] = "Gestreckt",
+                ["restart"] = "Um diese Einstellungen zu übernehmen, muss Ryujinx | Nextendo neu starten:",
             },
             ["it"] = new()
             {
@@ -84,6 +88,7 @@ namespace Ryujinx.HLE.HOS.Themes
                 ["shadercache"] = "Cache shader", ["recompression"] = "Ricomp. texture", ["macrohle"] = "Macro HLE",
                 ["on"] = "Sì", ["off"] = "No", ["auto"] = "Auto", ["native"] = "Nativa", ["tv"] = "TV", ["handheld"] = "Portatile",
                 ["stretch"] = "Allungato",
+                ["restart"] = "Per applicare queste impostazioni, Ryujinx | Nextendo deve riavviarsi:",
             },
             ["pt"] = new()
             {
@@ -92,6 +97,7 @@ namespace Ryujinx.HLE.HOS.Themes
                 ["shadercache"] = "Cache shaders", ["recompression"] = "Recomp. texturas", ["macrohle"] = "Macro HLE",
                 ["on"] = "Sim", ["off"] = "Não", ["auto"] = "Auto", ["native"] = "Nativa", ["tv"] = "TV", ["handheld"] = "Portátil",
                 ["stretch"] = "Esticado",
+                ["restart"] = "Para aplicar estas configurações, o Ryujinx | Nextendo precisa reiniciar:",
             },
             ["ja"] = new()
             {
@@ -100,6 +106,7 @@ namespace Ryujinx.HLE.HOS.Themes
                 ["shadercache"] = "シェーダー", ["recompression"] = "テクスチャ圧縮", ["macrohle"] = "Macro HLE",
                 ["on"] = "ON", ["off"] = "OFF", ["auto"] = "自動", ["native"] = "ネイティブ", ["tv"] = "TV", ["handheld"] = "携帯",
                 ["stretch"] = "引き伸ばし",
+                ["restart"] = "これらの設定を反映するには、Ryujinx | Nextendoを再起動する必要があります：",
             },
         };
 
@@ -171,6 +178,114 @@ namespace Ryujinx.HLE.HOS.Themes
             }
         }
 
+        // ---- Settings read when the emulation starts: a restart, or their old values ----
+
+        // The settings changed that need a restart (their rows), with the values they had.
+        private static readonly Dictionary<int, int> _changed = [];
+
+        /// <summary>Settings that need a restart were changed in the section.</summary>
+        public static bool RestartPending => _changed.Count > 0;
+
+        /// <summary>The settings that need a restart, in order (their rows).</summary>
+        private static List<int> RestartRows()
+        {
+            List<int> rows = [];
+            IReadOnlyList<NextendoEmulatorSetting> settings = NextendoEmulatorSettings.List;
+
+            for (int i = 0; i < settings.Count; i++)
+            {
+                if (settings[i].Restart)
+                {
+                    rows.Add(i);
+                }
+            }
+
+            return rows;
+        }
+
+        /// <summary>The label of the restart dialog's body for some settings (a bit each).</summary>
+        public static string RestartLabel(int mask) => $"Nx_SetRst_{mask}";
+
+        /// <summary>The bodies of the restart dialog: (label, text) for each set of settings.</summary>
+        public static IEnumerable<(string Label, string Text)> RestartBodies(string language)
+        {
+            IReadOnlyList<NextendoEmulatorSetting> settings = NextendoEmulatorSettings.List;
+            List<int> rows = RestartRows();
+
+            for (int mask = 1; mask < (1 << rows.Count); mask++)
+            {
+                StringBuilder text = new(Text("restart", language));
+
+                text.Append('\n');
+
+                for (int bit = 0; bit < rows.Count; bit++)
+                {
+                    if ((mask & (1 << bit)) != 0)
+                    {
+                        text.Append("\n• ").Append(Text(settings[rows[bit]].Key, language));
+                    }
+                }
+
+                yield return (RestartLabel(mask), text.ToString());
+            }
+        }
+
+        /// <summary>The restart dialog asked (by the added code, once a frame): which settings.</summary>
+        public static void AskRestart(KProcess process, ulong dataAddress)
+        {
+            List<int> rows = RestartRows();
+            int mask = 0;
+
+            for (int bit = 0; bit < rows.Count; bit++)
+            {
+                if (_changed.ContainsKey(rows[bit]))
+                {
+                    mask |= 1 << bit;
+                }
+            }
+
+            if (mask == 0)
+            {
+                return;
+            }
+
+            byte[] label = Encoding.ASCII.GetBytes(RestartLabel(mask) + "\0");
+
+            process.CpuMemory.Write(dataAddress + 0x6200, label);
+            process.CpuMemory.Write(dataAddress + 0x6110, dataAddress + 0x6200);
+            process.CpuMemory.Write(dataAddress + 0x610C, 1);
+        }
+
+        /// <summary>
+        /// The restart dialog answered: restart (the settings are kept), or the settings as they
+        /// were. True when the entries are to be shown again.
+        /// </summary>
+        public static bool TakeRestartAnswer(KProcess process, ulong dataAddress)
+        {
+            int button = process.CpuMemory.Read<int>(dataAddress + 0x6108);
+
+            if (button == 0)
+            {
+                Logger.Info?.Print(LogClass.ServiceSet, "[settings] restart to apply the settings");
+                _changed.Clear();
+                HomeMenuStatus.RequestPower(true);
+
+                return false;
+            }
+
+            IReadOnlyList<NextendoEmulatorSetting> settings = NextendoEmulatorSettings.List;
+
+            foreach ((int row, int value) in _changed)
+            {
+                settings[row].Set(value);
+            }
+
+            Logger.Info?.Print(LogClass.ServiceSet, $"[settings] {_changed.Count} setting(s) back as they were");
+            _changed.Clear();
+
+            return true;
+        }
+
         /// <summary>An entry picked: its box opened (by the added code, the choice in use ticked).</summary>
         public static void Open(KProcess process, ulong dataAddress, int row)
         {
@@ -197,6 +312,24 @@ namespace Ryujinx.HLE.HOS.Themes
             if (row < 0 || row >= settings.Count || choice < 0 || choice >= settings[row].Values.Length)
             {
                 return -1;
+            }
+
+            NextendoEmulatorSetting changed = settings[row];
+
+            // read when the emulation starts: the value it had is kept, to give it back
+            if (changed.Restart)
+            {
+                int before = Math.Clamp(changed.Get(), 0, changed.Values.Length - 1);
+
+                if (!_changed.ContainsKey(row))
+                {
+                    _changed[row] = before;
+                }
+
+                if (_changed[row] == choice)
+                {
+                    _changed.Remove(row);
+                }
             }
 
             settings[row].Set(choice);

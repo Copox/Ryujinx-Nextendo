@@ -1976,6 +1976,11 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
                 return;
             }
 
+            if (str == "NxSetRst" && HOS.Themes.QlaunchThemePage.TakeRestartAnswer(process))
+            {
+                return;
+            }
+
             Logger.Warning?.Print(LogClass.KernelSvc, str);
         }
 

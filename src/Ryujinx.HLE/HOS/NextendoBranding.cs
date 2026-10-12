@@ -202,6 +202,16 @@ namespace Ryujinx.HLE.HOS
                             }
                         }
                     }
+
+                    // the restart dialog's bodies (the buttons of the language's: Cancel, Restart)
+                    foreach ((string label, string text) in Themes.QlaunchSettingsPage.RestartBodies(language))
+                    {
+                        if (AddMsbtLabel(patched, label, text, "SetCntHardware_DlgBodyLanguageRestartConfirm") is { } withBody)
+                        {
+                            patched = withBody;
+                            count++;
+                        }
+                    }
                 }
 
                 if (count > 0)
@@ -447,6 +457,24 @@ namespace Ryujinx.HLE.HOS
                 }
 
                 archive.Files["blyt/SetBtnListCheckTheme_.bflyt"] = entry.Write();
+
+                // "Ryujinx | Nextendo" (the Bluetooth Audio entry, N_Sound) under System: the menu
+                // shows its entries in the order of its layout.
+                if (archive.Files.TryGetValue("blyt/SetBaseNav.bflyt", out byte[] navData))
+                {
+                    Themes.LayoutFile nav = new(navData);
+                    int sound = nav.FindPane("N_Sound");
+
+                    if (sound >= 0 && nav.FindPane("N_Btm") > sound)
+                    {
+                        (int first, int end) = nav.Subtree(sound);
+                        List<Themes.LayoutFile.Section> moved = nav.Sections.GetRange(first, end - first);
+
+                        nav.Sections.RemoveRange(first, end - first);
+                        nav.Sections.InsertRange(nav.FindPane("N_Btm"), moved);
+                        archive.Files["blyt/SetBaseNav.bflyt"] = nav.Write();
+                    }
+                }
 
                 return archive.Write();
             }

@@ -62,6 +62,9 @@
     b settings_scene              ; +0x30
     b themes_scene                ; +0x34
     b uses_select_boxes           ; +0x38 (vtable slot +0x420 of the page)
+    b restart_callback_copy       ; +0x3C (the restart dialog's callbacks: their vtables)
+    b restart_callback_buttons    ; +0x40
+    b restart_callback_dialog     ; +0x44
 
 ; ---------------------------------------------------------------------------------------------
 ; [Nextendo, HOME Menu work] The settings menu builds the page of a section (a switch on its
@@ -2100,8 +2103,13 @@ select_box_fields:
     strb wzr, [x0, #0x174]
     ret
 
-; once a frame: a box to open (asked by the emulator): its choice in use ticked, then shown
+; once a frame: the restart dialog (asked by the emulator, or its answer), then a box to open
+; (asked by the emulator): its choice in use ticked, then shown
 settings_poll:
+    stp x29, x30, [sp, #-0x10]!
+    mov x29, sp
+    bl restart_dialog_poll
+    ldp x29, x30, [sp], #0x10
     adrp x8, @DATA
     ldr w9, [x8, #0x3c4]
     cbz w9, settings_poll_done
@@ -2271,6 +2279,142 @@ settings_free_done:
     ldp x29, x30, [sp], #0x30
     ret
 
+
+; ---------------------------------------------------------------------------------------------
+; [Nextendo, HOME Menu work] The restart dialog of the "Ryujinx | Nextendo" section: settings
+; read when the emulation starts were changed, the user leaves the section (B): the system's
+; dialog, as System's for a new language (0x894C80): its parameters (0x170 bytes), the body's
+; label (0xB1BE00: its attributes give the buttons), two callbacks, shown by the dialog manager
+; (0x4254550, 0xB21640). The second callback gets the dialog: its state (+0x24, 4 when over) and
+; the button (+0xAF0, 0 to go on) are read once a frame (as System does).
+; Data page:
+;   +0x6000 the callbacks' vtables (written by the emulator: 6 u64 each, the second at +0x30)
+;   +0x6100 u64  the dialog (from the second callback)
+;   +0x6108 s32  the button (from the first), +0x610C u32 the dialog is asked (by the emulator)
+;   +0x6110 u64  the body's label (a pointer, written by the emulator)
+
+restart_dialog_poll:
+    sub sp, sp, #0x240
+    stp x29, x30, [sp]
+    mov x29, sp
+    stp x19, x20, [sp, #0x10]
+    stp x21, x22, [sp, #0x20]
+    adrp x20, @DATA
+    add x20, x20, #0x6000
+    ldr w8, [x20, #0x10c]
+    cbz w8, restart_dialog_end
+    str wzr, [x20, #0x10c]
+    adrp x8, @DATA
+    ldr x19, [x8, #0x38]          ; the page
+    cbz x19, restart_dialog_end
+    ; the parameters (S at sp+0x40, 0x170 bytes), zero first
+    add x21, sp, #0x40
+    mov x9, #0
+restart_dialog_zero:
+    str xzr, [x21, x9]
+    add x9, x9, #8
+    cmp x9, #0x170
+    b.lt restart_dialog_zero
+    mov x9, #0x100000000
+    str x9, [x21, #0x10]
+    adrp x9, #0xef9000
+    add x9, x9, #0x4c             ; ""
+    stp x9, x9, [x21, #0x38]
+    stp x9, x9, [x21, #0x48]
+    str x9, [x21, #0x148]
+    mov w9, #1
+    strb w9, [x21, #0x140]
+    adrp x9, #0x108a000
+    add x9, x9, #0x988            ; the callbacks' holder
+    str x9, [x21, #0x80]
+    str x9, [x21, #0xb0]
+    str x9, [x21, #0xe0]
+    str x9, [x21, #0x110]
+    str x9, [x21, #0x158]
+    ; the first callback (the buttons), inline
+    add x10, x21, #0x90
+    str x10, [x21, #0x88]
+    str x20, [x10]                ; vtable +0x6000
+    str x19, [x10, #8]
+    ; the second (the dialog), inline
+    add x10, x21, #0x160
+    add x10, x10, #8
+    str x10, [x21, #0x160]
+    add x11, x20, #0x30
+    str x11, [x10]                ; vtable +0x6030
+    str x19, [x10, #8]
+    ; the body
+    mov x0, x21
+    ldr x1, [x20, #0x110]
+    cbz x1, restart_dialog_end
+    bl #0xb1be00
+    ; the page's defaults (as System's)
+    ldr x8, [x21]
+    cbnz x8, restart_dialog_d1
+    ldr x8, [x19, #0x50]
+    add x8, x8, #0x28
+    str x8, [x21]
+restart_dialog_d1:
+    ldr x8, [x21, #0x78]
+    cbnz x8, restart_dialog_d2
+    add x8, x19, #0x488
+    str x8, [x21, #0x78]
+restart_dialog_d2:
+    ldr x8, [x21, #0x70]
+    cbnz x8, restart_dialog_show
+    add x8, x19, #0x2b8
+    str x8, [x21, #0x70]
+restart_dialog_show:
+    ; the dialog callback once more, for the manager (F at sp+0x1C0)
+    add x2, sp, #0x1c0
+    adrp x9, #0x108a000
+    add x9, x9, #0x988
+    str x9, [x2]
+    add x10, x2, #0x10
+    str x10, [x2, #8]
+    add x11, x20, #0x30
+    str x11, [x10]
+    str x19, [x10, #8]
+    adrp x8, #0x4254000
+    ldr x0, [x8, #0x550]
+    cbz x0, restart_dialog_end
+    mov x1, x21
+    bl #0xb21640
+restart_dialog_end:
+    ldp x21, x22, [sp, #0x20]
+    ldp x19, x20, [sp, #0x10]
+    ldp x29, x30, [sp]
+    add sp, sp, #0x240
+    ret
+
+; the callbacks: copy (x0 = this, x1 = where), then call
+restart_callback_copy:
+    cbz x1, restart_callback_copy_done
+    ldr x8, [x0]
+    str x8, [x1]
+    ldr x8, [x0, #8]
+    str x8, [x1, #8]
+restart_callback_copy_done:
+    mov x0, x1
+    ret
+
+; the button chosen (w1), told to the emulator (as System's, 0x899230, takes it)
+restart_callback_buttons:
+    adrp x8, @DATA
+    add x8, x8, #0x6000
+    str w1, [x8, #0x108]
+    adr x0, restart_signal
+    mov x1, #8
+    svc #0x27
+    ret
+
+; the dialog (x1): kept, its answer read once a frame
+restart_callback_dialog:
+    adrp x8, @DATA
+    add x8, x8, #0x6000
+    str x1, [x8, #0x100]
+    ret
+
 name_value:
     .byte 84, 95, 86, 97, 108, 117, 101, 0
 name_lpos:
@@ -2282,3 +2426,5 @@ nav_label:
     .byte 78, 120, 95, 83, 101, 116, 78, 97, 118, 95, 82, 121, 117, 106, 105, 110, 120, 0
 settings_signal:
     .byte 78, 120, 83, 101, 116, 116, 110, 103
+restart_signal:
+    .byte 78, 120, 83, 101, 116, 82, 115, 116

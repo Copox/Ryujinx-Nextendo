@@ -505,6 +505,26 @@ namespace Ryujinx.HLE.HOS.Themes
 
             KProcess process = _process;
 
+            // [Nextendo, HOME Menu work] Leaving the "Ryujinx | Nextendo" section with settings
+            // changed that need a restart: the restart dialog first.
+            if (pressed && process != null && QlaunchSettingsPage.Active && QlaunchSettingsPage.RestartPending)
+            {
+                try
+                {
+                    if (PageFocused(process))
+                    {
+                        QlaunchSettingsPage.AskRestart(process, _base + Cave + CodeSize);
+                        _bSwallowed = true;
+
+                        return true;
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.Warning?.Print(LogClass.ServiceSet, $"[settings] restart dialog: {e.Message}");
+                }
+            }
+
             if (!pressed || process == null || _menuPack == null)
             {
                 return false;
@@ -776,6 +796,17 @@ namespace Ryujinx.HLE.HOS.Themes
             BinaryPrimitives.WriteUInt64LittleEndian(selectBoxes, Cave + 0x38);
             process.CpuMemory.Write(baseAddress + BuildSlot + 0x60, selectBoxes);
 
+            // The restart dialog's callbacks: their vtables (as the system's lambdas': its
+            // type's function, two that do nothing, copy, call), in the data page.
+            ulong[] buttons = [baseAddress + 0x439010, baseAddress + 0x26F0, baseAddress + 0x26F0, baseAddress + Cave + 0x3C, baseAddress + Cave + 0x40, 0];
+            ulong[] dialog = [baseAddress + 0x439010, baseAddress + 0x26F0, baseAddress + 0x26F0, baseAddress + Cave + 0x3C, baseAddress + Cave + 0x44, 0];
+
+            for (int i = 0; i < 6; i++)
+            {
+                process.CpuMemory.Write(baseAddress + Cave + CodeSize + 0x6000 + (ulong)(8 * i), buttons[i]);
+                process.CpuMemory.Write(baseAddress + Cave + CodeSize + 0x6030 + (ulong)(8 * i), dialog[i]);
+            }
+
             // The page's own code, changed to know the added entries (Qlaunch/build.py).
             byte[] patches = Ryujinx.Common.EmbeddedResources.Read("Ryujinx.HLE/HOS/Themes/Qlaunch/theme_page.patches");
             int count = BinaryPrimitives.ReadInt32LittleEndian(patches);
@@ -900,6 +931,29 @@ namespace Ryujinx.HLE.HOS.Themes
             catch (Exception e)
             {
                 Logger.Warning?.Print(LogClass.ServiceSet, $"[settings] HOME Menu settings: {e.Message}");
+            }
+
+            return true;
+        }
+
+        /// <summary>[Nextendo, HOME Menu work] The restart dialog of the settings answered.</summary>
+        internal static bool TakeRestartAnswer(KProcess process)
+        {
+            if (process != _process)
+            {
+                return false;
+            }
+
+            try
+            {
+                if (QlaunchSettingsPage.TakeRestartAnswer(process, _base + Cave + CodeSize))
+                {
+                    Rebuild(process, 0);
+                }
+            }
+            catch (Exception e)
+            {
+                Logger.Warning?.Print(LogClass.ServiceSet, $"[settings] restart dialog: {e.Message}");
             }
 
             return true;

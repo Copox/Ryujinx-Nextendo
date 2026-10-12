@@ -64,20 +64,13 @@ namespace Ryujinx.Ava.Common
             {
                 _pending[key] = index;
 
+                // Those read when the emulation starts: the HOME Menu asks for a restart when the
+                // section is left (or gives their values back).
                 Dispatcher.UIThread.Post(() =>
                 {
-                    bool changed = !Equals(get(), options[index]);
-
                     set(options[index]);
                     ConfigurationState.Instance.ToFileFormat().SaveConfig(Program.ConfigurationPath);
                     _pending.TryRemove(key, out _);
-
-                    // Taken into account only when the emulation starts: it starts again, on
-                    // the HOME Menu, as the console restarts for some of its settings.
-                    if (restart && changed)
-                    {
-                        Ryujinx.HLE.HOS.HomeMenuStatus.RequestPower(true);
-                    }
                 });
             },
         };
