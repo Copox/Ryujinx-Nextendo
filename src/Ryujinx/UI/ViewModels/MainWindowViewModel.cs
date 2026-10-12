@@ -277,6 +277,8 @@ namespace Ryujinx.Ava.UI.ViewModels
                 System.Diagnostics.Process.GetCurrentProcess().Kill();
             });
 
+            Ryujinx.HLE.HOS.HomeMenuStatus.SleepRequested += () => AppHost?.Sleep();
+
             Ryujinx.HLE.HOS.HomeMenuStatus.PowerRequested += reboot => Dispatcher.UIThread.Post(() =>
             {
                 if (reboot)

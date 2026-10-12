@@ -36,6 +36,21 @@ namespace Ryujinx.HLE.HOS
             }
         }
 
+        /// <summary>The console is asked to sleep (power menu, "Sleep Mode").</summary>
+        public static event Action SleepRequested;
+
+        public static void RequestSleep()
+        {
+            try
+            {
+                SleepRequested?.Invoke();
+            }
+            catch (Exception)
+            {
+                // the request is lost, nothing else
+            }
+        }
+
         public static void RequestPower(bool reboot)
         {
             try

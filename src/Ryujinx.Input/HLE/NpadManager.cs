@@ -381,6 +381,9 @@ namespace Ryujinx.Input.HLE
             ReloadConfiguration(inputConfig, playerInputAssignments, enableKeyboard, enableMouse);
         }
 
+        /// <summary>[Nextendo] A button of a player's controller (or of its keyboard mapping) is down.</summary>
+        public bool AnyButtonPressed { get; private set; }
+
         public void Update(float aspectRatio = 1)
         {
             lock (_lock)
@@ -455,6 +458,8 @@ namespace Ryujinx.Input.HLE
                 {
                     _device.System.ChangeDockedModeState(docked);
                 }
+
+                AnyButtonPressed = _hleInputStates.Exists(state => state.Buttons != 0);
 
                 _device.Hid.Npads.Update(_hleInputStates);
                 _device.Hid.Npads.UpdateSixAxis(_hleMotionStates);

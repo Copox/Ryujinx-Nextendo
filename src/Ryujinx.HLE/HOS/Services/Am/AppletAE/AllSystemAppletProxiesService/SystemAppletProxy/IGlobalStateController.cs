@@ -3,6 +3,15 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
     class IGlobalStateController : IpcService
     {
         // [Nextendo, HOME Menu work] Power off and restart, from the power menu.
+        [CommandCmif(2)]
+        // StartSleepSequence()
+        public ResultCode StartSleepSequence(ServiceCtx context)
+        {
+            Ryujinx.HLE.HOS.HomeMenuStatus.RequestSleep();
+
+            return ResultCode.Success;
+        }
+
         [CommandCmif(3)]
         // StartShutdownSequence()
         public ResultCode StartShutdownSequence(ServiceCtx context)

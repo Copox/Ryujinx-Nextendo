@@ -979,6 +979,39 @@ namespace Ryujinx.Ava.Systems
             }
         }
 
+        // [Nextendo, HOME Menu work] Sleep mode: the emulation paused, the screen dark; a button
+        // wakes it.
+        private volatile bool _sleeping;
+        private bool _wakeArmed;
+
+        internal void Sleep()
+        {
+            if (_sleeping || Device == null)
+            {
+                return;
+            }
+
+            Logger.Info?.Print(LogClass.Emulation, "[Nextendo] sleep mode");
+
+            _wakeArmed = false;
+            _sleeping = true;
+
+            Pause();
+
+            Dispatcher.UIThread.Post(() => RendererHost.IsVisible = false);
+        }
+
+        private void Wake()
+        {
+            _sleeping = false;
+
+            Logger.Info?.Print(LogClass.Emulation, "[Nextendo] woken up");
+
+            // The HOME Menu cannot come back from its own sleep without the console's power
+            // services: the emulator starts again, on the lock screen, as a console waking up.
+            Ryujinx.HLE.HOS.HomeMenuStatus.RequestRelaunch();
+        }
+
         internal void Resume()
         {
             Device?.System.TogglePauseEmulation(false);
@@ -1378,6 +1411,20 @@ namespace Ryujinx.Ava.Systems
             }
 
             NpadManager.Update(ConfigurationState.Instance.Graphics.AspectRatio.Value.ToFloat());
+
+            // [Nextendo, HOME Menu work] Asleep: a button pressed (after the one that chose sleep
+            // is let go) wakes the console.
+            if (_sleeping)
+            {
+                if (!NpadManager.AnyButtonPressed)
+                {
+                    _wakeArmed = true;
+                }
+                else if (_wakeArmed)
+                {
+                    Wake();
+                }
+            }
 
             if (_viewModel.IsActive)
             {
