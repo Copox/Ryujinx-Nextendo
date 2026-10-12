@@ -29,6 +29,23 @@ namespace Ryujinx.HLE.HOS.Services.Settings
 
         public ISystemSettingsServer(ServiceCtx context) { }
 
+        [CommandCmif(174)] // 20.0.0+
+        // Asked by the virtual game cards page (study: NEXTENDO_SET174=<u32>).
+        public ResultCode Unknown174(ServiceCtx context)
+        {
+            uint value = uint.TryParse(System.Environment.GetEnvironmentVariable("NEXTENDO_SET174"), out uint v) ? v : 0;
+
+            if (System.Environment.GetEnvironmentVariable("NEXTENDO_VGC_TRACE") == "1")
+            {
+                Logger.Notice.Print(LogClass.ServiceSet, "[vgc] set 174 " +
+                    string.Concat(System.Linq.Enumerable.Select(System.Linq.Enumerable.Where(context.Device.System.KernelContext.Processes.Values, p => p.TitleId == 0x0100000000001000), p => p.DescribeGuestThreads())));
+            }
+
+            context.ResponseData.Write(value);
+
+            return ResultCode.Success;
+        }
+
         [CommandCmif(57)]
         // SetRegionCode(u32)
         public ResultCode SetRegionCode(ServiceCtx context)

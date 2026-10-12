@@ -53,6 +53,7 @@ namespace Ryujinx.HLE.HOS.Themes
                 ["on"] = "On", ["off"] = "Off", ["auto"] = "Auto", ["native"] = "Native", ["tv"] = "TV", ["handheld"] = "Handheld",
                 ["stretch"] = "Stretched",
                 ["vanilla"] = "HOME Menu as on the console",
+                ["xcicards"] = "Game cards as virtual cards",
                 ["restart"] = "To apply these settings, Ryujinx | Nextendo needs to restart:",
             },
             ["fr"] = new()
@@ -63,6 +64,7 @@ namespace Ryujinx.HLE.HOS.Themes
                 ["on"] = "Oui", ["off"] = "Non", ["auto"] = "Auto", ["native"] = "Native", ["tv"] = "TV", ["handheld"] = "Portable",
                 ["stretch"] = "Étiré",
                 ["vanilla"] = "Menu HOME comme sur la console",
+                ["xcicards"] = "Cartes de jeu virtuelles (XCI)",
                 ["restart"] = "Pour appliquer ces paramètres, Ryujinx | Nextendo doit redémarrer :",
             },
             ["es"] = new()
@@ -73,6 +75,7 @@ namespace Ryujinx.HLE.HOS.Themes
                 ["on"] = "Sí", ["off"] = "No", ["auto"] = "Auto", ["native"] = "Nativa", ["tv"] = "TV", ["handheld"] = "Portátil",
                 ["stretch"] = "Estirado",
                 ["vanilla"] = "Menú HOME como en la consola",
+                ["xcicards"] = "Tarjetas virtuales (XCI)",
                 ["restart"] = "Para aplicar estos ajustes, Ryujinx | Nextendo debe reiniciarse:",
             },
             ["de"] = new()
@@ -83,6 +86,7 @@ namespace Ryujinx.HLE.HOS.Themes
                 ["on"] = "An", ["off"] = "Aus", ["auto"] = "Auto", ["native"] = "Nativ", ["tv"] = "TV", ["handheld"] = "Handheld",
                 ["stretch"] = "Gestreckt",
                 ["vanilla"] = "HOME-Menü wie auf der Konsole",
+                ["xcicards"] = "Virtuelle Spielkarten (XCI)",
                 ["restart"] = "Um diese Einstellungen zu übernehmen, muss Ryujinx | Nextendo neu starten:",
             },
             ["it"] = new()
@@ -93,6 +97,7 @@ namespace Ryujinx.HLE.HOS.Themes
                 ["on"] = "Sì", ["off"] = "No", ["auto"] = "Auto", ["native"] = "Nativa", ["tv"] = "TV", ["handheld"] = "Portatile",
                 ["stretch"] = "Allungato",
                 ["vanilla"] = "Menu HOME come sulla console",
+                ["xcicards"] = "Schede virtuali (XCI)",
                 ["restart"] = "Per applicare queste impostazioni, Ryujinx | Nextendo deve riavviarsi:",
             },
             ["pt"] = new()
@@ -103,6 +108,7 @@ namespace Ryujinx.HLE.HOS.Themes
                 ["on"] = "Sim", ["off"] = "Não", ["auto"] = "Auto", ["native"] = "Nativa", ["tv"] = "TV", ["handheld"] = "Portátil",
                 ["stretch"] = "Esticado",
                 ["vanilla"] = "Menu HOME como no console",
+                ["xcicards"] = "Cartões virtuais (XCI)",
                 ["restart"] = "Para aplicar estas configurações, o Ryujinx | Nextendo precisa reiniciar:",
             },
             ["ja"] = new()
@@ -113,6 +119,7 @@ namespace Ryujinx.HLE.HOS.Themes
                 ["on"] = "ON", ["off"] = "OFF", ["auto"] = "自動", ["native"] = "ネイティブ", ["tv"] = "TV", ["handheld"] = "携帯",
                 ["stretch"] = "引き伸ばし",
                 ["vanilla"] = "本体と同じHOMEメニュー",
+                ["xcicards"] = "バーチャルゲームカード (XCI)",
                 ["restart"] = "これらの設定を反映するには、Ryujinx | Nextendoを再起動する必要があります：",
             },
         };

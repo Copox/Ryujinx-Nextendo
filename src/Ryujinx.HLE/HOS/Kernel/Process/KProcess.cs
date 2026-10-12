@@ -78,7 +78,7 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
 
             foreach (KThread thread in threads)
             {
-                if (thread.HostThread?.Name?.StartsWith("HLE.GuestThread") != true)
+                if (thread.HostThread == null || thread.HostThread.Name?.StartsWith("HLE.OsThread") == true)
                 {
                     continue;
                 }

@@ -149,6 +149,13 @@ namespace Ryujinx.HLE.HOS.Services.Ns
                     break;
                 }
 
+                // [Nextendo] a game card of the library that is not loaded to the console: in the
+                // virtual game cards page only
+                if (!Ryujinx.HLE.HOS.NextendoVirtualCards.Shown(title))
+                {
+                    continue;
+                }
+
                 ulong record = position + (ulong)(count * RecordSize);
 
                 context.Memory.Write(record + 0x00, title.Id);

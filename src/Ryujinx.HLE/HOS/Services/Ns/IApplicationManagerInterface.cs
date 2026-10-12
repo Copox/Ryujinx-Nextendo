@@ -118,7 +118,7 @@ namespace Ryujinx.HLE.HOS.Services.Ns
                 context.Memory.Write(view, new byte[ViewSize]);
                 context.Memory.Write(view + 0x00, applicationId);
                 context.Memory.Write(view + 0x08, 0u);         // version
-                context.Memory.Write(view + 0x0C, 0x401f17u);  // can be launched, has all its contents
+                context.Memory.Write(view + 0x0C, 0x401f17u | GameCardViewFlags(applicationId));  // can be launched, has all its contents
             }
 
             return ResultCode.Success;
@@ -142,11 +142,16 @@ namespace Ryujinx.HLE.HOS.Services.Ns
                 context.Memory.Write(entry, new byte[EntrySize]);
                 context.Memory.Write(entry + 0x00, applicationId);
                 context.Memory.Write(entry + 0x08, 0u);
-                context.Memory.Write(entry + 0x0C, 0x401f17u);
+                context.Memory.Write(entry + 0x0C, 0x401f17u | GameCardViewFlags(applicationId));
             }
 
             return ResultCode.Success;
         }
+
+        // [Nextendo, HOME Menu work] The view of the virtual game card loaded to the console: on a
+        // game card (bits 6 and 7), the HOME Menu shows the game card's picture by its name.
+        private static uint GameCardViewFlags(ulong applicationId) =>
+            applicationId != 0 && applicationId == Ryujinx.HLE.HOS.NextendoVirtualCards.Inserted && Ryujinx.HLE.HOS.NextendoVirtualCards.Enabled ? 0xC0u : 0;
 
         [CommandCmif(2050)] // 6.0.0+
         // GetApplicationRightsOnClient(u32 flags, nn::ncm::ApplicationId, nn::account::Uid) -> (s32 count, buffer<nn::ns::ApplicationRightsOnClient, 6>)
@@ -198,11 +203,15 @@ namespace Ryujinx.HLE.HOS.Services.Ns
         [CommandCmif(4013)]
         [CommandCmif(4028)]
         [CommandCmif(4029)]
+        [CommandCmif(4030)]
         [CommandCmif(4033)]
         [CommandCmif(4060)]
         [CommandCmif(4069)]
         [CommandCmif(4071)]
         [CommandCmif(4073)]
+        [CommandCmif(4076)]
+        [CommandCmif(4079)]
+        [CommandCmif(4087)]
         [CommandCmif(4080)]
         [CommandCmif(4086)]
         // Asked by the virtual game card page of the HOME Menu, which keeps the returned object
@@ -210,6 +219,18 @@ namespace Ryujinx.HLE.HOS.Services.Ns
         // -> (handle<copy>, object)
         public ResultCode RequestVirtualGameCardOperation(ServiceCtx context)
         {
+            // NEXTENDO_VGC_TRACE=1: the request as the HOME Menu makes it, and where from (study).
+            if (System.Environment.GetEnvironmentVariable("NEXTENDO_VGC_TRACE") == "1")
+            {
+                long position = context.RequestData.BaseStream.Position;
+                byte[] raw = ((System.IO.MemoryStream)context.RequestData.BaseStream).ToArray();
+                long command = position >= 8 ? System.BitConverter.ToInt64(raw, (int)position - 8) : -1;
+                string Buffers(System.Collections.Generic.IEnumerable<Ipc.IpcBuffDesc> list) => string.Join(",", System.Linq.Enumerable.Select(list, d => $"{d.Position:X}+{d.Size:X}={(d.Size > 0 && d.Size <= 0x200 ? System.Convert.ToHexString(context.Memory.GetSpan(d.Position, (int)d.Size)) : "")}"));
+
+                Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.ServiceNs, $"[vgc] {command}: data {System.Convert.ToHexString(raw, (int)position, raw.Length - (int)position)} send[{Buffers(context.Request.SendBuff)}] recv[{Buffers(context.Request.ReceiveBuff)}] " +
+                    $"ptr[{context.Request.PtrBuff.Count}] recvlist[{context.Request.RecvListBuff.Count}] copy[{context.Request.HandleDesc?.ToCopy.Length ?? 0}]\n{string.Concat(System.Linq.Enumerable.Select(System.Linq.Enumerable.Where(context.Device.System.KernelContext.Processes.Values, p => p.TitleId == 0x0100000000001000), p => p.DescribeGuestThreads()))}");
+            }
+
             // A transfer memory handed with the request is let go at once: kept, it held the
             // menu's own heap, which then could not shrink (fatal 2001-0106).
             if (context.Request.HandleDesc != null)
@@ -226,7 +247,94 @@ namespace Ryujinx.HLE.HOS.Services.Ns
             _virtualCardEvent.Signal();
             _virtualCardEvent.ReplyWithHandle(context);
 
-            MakeObject(context, new IAsyncValue(new byte[8]));
+            // NEXTENDO_VGC_TEST=<application id>[,...]: the virtual game cards list (4008) holds
+            // those, in 64 bytes entries (study of their layout).
+            byte[] value = new byte[8];
+            long vgcCommand = context.RequestData.BaseStream.Position >= 8
+                ? System.BitConverter.ToInt64(((System.IO.MemoryStream)context.RequestData.BaseStream).GetBuffer(), (int)context.RequestData.BaseStream.Position - 8) : -1;
+
+            // [Nextendo, HOME Menu work] The game cards of the library, as virtual game cards (the
+            // option on): the list (4008), one of them loaded to this console (4076).
+            if (vgcCommand == 4008 && Ryujinx.HLE.HOS.NextendoVirtualCards.Enabled)
+            {
+                value = Ryujinx.HLE.HOS.NextendoVirtualCards.Entries();
+            }
+
+            if (vgcCommand == 4076 && Ryujinx.HLE.HOS.NextendoVirtualCards.Enabled && context.Request.SendBuff.Count > 0)
+            {
+                int count = System.BitConverter.ToInt32(((System.IO.MemoryStream)context.RequestData.BaseStream).GetBuffer(), (int)context.RequestData.BaseStream.Position);
+                Ipc.IpcBuffDesc entries = context.Request.SendBuff[0];
+
+                Ryujinx.HLE.HOS.NextendoVirtualCards.Load(context.Memory.GetSpan(entries.Position, (int)entries.Size), count);
+            }
+
+            if (vgcCommand == 4008 && System.Environment.GetEnvironmentVariable("NEXTENDO_VGC_TEST") is { Length: > 0 } test)
+            {
+                string[] ids = test.Split(',');
+                value = new byte[0x40 * ids.Length];
+
+                for (int i = 0; i < ids.Length; i++)
+                {
+                    string[] f = ids[i].Split(':');
+                    ulong id = System.Convert.ToUInt64(f[0], 16);
+                    System.BitConverter.TryWriteBytes(System.MemoryExtensions.AsSpan(value, 0x40 * i), id);
+                    System.BitConverter.TryWriteBytes(System.MemoryExtensions.AsSpan(value, 0x40 * i + 0x08), id);
+                    System.BitConverter.TryWriteBytes(System.MemoryExtensions.AsSpan(value, 0x40 * i + 0x10), id);
+                    value[0x40 * i + 0x18] = f.Length > 1 ? System.Convert.ToByte(f[1]) : (byte)0;
+
+                    // id:type:offset=hexbytes:... (study of the other fields)
+                    for (int k = 2; k < f.Length; k++)
+                    {
+                        string[] kv = f[k].Split('=');
+                        System.Convert.FromHexString(kv[1]).CopyTo(value, 0x40 * i + System.Convert.ToInt32(kv[0], 16));
+                    }
+                }
+            }
+
+            // NEXTENDO_VGC_FILL=<command>=<hex>;...: the value of other requests (study).
+            if (System.Environment.GetEnvironmentVariable("NEXTENDO_VGC_FILL") is { Length: > 0 } fill)
+            {
+                foreach (string item in fill.Split(';'))
+                {
+                    string[] kv = item.Split('=');
+
+                    if (kv.Length == 2 && long.Parse(kv[0]) == vgcCommand)
+                    {
+                        value = System.Convert.FromHexString(kv[1]);
+                    }
+                }
+            }
+
+            MakeObject(context, new IAsyncValue(value));
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(4022)] // 20.0.0+
+        [CommandCmif(4023)] // 20.0.0+
+        [CommandCmif(4053)] // 20.0.0+
+        [CommandCmif(4054)] // 20.0.0+
+        [CommandCmif(4088)] // 20.0.0+
+        // Asked by the virtual game cards page, without arguments (study: NEXTENDO_VGC_GET=<cmd>=<hex>;...).
+        public ResultCode GetVirtualGameCardValue(ServiceCtx context)
+        {
+            long command = System.BitConverter.ToInt64(((System.IO.MemoryStream)context.RequestData.BaseStream).GetBuffer(), 8);
+            byte[] value = new byte[8];
+
+            if (System.Environment.GetEnvironmentVariable("NEXTENDO_VGC_GET") is { Length: > 0 } get)
+            {
+                foreach (string item in get.Split(';'))
+                {
+                    string[] kv = item.Split('=');
+
+                    if (kv.Length == 2 && long.Parse(kv[0]) == command)
+                    {
+                        value = System.Convert.FromHexString(kv[1]);
+                    }
+                }
+            }
+
+            context.ResponseData.Write(value);
 
             return ResultCode.Success;
         }

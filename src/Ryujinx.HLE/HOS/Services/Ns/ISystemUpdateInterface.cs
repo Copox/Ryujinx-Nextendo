@@ -187,12 +187,26 @@ namespace Ryujinx.HLE.HOS.Services.Ns
         // Get() -> buffer<bytes, 6>
         public ResultCode Get(ServiceCtx context)
         {
+            // NEXTENDO_VGC_TRACE=1: where the HOME Menu reads the value from (study).
+            if (System.Environment.GetEnvironmentVariable("NEXTENDO_VGC_TRACE") == "1")
+            {
+                Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.ServiceNs, "[vgc] Get recv=" + (context.Request.ReceiveBuff.Count > 0 ? context.Request.ReceiveBuff[0].Size.ToString("X") : "-") + " value=" + _value.Length + " in=" + System.Convert.ToHexString(((System.IO.MemoryStream)context.RequestData.BaseStream).ToArray()) + " " +
+                    string.Concat(System.Linq.Enumerable.Select(System.Linq.Enumerable.Where(context.Device.System.KernelContext.Processes.Values, p => p.TitleId == 0x0100000000001000), p => p.DescribeGuestThreads())));
+            }
+
             // The value may be smaller than the room kept for it (LatestSystemUpdate is one byte).
             if (context.Request.ReceiveBuff.Count > 0 && context.Request.ReceiveBuff[0].Size > 0)
             {
                 int size = (int)Math.Min(context.Request.ReceiveBuff[0].Size, (ulong)_value.Length);
 
                 context.Memory.Write(context.Request.ReceiveBuff[0].Position, _value.AsSpan(0, size));
+
+                // the size read (the HOME Menu counts the virtual game cards with it)
+                context.ResponseData.Write((long)size);
+            }
+            else
+            {
+                context.ResponseData.Write(0L);
             }
 
             return ResultCode.Success;

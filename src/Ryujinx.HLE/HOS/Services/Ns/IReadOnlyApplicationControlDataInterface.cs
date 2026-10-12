@@ -51,6 +51,7 @@ namespace Ryujinx.HLE.HOS.Services.Ns
 
         [CommandCmif(19)] // 19.0.0+
         [CommandCmif(20)] // 20.0.0+, asked for titles that are not on the console (a friend's game)
+        [CommandCmif(22)] // 20.0.0+, the virtual game cards page
         // GetApplicationControlData(u8 source, u8, u8, u64 applicationId) -> (u64, buffer<bytes, 6>)
         public ResultCode GetApplicationControlDataWithIcon(ServiceCtx context)
         {
@@ -65,6 +66,17 @@ namespace Ryujinx.HLE.HOS.Services.Ns
 
             ulong position = context.Request.ReceiveBuff[0].Position;
             ulong capacity = context.Request.ReceiveBuff[0].Size;
+
+            long command = System.BitConverter.ToInt64(((System.IO.MemoryStream)context.RequestData.BaseStream).GetBuffer(), 8);
+
+            // The virtual game cards page (22) has the friend page's room: the picture at that size.
+            decoded |= command == 22;
+
+            if (capacity == 0x14000 && System.Environment.GetEnvironmentVariable("NEXTENDO_VGC_TRACE") == "1")
+            {
+                Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.ServiceNs, "[vgc] control data " + System.Convert.ToHexString(((System.IO.MemoryStream)context.RequestData.BaseStream).ToArray()) + " " +
+                    string.Concat(System.Linq.Enumerable.Select(System.Linq.Enumerable.Where(context.Device.System.KernelContext.Processes.Values, p => p.TitleId == 0x0100000000001000), p => p.DescribeGuestThreads())));
+            }
 
             Ryujinx.HLE.HOS.HomeMenuTitle title = Ryujinx.HLE.HOS.HomeMenuLibrary.Find(applicationId);
 
@@ -167,7 +179,8 @@ namespace Ryujinx.HLE.HOS.Services.Ns
             // the decoded form was asked for, or a download is requested and the card refused).
             string variant = decoded ? "a" : "";
 
-            context.ResponseData.Write(variant is "b" or "c" ? 1u : 0u);
+            // the virtual game cards page asks for the picture decoded: the state says it is (bit 16)
+            context.ResponseData.Write(command == 22 && iconSize > 0 ? 0x10000u : variant is "b" or "c" ? 1u : 0u);
             context.ResponseData.Write(variant is "a" or "c" ? 1u : 0u);
             context.ResponseData.Write((uint)(NacpSize + iconSize));
 

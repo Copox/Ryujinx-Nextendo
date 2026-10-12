@@ -51,6 +51,14 @@ namespace Ryujinx.Ava.Common
                 Make("shadercache", ["on", "off"], [true, false], () => graphics.EnableShaderCache.Value, v => graphics.EnableShaderCache.Value = v, true),
                 Make("recompression", ["on", "off"], [true, false], () => graphics.EnableTextureRecompression.Value, v => graphics.EnableTextureRecompression.Value = v, true),
                 Make("macrohle", ["on", "off"], [true, false], () => graphics.EnableMacroHLE.Value, v => graphics.EnableMacroHLE.Value = v, true),
+                // the game cards (.xci) as virtual game cards (live: the HOME Menu lists its games again)
+                new NextendoEmulatorSetting
+                {
+                    Key = "xcicards",
+                    Values = ["off", "on"],
+                    Get = () => Ryujinx.HLE.HOS.NextendoVirtualCards.Option ? 1 : 0,
+                    Set = v => Ryujinx.HLE.HOS.NextendoVirtualCards.Enabled = v == 1,
+                },
                 // the HOME Menu as the console has it (this section goes with it: back from the emulator's Nextendo menu)
                 new NextendoEmulatorSetting
                 {
