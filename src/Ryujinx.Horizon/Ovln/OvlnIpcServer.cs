@@ -24,6 +24,8 @@ namespace Ryujinx.Horizon.Ovln
         {
             HeapAllocator allocator = new();
 
+            OvlnQueue.Reset();
+
             _sm = new SmApi();
             _sm.Initialize().AbortOnFailure();
 

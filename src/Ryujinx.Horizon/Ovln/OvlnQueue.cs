@@ -14,6 +14,18 @@ namespace Ryujinx.Horizon.Ovln
         private static readonly object _lock = new();
         private static readonly List<Receiver> _receivers = [];
 
+        /// <summary>
+        /// The system starts (again, after a restart of the emulation): the receivers of the one
+        /// before are gone, their events with them.
+        /// </summary>
+        public static void Reset()
+        {
+            lock (_lock)
+            {
+                _receivers.Clear();
+            }
+        }
+
         public static void Add(Receiver receiver)
         {
             lock (_lock)

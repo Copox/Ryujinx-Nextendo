@@ -1481,6 +1481,10 @@ place_entry:
     mov x21, x2
     bl entry_object
     mov x22, x0
+    ldr x9, [x22, #8]             ; not made yet (the list moves while the page is built)
+    cbz x9, place_done
+    ldr x9, [x22, #0x10]
+    cbz x9, place_done
     ldp s8, s0, [x21]
     ldr x9, [x22, #8]
     ldr x9, [x9, #0xa0]
@@ -1540,8 +1544,9 @@ move_entry:
     mov w20, w1
     mov x21, x2
     bl entry_object
+    ldr x8, [x0, #8]              ; not made yet
+    cbz x8, move_done
     ldp s0, s1, [x21]
-    ldr x8, [x0, #8]
     ldr x8, [x8, #0xa0]
     ldr x8, [x8, #0x18]
     ldrb w10, [x8, #0x58]
@@ -1579,6 +1584,7 @@ hide_entry:
     mov w20, w1
     bl entry_object
     ldr x21, [x0, #0x10]
+    cbz x21, hide_done            ; not made yet
     ldr x0, [x21, #0x6b8]
     cbz x0, hide_button_pane
     mov w1, wzr
