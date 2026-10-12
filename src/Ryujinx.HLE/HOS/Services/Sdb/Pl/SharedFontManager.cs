@@ -83,9 +83,9 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
 
                                 data = DecryptFont(fontFile.Get.AsStream());
 
-                                if (name == "FontNintendoExtended" && PlayStationButtonFont.Enabled)
+                                if (name == "FontNintendoExtended")
                                 {
-                                    data = PlayStationButtonFont.Apply(data);
+                                    data = ControllerButtonFont.Apply(data);
                                 }
                             }
 

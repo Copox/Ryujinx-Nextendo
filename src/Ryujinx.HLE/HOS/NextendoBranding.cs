@@ -234,6 +234,23 @@ namespace Ryujinx.HLE.HOS
                 }
             }
 
+            // [Nextendo] The Controllers page: its Pro Controller picture follows the controller of
+            // player 1 (PlayStation, Xbox), its layers drawn from Kenney's Input Prompts (CC0).
+            const string ControllerLayout = "/lyt/Controller.szs";
+
+            if (programId == 0x0100000000001003 && ControllerPagePictures() is { } pictures && Exists(baseRom, ControllerLayout))
+            {
+                byte[] layout = Yaz0Decode(changed.TryGetValue(ControllerLayout, out byte[] earlier) ? earlier : Read(baseRom, ControllerLayout));
+                int replaced = pictures.Count(p => ReplaceTexture(layout, p.Name, p.Data));
+
+                if (replaced > 0)
+                {
+                    changed[ControllerLayout] = Yaz0Encode(layout);
+                }
+
+                Logger.Info?.Print(LogClass.ModLoader, $"[Nextendo] Controllers page: {replaced}/{pictures.Count} controller layer(s)");
+            }
+
             // [Nextendo, HOME Menu themes] The pictures of the themes added to its themes page.
             List<(string Path, byte[] Data)> added = programId == 0x0100000000001000 ? Themes.QlaunchThemePage.Pictures().ToList() : [];
 
@@ -311,47 +328,144 @@ namespace Ryujinx.HLE.HOS
                     continue;
                 }
 
-                Span<byte> bntx = sarc.AsSpan(start, end - start);
-                int nx = bntx.IndexOf("NX  "u8);
-
-                if (nx < 0)
+                if (ReplaceBntxTexture(sarc.AsSpan(start, end - start), name, data))
                 {
-                    continue;
-                }
-
-                int count = BitConverter.ToInt32(bntx[(nx + 4)..]);
-                int infoPointers = (int)BitConverter.ToInt64(bntx[(nx + 8)..]);
-
-                for (int t = 0; t < count; t++)
-                {
-                    int brti = (int)BitConverter.ToInt64(bntx[(infoPointers + 8 * t)..]);
-                    int nameAddress = (int)BitConverter.ToInt64(bntx[(brti + 0x60)..]);
-                    int nameLength = BitConverter.ToUInt16(bntx[nameAddress..]);
-                    string texture = Encoding.ASCII.GetString(bntx.Slice(nameAddress + 2, nameLength));
-
-                    if (texture != name)
-                    {
-                        continue;
-                    }
-
-                    int size = BitConverter.ToInt32(bntx[(brti + 0x50)..]);
-                    int mips = (int)BitConverter.ToInt64(bntx[(brti + 0x70)..]);
-                    int mip0 = (int)BitConverter.ToInt64(bntx[mips..]);
-
-                    if (size != data.Length)
-                    {
-                        Logger.Warning?.Print(LogClass.ModLoader, $"[Nextendo] texture {name}: 0x{size:X} bytes, 0x{data.Length:X} given, left as it is");
-
-                        return false;
-                    }
-
-                    data.CopyTo(bntx.Slice(mip0, size));
-
                     return true;
                 }
             }
 
             return false;
+        }
+
+        // Puts new texture data (GPU layout of the original, same size) in place of a texture of a
+        // BNTX archive. True when done.
+        private static bool ReplaceBntxTexture(Span<byte> bntx, string name, byte[] data)
+        {
+            int nx = bntx.IndexOf("NX  "u8);
+
+            if (nx < 0)
+            {
+                return false;
+            }
+
+            int count = BitConverter.ToInt32(bntx[(nx + 4)..]);
+            int infoPointers = (int)BitConverter.ToInt64(bntx[(nx + 8)..]);
+
+            for (int t = 0; t < count; t++)
+            {
+                int brti = (int)BitConverter.ToInt64(bntx[(infoPointers + 8 * t)..]);
+                int nameAddress = (int)BitConverter.ToInt64(bntx[(brti + 0x60)..]);
+                int nameLength = BitConverter.ToUInt16(bntx[nameAddress..]);
+                string texture = Encoding.ASCII.GetString(bntx.Slice(nameAddress + 2, nameLength));
+
+                if (texture != name)
+                {
+                    continue;
+                }
+
+                int size = BitConverter.ToInt32(bntx[(brti + 0x50)..]);
+                int mips = (int)BitConverter.ToInt64(bntx[(brti + 0x70)..]);
+                int mip0 = (int)BitConverter.ToInt64(bntx[mips..]);
+
+                if (size != data.Length)
+                {
+                    Logger.Warning?.Print(LogClass.ModLoader, $"[Nextendo] texture {name}: 0x{size:X} bytes, 0x{data.Length:X} given, left as it is");
+
+                    return false;
+                }
+
+                data.CopyTo(bntx.Slice(mip0, size));
+
+                return true;
+            }
+
+            return false;
+        }
+
+        // The kind of controller of player 1, for its pictures ("ps4", "ps5", "xbox"), or null.
+        private static string ControllerStyleName() => Services.Sdb.Pl.ControllerButtonFont.Style switch
+        {
+            Services.Sdb.Pl.ControllerStyle.PlayStation4 => "ps4",
+            Services.Sdb.Pl.ControllerStyle.PlayStation5 => "ps5",
+            Services.Sdb.Pl.ControllerStyle.Xbox => "xbox",
+            _ => null,
+        };
+
+        // The layers of the Controllers page's controller picture for that controller
+        // (ControllerPage_*.bin: count, then per texture its name and data), or null.
+        private static List<(string Name, byte[] Data)> ControllerPagePictures()
+        {
+            if (ControllerStyleName() is not { } style)
+            {
+                return null;
+            }
+
+            using BinaryReader reader = new(new MemoryStream(Ryujinx.Common.EmbeddedResources.Read($"Ryujinx.HLE/HOS/NextendoAssets/ControllerPage_{style}.bin")));
+            List<(string, byte[])> layers = [];
+            int count = reader.ReadInt32();
+
+            for (int i = 0; i < count; i++)
+            {
+                string name = Encoding.ASCII.GetString(reader.ReadBytes(reader.ReadUInt16()));
+
+                layers.Add((name, reader.ReadBytes(reader.ReadInt32())));
+            }
+
+            return layers;
+        }
+
+        /// <summary>
+        /// [Nextendo] The system's controller pictures (ControllerIcon archive, used by the HOME
+        /// Menu footer): with a PlayStation or Xbox controller for player 1, the Pro Controller one
+        /// ("0C-00") is that controller (Kenney's Input Prompts, CC0).
+        /// </summary>
+        public static IStorage ControllerIcons(IStorage storage)
+        {
+            string style = ControllerStyleName();
+
+            if (style == null)
+            {
+                return storage;
+            }
+
+            try
+            {
+                byte[] picture = Ryujinx.Common.EmbeddedResources.Read($"Ryujinx.HLE/HOS/NextendoAssets/ControllerIcon_{style}.bc4");
+                RomFsFileSystem rom = new(storage);
+                RomFsBuilder builder = new();
+                int replaced = 0;
+
+                foreach (DirectoryEntryEx entry in rom.EnumerateEntries().Where(f => f.Type == DirectoryEntryType.File).OrderBy(f => f.FullPath, StringComparer.Ordinal))
+                {
+                    if (entry.FullPath.EndsWith(".bntx", StringComparison.Ordinal))
+                    {
+                        byte[] bntx = Read(rom, entry.FullPath);
+
+                        if (ReplaceBntxTexture(bntx, "0C-00", picture))
+                        {
+                            replaced++;
+                        }
+
+                        builder.AddFile(entry.FullPath, new StorageFile(new MemoryStorage(bntx), OpenMode.Read));
+                    }
+                    else
+                    {
+                        using UniqueRef<IFile> file = new();
+                        rom.OpenFile(ref file.Ref, entry.FullPath.ToU8Span(), OpenMode.Read).ThrowIfFailure();
+                        builder.AddFile(entry.FullPath, file.Release());
+                    }
+                }
+
+                Logger.Info?.Print(LogClass.ModLoader, $"[Nextendo] controller pictures: {style} in {replaced} archive(s)");
+
+                return replaced > 0 ? builder.Build() : storage;
+            }
+            catch (Exception e)
+            {
+                Logger.Warning?.Print(LogClass.ModLoader, $"[Nextendo] controller pictures left as they are: {e.Message}");
+
+                return storage;
+            }
         }
 
         // "/message/EUfr/x.msbt.szs" -> "fr"; Chinese keeps its script.

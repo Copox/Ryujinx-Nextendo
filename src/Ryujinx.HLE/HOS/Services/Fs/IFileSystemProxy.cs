@@ -897,6 +897,13 @@ namespace Ryujinx.HLE.HOS.Services.Fs
                             LibHac.Fs.IStorage ncaStorage = new LocalStorage(ncaPath, FileAccess.Read, FileMode.Open);
                             Nca nca = new(context.Device.System.KeySet, ncaStorage);
                             LibHac.Fs.IStorage romfsStorage = nca.OpenStorage(NcaSectionType.Data, context.Device.System.FsIntegrityCheckLevel);
+
+                            // [Nextendo] The controller pictures follow the controller of player 1.
+                            if (titleId == 0x010000000000081E)
+                            {
+                                romfsStorage = NextendoBranding.ControllerIcons(romfsStorage);
+                            }
+
                             using SharedRef<LibHac.Fs.IStorage> sharedStorage = new(romfsStorage);
                             using SharedRef<IStorage> sfStorage = new(new StorageInterfaceAdapter(ref sharedStorage.Ref));
 

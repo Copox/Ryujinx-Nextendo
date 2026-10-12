@@ -1028,11 +1028,14 @@ namespace Ryujinx.Ava.Systems
                 _ => new OpenGLRenderer()
             };
 
-            // [Nextendo] A PlayStation controller for player 1: its symbols in the HOME Menu.
-            Ryujinx.HLE.HOS.Services.Sdb.Pl.PlayStationButtonFont.Enabled =
-                (ConfigurationState.Instance.Hid.InputConfig.Value?.Find(c => c?.PlayerIndex == Ryujinx.Common.Configuration.Hid.PlayerIndex.Player1) is { Backend: Ryujinx.Common.Configuration.Hid.InputBackendType.GamepadSDL3 } first
-                    && Ryujinx.HLE.HOS.Services.Sdb.Pl.PlayStationButtonFont.IsPlayStation(first.Name))
-                || Environment.GetEnvironmentVariable("NEXTENDO_PS_BUTTONS") == "1";
+            // [Nextendo] The controller of player 1: its symbols in the HOME Menu (PlayStation,
+            // Xbox). NEXTENDO_CONTROLLER_STYLE forces one (tests).
+            Ryujinx.HLE.HOS.Services.Sdb.Pl.ControllerButtonFont.Style =
+                Environment.GetEnvironmentVariable("NEXTENDO_CONTROLLER_STYLE") is { Length: > 0 } forced
+                    ? Ryujinx.HLE.HOS.Services.Sdb.Pl.ControllerButtonFont.StyleOf(forced)
+                    : ConfigurationState.Instance.Hid.InputConfig.Value?.Find(c => c?.PlayerIndex == Ryujinx.Common.Configuration.Hid.PlayerIndex.Player1) is { Backend: Ryujinx.Common.Configuration.Hid.InputBackendType.GamepadSDL3 } first
+                        ? Ryujinx.HLE.HOS.Services.Sdb.Pl.ControllerButtonFont.StyleOf(first.Name)
+                        : Ryujinx.HLE.HOS.Services.Sdb.Pl.ControllerStyle.Nintendo;
 
             // Initialize Configuration.
             Device = new Switch(ConfigurationState.Instance.CreateHleConfiguration()

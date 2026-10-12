@@ -58,7 +58,7 @@
     <EmbeddedResource Include="Debugger\Gdb\Xml\target32.xml" />
     <EmbeddedResource Include="Debugger\Gdb\Xml\target64.xml" />
     <EmbeddedResource Include="Homebrew.npdm" />
-    <EmbeddedResource Include="HOS\Services\Sdb\Pl\PlayStationButtons.bin" />
+    <EmbeddedResource Include="HOS\Services\Sdb\Pl\ButtonGlyphs_*.bin" />
     <EmbeddedResource Include="HOS\Services\Am\AppletAE\SdCard\*.nro" />
     <EmbeddedResource Include="HOS\Applets\SoftwareKeyboard\Resources\Logo_Ryujinx.png" />
     <EmbeddedResource Include="HOS\Applets\SoftwareKeyboard\Resources\Icon_BtnA.png" />
@@ -66,6 +66,8 @@
     <EmbeddedResource Include="HOS\Applets\SoftwareKeyboard\Resources\Icon_KeyF6.png" />
     <EmbeddedResource Include="HOS\Services\Account\Acc\DefaultUserImage.jpg" />
     <EmbeddedResource Include="HOS\NextendoAssets\EntIcoLHUB.bc4" />
+    <EmbeddedResource Include="HOS\NextendoAssets\ControllerIcon_*.bc4" />
+    <EmbeddedResource Include="HOS\NextendoAssets\ControllerPage_*.bin" />
     <EmbeddedResource Include="HOS\NextendoAssets\RdtIcoLR_00.bc4" />
     <EmbeddedResource Include="HOS\Themes\Qlaunch\theme_page.bin" />
     <EmbeddedResource Include="HOS\Themes\Qlaunch\theme_page.patches" />

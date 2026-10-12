@@ -5,30 +5,75 @@ using System.IO;
 
 namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
 {
+    /// <summary>The controller of player 1, for the symbols of the HOME Menu.</summary>
+    public enum ControllerStyle
+    {
+        Nintendo,
+        PlayStation4,
+        PlayStation5,
+        Xbox,
+    }
+
     /// <summary>
-    /// [Nextendo] With a PlayStation controller, the A/B/X/Y symbols of the system's button font
-    /// become circle/cross/triangle/square (by position: A right, B bottom, X top, Y left), so the
-    /// whole HOME Menu shows them. The symbols are Kenney's Input Prompts (CC0), built as TrueType
-    /// glyphs (PlayStationButtons.bin: count, then per glyph its code point, size and data).
+    /// [Nextendo] The symbols of the system's button font follow the controller of player 1:
+    /// <list type="bullet">
+    /// <item>PlayStation: A/B/X/Y become circle/cross/triangle/square (by position: A right, B
+    /// bottom, X top, Y left), L/R/ZL/ZR become L1/R1/L2/R2, the stick presses L3/R3, +/- the
+    /// Options and Share (PS4) or Create (PS5) buttons;</item>
+    /// <item>PlayStation and Xbox: the Pro Controller pictogram (HOME Menu footer, Controllers
+    /// page, which colour it as they colour the original) becomes that controller.</item>
+    /// </list>
+    /// The symbols are Kenney's Input Prompts (CC0), built as TrueType glyphs (ButtonGlyphs_*.bin:
+    /// count, then per glyph its code point, size and data).
     /// </summary>
-    public static class PlayStationButtonFont
+    public static class ControllerButtonFont
     {
         /// <summary>Set before the emulation starts, from the controller of player 1.</summary>
-        public static bool Enabled { get; set; }
+        public static ControllerStyle Style { get; set; }
 
-        /// <summary>Whether a controller name is a PlayStation one.</summary>
-        public static bool IsPlayStation(string name)
+        /// <summary>The style of a controller, from the name the system gives it.</summary>
+        public static ControllerStyle StyleOf(string name)
         {
             string n = (name ?? "").ToLowerInvariant();
 
-            return n.Contains("dualsense") || n.Contains("dualshock") || n.Contains("ps3") || n.Contains("ps4") || n.Contains("ps5") || n.Contains("playstation");
+            if (n.Contains("dualsense") || n.Contains("ps5"))
+            {
+                return ControllerStyle.PlayStation5;
+            }
+
+            if (n.Contains("dualshock") || n.Contains("ps3") || n.Contains("ps4") || n.Contains("playstation"))
+            {
+                return ControllerStyle.PlayStation4;
+            }
+
+            return n.Contains("xbox") ? ControllerStyle.Xbox : ControllerStyle.Nintendo;
         }
 
         public static byte[] Apply(byte[] ttf)
         {
+            string[] sets = Style switch
+            {
+                ControllerStyle.PlayStation4 => ["ps", "ps4"],
+                ControllerStyle.PlayStation5 => ["ps", "ps5"],
+                ControllerStyle.Xbox => ["xbox"],
+                _ => [],
+            };
+
+            if (sets.Length == 0)
+            {
+                return ttf;
+            }
+
             try
             {
-                return Patch(ttf, ReadGlyphs()) ?? ttf;
+                Dictionary<uint, byte[]> glyphs = [];
+
+                foreach (string set in sets)
+                {
+                    ReadGlyphs(set, glyphs);
+                }
+
+                return Patch(ttf, glyphs) ?? ttf;
             }
             catch (Exception)
             {
@@ -36,11 +81,9 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
             }
         }
 
-        private static Dictionary<uint, byte[]> ReadGlyphs()
+        private static void ReadGlyphs(string set, Dictionary<uint, byte[]> glyphs)
         {
-            Dictionary<uint, byte[]> glyphs = [];
-
-            using Stream stream = typeof(PlayStationButtonFont).Assembly.GetManifestResourceStream("Ryujinx.HLE.HOS.Services.Sdb.Pl.PlayStationButtons.bin");
+            using Stream stream = typeof(ControllerButtonFont).Assembly.GetManifestResourceStream($"Ryujinx.HLE.HOS.Services.Sdb.Pl.ButtonGlyphs_{set}.bin");
             using BinaryReader reader = new(stream);
 
             uint count = reader.ReadUInt32();
@@ -52,8 +95,6 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
 
                 glyphs[codePoint] = reader.ReadBytes(size);
             }
-
-            return glyphs;
         }
 
         // The glyph table is rebuilt with the new glyphs and put at the end of the font; the index
