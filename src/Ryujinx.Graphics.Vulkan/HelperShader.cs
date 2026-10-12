@@ -352,7 +352,8 @@ namespace Ryujinx.Graphics.Vulkan
             Extents2D srcRegion,
             Extents2D dstRegion,
             bool linearFilter,
-            bool clearAlpha = false)
+            bool clearAlpha = false,
+            bool blend = false)
         {
             _pipeline.SetCommandBuffer(cbs);
 
@@ -436,7 +437,19 @@ namespace Ryujinx.Graphics.Vulkan
 
             _pipeline.SetViewports(viewports);
             _pipeline.SetPrimitiveTopology(PrimitiveTopology.TriangleStrip);
+
+            // [Nextendo] Laid over what is there by its alpha (the overlay of the system).
+            if (blend)
+            {
+                _pipeline.SetBlendState(0, new BlendDescriptor(true, new ColorF(0f, 0f, 0f, 0f), GAL.BlendOp.Add, GAL.BlendFactor.SrcAlpha, GAL.BlendFactor.OneMinusSrcAlpha, GAL.BlendOp.Add, GAL.BlendFactor.One, GAL.BlendFactor.OneMinusSrcAlpha));
+            }
+
             _pipeline.Draw(4, 1, 0, 0);
+
+            if (blend)
+            {
+                _pipeline.SetBlendState(0, new BlendDescriptor(false, new ColorF(0f, 0f, 0f, 0f), GAL.BlendOp.Add, GAL.BlendFactor.One, GAL.BlendFactor.Zero, GAL.BlendOp.Add, GAL.BlendFactor.One, GAL.BlendFactor.Zero));
+            }
 
             if (dstIsDepthOrStencil)
             {

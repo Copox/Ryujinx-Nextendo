@@ -392,9 +392,9 @@ namespace Ryujinx.HLE.HOS.Services.SurfaceFlinger
                     {
                         AndroidFence noFence = AndroidFence.NoFence;
 
-                        // The overlay applet's picture (notifications, volume...) is read back
-                        // from the GPU, then its buffer goes back: it is shown over the screen.
-                        if (pair.Key == OverlayLayerId && OverlayOn && EnqueueOverlay(pair.Value, hidden))
+                        // The overlay applet's picture (notifications, volume...) is laid over
+                        // the frames; its buffer goes back when the next one comes.
+                        if (pair.Key == OverlayLayerId && EnqueueOverlay(pair.Value, hidden))
                         {
                             continue;
                         }
@@ -434,9 +434,6 @@ namespace Ryujinx.HLE.HOS.Services.SurfaceFlinger
             }
         }
 
-        private static bool OverlayOn => HomeMenuStatus.OverlayWanted;
-
-        private byte[] _overlayLast;
 
         private bool EnqueueOverlay(Layer layer, BufferItem item)
         {
@@ -460,7 +457,27 @@ namespace Ryujinx.HLE.HOS.Services.SurfaceFlinger
                 Item = item,
             };
 
-            return _device.Gpu.Window.EnqueueOverlayThreadSafe(
+            if (item.Fence.FenceCount == 0)
+            {
+                return QueueOverlay(layer, item, map, information);
+            }
+
+            // Read once the GPU is done with it (never waited for on the render thread: the GPU
+            // work of the overlay needs that thread, the wait lasted until its 3 s timeout).
+            item.Fence.RegisterCallback(_device.Gpu, _ =>
+            {
+                if (!QueueOverlay(layer, item, map, information))
+                {
+                    ReleaseBuffer(information);
+                }
+            });
+
+            return true;
+        }
+
+        private bool QueueOverlay(Layer layer, BufferItem item, NvMapHandle map, TextureCallbackInformation information)
+        {
+            return _device.Gpu.Window.SetOverlayThreadSafe(
                 layer.Owner,
                 map.Address + (ulong)item.GraphicBuffer.Object.Buffer.Surfaces[0].Offset,
                 item.GraphicBuffer.Object.Width,
@@ -468,21 +485,8 @@ namespace Ryujinx.HLE.HOS.Services.SurfaceFlinger
                 1 << item.GraphicBuffer.Object.Buffer.Surfaces[0].BlockHeightLog2,
                 ConvertColorFormat(item.GraphicBuffer.Object.Buffer.Surfaces[0].ColorFormat),
                 4,
-                AcquireBuffer,
                 ReleaseBuffer,
-                information,
-                (rgba, width, height) =>
-                {
-                    // Only a picture that changed goes on.
-                    if (_overlayLast != null && rgba.AsSpan().SequenceEqual(_overlayLast))
-                    {
-                        return;
-                    }
-
-                    _overlayLast = rgba;
-
-                    HomeMenuStatus.PublishOverlay(rgba, width, height);
-                });
+                information);
         }
 
         private void PostFrameBuffer(Layer layer, BufferItem item)

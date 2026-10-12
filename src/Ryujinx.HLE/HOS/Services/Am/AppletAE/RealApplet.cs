@@ -109,8 +109,8 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
                 _systemApplets[pid] = state;
 
                 // [Nextendo, HOME Menu work] With the HOME Menu, the overlay applet that draws the
-                // notifications of the system (experimental: NEXTENDO_OVERLAY=1).
-                if (first && Environment.GetEnvironmentVariable("NEXTENDO_OVERLAY") == "1")
+                // notifications of the system (NEXTENDO_OVERLAY=0 goes without it).
+                if (first && Environment.GetEnvironmentVariable("NEXTENDO_OVERLAY") != "0")
                 {
                     StartOverlay(system.Device);
                 }

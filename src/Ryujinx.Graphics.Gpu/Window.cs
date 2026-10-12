@@ -89,6 +89,11 @@ namespace Ryujinx.Graphics.Gpu
 
         private readonly ConcurrentQueue<PresentationTexture> _frameQueue;
 
+        // [Nextendo, HOME Menu work] The picture of the overlay applet (notifications of the system),
+        // laid over each frame until the next one comes (its buffer is held until then).
+        private PresentationTexture? _overlay;
+        private readonly object _overlayLock = new();
+
         private int _framesAvailable;
 
         public bool IsFrameAvailable => _framesAvailable != 0;
@@ -191,6 +196,81 @@ namespace Ryujinx.Graphics.Gpu
         }
 
         /// <summary>
+        /// [Nextendo, HOME Menu work] The new picture of the overlay applet, laid over the frames
+        /// from now on; the one before goes back to the applet.
+        /// </summary>
+        public bool SetOverlayThreadSafe(
+            ulong pid,
+            ulong address,
+            int width,
+            int height,
+            int gobBlocksInY,
+            Format format,
+            byte bytesPerPixel,
+            Action<object> releaseCallback,
+            object userObj)
+        {
+            if (!_context.PhysicalMemoryRegistry.TryGetValue(pid, out PhysicalMemory physicalMemory))
+            {
+                return false;
+            }
+
+            FormatInfo formatInfo = new(format, 1, 1, bytesPerPixel, 4);
+
+            TextureInfo info = new(0UL, width, height, 1, 1, 1, 1, 0, false, gobBlocksInY, 1, 1, Target.Texture2D, formatInfo);
+
+            int size = SizeCalculator.GetBlockLinearTextureSize(width, height, 1, 1, 1, 1, 1, bytesPerPixel, gobBlocksInY, 1, 1).TotalSize;
+
+            PresentationTexture overlay = new(physicalMemory.TextureCache, info, new MultiRange(address, (ulong)size), default, null, releaseCallback, userObj);
+            PresentationTexture? previous;
+
+            lock (_overlayLock)
+            {
+                previous = _overlay;
+                _overlay = overlay;
+            }
+
+            previous?.ReleaseCallback(previous.Value.UserObj);
+
+            return true;
+        }
+
+        private void SetOverlay()
+        {
+            PresentationTexture? overlay;
+
+            lock (_overlayLock)
+            {
+                overlay = _overlay;
+            }
+
+            if (overlay is not { } pt)
+            {
+                return;
+            }
+
+            try
+            {
+                Image.Texture texture = pt.Cache.FindOrCreateTexture(null, TextureSearchFlags.WithUpscale, pt.Info, 0, range: pt.Range);
+
+                texture.SynchronizeMemory();
+
+                _context.Renderer.Window.SetOverlay(texture.HostTexture);
+            }
+            catch (Exception e)
+            {
+                Ryujinx.Common.Logging.Logger.Warning?.Print(Ryujinx.Common.Logging.LogClass.Gpu, $"[overlay] not laid over the frame: {e.Message}");
+
+                lock (_overlayLock)
+                {
+                    _overlay = null;
+                }
+
+                _context.Renderer.Window.SetOverlay(null);
+            }
+        }
+
+        /// <summary>
         /// Presents a texture on the queue.
         /// If the queue is empty, then no texture is presented.
         /// </summary>
@@ -244,6 +324,8 @@ namespace Ryujinx.Graphics.Gpu
 
                     crop = new ImageCrop(left, right, top, bottom, crop.FlipX, crop.FlipY, crop.IsStretched, crop.AspectRatioX, crop.AspectRatioY);
                 }
+
+                SetOverlay();
 
                 _context.Renderer.Window.Present(texture.HostTexture, crop, swapBuffersCallback);
 

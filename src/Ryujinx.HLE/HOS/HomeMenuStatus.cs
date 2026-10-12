@@ -19,26 +19,6 @@ namespace Ryujinx.HLE.HOS
         public static event Action<bool> PowerRequested;
 
         /// <summary>
-        /// The picture of the overlay applet (the notifications of the system), RGBA, each time it
-        /// changes; a picture with nothing drawn means nothing to show.
-        /// </summary>
-        public static event Action<byte[], int, int> OverlayFrame;
-
-        public static bool OverlayWanted => OverlayFrame != null;
-
-        internal static void PublishOverlay(byte[] rgba, int width, int height)
-        {
-            try
-            {
-                OverlayFrame?.Invoke(rgba, width, height);
-            }
-            catch (Exception)
-            {
-                // a picture lost, the next one comes
-            }
-        }
-
-        /// <summary>
         /// The emulator is asked to start again from scratch, on the HOME Menu (after the initial
         /// setup: a restart inside the same run does not get through the end of the emulation).
         /// </summary>

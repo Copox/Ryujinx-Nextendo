@@ -22,6 +22,12 @@ namespace Ryujinx.Graphics.Vulkan
 
         private Image[] _swapchainImages;
         private TextureView[] _swapchainImageViews;
+        private TextureView _overlay;
+
+        public override void SetOverlay(ITexture overlay)
+        {
+            _overlay = overlay as TextureView;
+        }
 
         private Semaphore[] _imageAvailableSemaphores;
         private Semaphore[] _renderFinishedSemaphores;
@@ -444,6 +450,21 @@ namespace Ryujinx.Graphics.Vulkan
                     new Extents2D(srcX0, srcY0, srcX1, srcY1),
                     new Extents2D(dstX0, dstY1, dstX1, dstY0),
                     _isLinear,
+                    true);
+            }
+
+            // [Nextendo, HOME Menu work] The notifications of the system over the frame.
+            if (_overlay != null)
+            {
+                _gd.HelperShader.BlitColor(
+                    _gd,
+                    cbs,
+                    _overlay,
+                    _swapchainImageViews[nextImage],
+                    new Extents2D(0, 0, _overlay.Width, _overlay.Height),
+                    new Extents2D(dstPaddingX, dstPaddingY, _width - dstPaddingX, _height - dstPaddingY),
+                    true,
+                    false,
                     true);
             }
 

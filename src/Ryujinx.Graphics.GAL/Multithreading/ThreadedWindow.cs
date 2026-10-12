@@ -10,6 +10,7 @@ namespace Ryujinx.Graphics.GAL.Multithreading
     {
         private readonly ThreadedRenderer _renderer;
         private readonly IRenderer _impl;
+        private ThreadedTexture _overlay;
 
         public ThreadedWindow(ThreadedRenderer renderer, IRenderer impl)
         {
@@ -23,8 +24,13 @@ namespace Ryujinx.Graphics.GAL.Multithreading
             // This is a multithread rate limit - we can't be more than one frame behind the command queue.
 
             _renderer.WaitForFrame();
-            _renderer.New<WindowPresentCommand>()->Set(new TableRef<ThreadedTexture>(_renderer, texture as ThreadedTexture), crop, new TableRef<Action>(_renderer, swapBuffersCallback));
+            _renderer.New<WindowPresentCommand>()->Set(new TableRef<ThreadedTexture>(_renderer, texture as ThreadedTexture), crop, new TableRef<Action>(_renderer, swapBuffersCallback), new TableRef<ThreadedTexture>(_renderer, _overlay));
             _renderer.QueueCommand();
+        }
+
+        public void SetOverlay(ITexture overlay)
+        {
+            _overlay = overlay as ThreadedTexture;
         }
 
         public void SetSize(int width, int height)
