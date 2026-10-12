@@ -11,6 +11,7 @@ namespace Ryujinx.Graphics.Vulkan
         public abstract void Dispose();
         public abstract void Present(ITexture texture, ImageCrop crop, Action swapBuffersCallback);
         public virtual void SetOverlay(ITexture overlay) { }
+        public virtual void SetNotification(ITexture notification, float x, float y, float width, float height) { }
         public abstract void SetSize(int width, int height);
         public abstract void ChangeVSyncMode(VSyncMode vSyncMode);
         public abstract void SetAntiAliasing(AntiAliasing effect);

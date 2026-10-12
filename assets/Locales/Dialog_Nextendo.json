@@ -11049,6 +11049,31 @@
         "zh_CN": "HOME菜单随系统固件提供。请先安装固件（操作 > 安装固件）。",
         "zh_TW": "HOME選單隨系統韌體提供。請先安裝韌體（動作 > 安裝韌體）。"
       }
+    },
+    {
+      "ID": "ConsoleUpdateTitle",
+      "Translations": {
+        "ar_SA": "تحديث متوفر",
+        "de_DE": "Update verfügbar",
+        "el_GR": "Διαθέσιμη ενημέρωση",
+        "en_US": "Update available",
+        "es_ES": "Actualización disponible",
+        "fr_FR": "Mise à jour disponible",
+        "he_IL": "עדכון זמין",
+        "it_IT": "Aggiornamento disponibile",
+        "ja_JP": "アップデートがあります",
+        "ko_KR": "업데이트 가능",
+        "no_NO": "Oppdatering tilgjengelig",
+        "pl_PL": "Dostępna aktualizacja",
+        "pt_BR": "Atualização disponível",
+        "ru_RU": "Доступно обновление",
+        "sv_SE": "Uppdatering tillgänglig",
+        "th_TH": "มีอัปเดตใหม่",
+        "tr_TR": "Güncelleme mevcut",
+        "uk_UA": "Доступне оновлення",
+        "zh_CN": "有可用更新",
+        "zh_TW": "有可用更新"
+      }
     }
   ]
 }

@@ -13,6 +13,12 @@ namespace Ryujinx.Graphics.GAL
         /// </summary>
         void SetOverlay(ITexture overlay) { }
 
+        /// <summary>
+        /// [Nextendo] A notification of the emulator laid over the next frames, at a place given in
+        /// parts of the picture (0 to 1); null for none.
+        /// </summary>
+        void SetNotification(ITexture notification, float x, float y, float width, float height) { }
+
         void SetSize(int width, int height);
 
         void ChangeVSyncMode(VSyncMode vSyncMode);

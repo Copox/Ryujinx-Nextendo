@@ -610,6 +610,11 @@ namespace Ryujinx.Ava.UI.Windows
             // click-through window — the game render is a native surface that paints over Avalonia).
             NextendoNotificationOverlayWindow.Attach(this);
 
+            // [Nextendo] The notifications of the emulator drawn like the console's, over the
+            // picture of the running emulation; "update available" while the HOME Menu runs.
+            NextendoConsoleToasts.Target = () => ViewModel?.AppHost?.Device?.Gpu?.Window;
+            Ryujinx.Ava.Systems.NextendoUpdateNotifier.Start();
+
             // [Nextendo] L'historique ne partait qu'a la fin d'un jeu ou a la fermeture de la
             // fenetre : un emulateur tue ou plante n'envoyait donc rien, et une longue session
             // n'arrivait sur le compte qu'apres coup. Mesure du 2026-08-23 : un compte ayant joue

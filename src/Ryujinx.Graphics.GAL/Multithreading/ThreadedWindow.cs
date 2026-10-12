@@ -11,6 +11,8 @@ namespace Ryujinx.Graphics.GAL.Multithreading
         private readonly ThreadedRenderer _renderer;
         private readonly IRenderer _impl;
         private ThreadedTexture _overlay;
+        private ThreadedTexture _notification;
+        private float _notificationX, _notificationY, _notificationWidth, _notificationHeight;
 
         public ThreadedWindow(ThreadedRenderer renderer, IRenderer impl)
         {
@@ -24,13 +26,22 @@ namespace Ryujinx.Graphics.GAL.Multithreading
             // This is a multithread rate limit - we can't be more than one frame behind the command queue.
 
             _renderer.WaitForFrame();
-            _renderer.New<WindowPresentCommand>()->Set(new TableRef<ThreadedTexture>(_renderer, texture as ThreadedTexture), crop, new TableRef<Action>(_renderer, swapBuffersCallback), new TableRef<ThreadedTexture>(_renderer, _overlay));
+            _renderer.New<WindowPresentCommand>()->Set(new TableRef<ThreadedTexture>(_renderer, texture as ThreadedTexture), crop, new TableRef<Action>(_renderer, swapBuffersCallback), new TableRef<ThreadedTexture>(_renderer, _overlay), new TableRef<ThreadedTexture>(_renderer, _notification), _notificationX, _notificationY, _notificationWidth, _notificationHeight);
             _renderer.QueueCommand();
         }
 
         public void SetOverlay(ITexture overlay)
         {
             _overlay = overlay as ThreadedTexture;
+        }
+
+        public void SetNotification(ITexture notification, float x, float y, float width, float height)
+        {
+            _notification = notification as ThreadedTexture;
+            _notificationX = x;
+            _notificationY = y;
+            _notificationWidth = width;
+            _notificationHeight = height;
         }
 
         public void SetSize(int width, int height)

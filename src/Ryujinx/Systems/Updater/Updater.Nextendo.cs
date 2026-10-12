@@ -302,6 +302,32 @@ namespace Ryujinx.Ava.Systems
         }
 
         /// <summary>
+        /// [Nextendo] The version of a newer release this build can install, or null (silent:
+        /// unreachable means none). NEXTENDO_UPDATE_TEST_VERSION checks as if this build had that
+        /// version (tests).
+        /// </summary>
+        public static async Task<string> NextendoNewerVersionAsync()
+        {
+            try
+            {
+                string running = Environment.GetEnvironmentVariable("NEXTENDO_UPDATE_TEST_VERSION") ?? Program.Version;
+
+                if (!Version.TryParse(running, out Version currentVersion))
+                {
+                    return null;
+                }
+
+                (Version newVersion, string assetUrl) = await QueryNextendoReleaseAsync();
+
+                return newVersion is not null && newVersion > currentVersion && !string.IsNullOrEmpty(assetUrl) ? newVersion.ToString() : null;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Silent check for the "update available" indicator: no dialogs, no download. Returns
         /// false on any failure, because a background check is not worth bothering anyone about.
         /// </summary>
