@@ -38,6 +38,8 @@ namespace Ryujinx.Ava.Common
 
         // Baseline captured at game launch, rolled forward each poll.
         private static HashSet<ulong> _knownRequests = [];
+        // Friends online at the last poll (the HOME Menu says so when one comes online).
+        private static HashSet<ulong> _knownOnline = [];
         // pid -> the game we last ANNOUNCED for that friend. Only a change to a different game (or a
         // first game after coming online) fires; a presence flicker to "online, no game" does NOT
         // reset it, so a friend staying in one game is announced exactly once.
@@ -111,6 +113,7 @@ namespace Ryujinx.Ava.Common
                 lock (_lock)
                 {
                     _knownRequests = requests.Select(r => r.Pid).ToHashSet();
+                    _knownOnline = friends.Where(f => f.OnlineStatus != 0).Select(f => f.Pid).ToHashSet();
                     _announcedGame = friends
                         .Where(f => f.OnlineStatus != 0 && !string.IsNullOrEmpty(f.AppId))
                         .GroupBy(f => f.Pid)
@@ -139,6 +142,13 @@ namespace Ryujinx.Ava.Common
 
                 List<NextendoToastModel> fresh = new();
 
+                // [Nextendo, HOME Menu work] On the HOME Menu, the console's own notifications
+                // (drawn by its overlay applet) say it: a friend request, friends coming online.
+                bool console = Ryujinx.HLE.HOS.HomeMenuStatus.Running;
+                bool newRequest = false;
+                int cameOnline = 0;
+                int online = 0;
+
                 lock (_lock)
                 {
                     if (!_active)
@@ -146,10 +156,17 @@ namespace Ryujinx.Ava.Common
                         return;
                     }
 
+                    HashSet<ulong> nowOnline = friends.Where(f => f.OnlineStatus != 0).Select(f => f.Pid).ToHashSet();
+
+                    cameOnline = nowOnline.Count(pid => !_knownOnline.Contains(pid));
+                    online = nowOnline.Count;
+                    _knownOnline = nowOnline;
+                    newRequest = requests.Any(r => !_knownRequests.Contains(r.Pid));
+
                     // New friend requests since the baseline.
                     foreach (NextendoApi.Friend r in requests)
                     {
-                        if (!_knownRequests.Contains(r.Pid))
+                        if (!_knownRequests.Contains(r.Pid) && !console)
                         {
                             fresh.Add(Build(r,
                                 LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_NotifFriendRequestTitle],
@@ -187,6 +204,19 @@ namespace Ryujinx.Ava.Common
                                     LocaleKeys.Dialog_Nextendo_NotifPlayingFormat, NameOf(f), GameNameOf(f))));
                             _announcedGame[f.Pid] = now;
                         }
+                    }
+                }
+
+                if (console)
+                {
+                    if (newRequest)
+                    {
+                        NextendoSystemNotifications.FriendRequestReceived();
+                    }
+
+                    if (cameOnline > 0)
+                    {
+                        NextendoSystemNotifications.FriendsOnline(online);
                     }
                 }
 
