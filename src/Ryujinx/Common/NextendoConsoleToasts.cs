@@ -49,6 +49,9 @@ namespace Ryujinx.Ava.Common
         {
             while (_queue.TryDequeue(out (string Title, string Text, byte[] Icon, string Glyph) toast))
             {
+                // One notification on screen at a time: this card waits for the console's ones.
+                Ryujinx.Horizon.Ovln.NotificationTurn.Take(SlideSeconds * 2 + HoldSeconds + 0.3);
+
                 try
                 {
                     Play(toast.Title, toast.Text, toast.Icon, toast.Glyph);
@@ -56,6 +59,10 @@ namespace Ryujinx.Ava.Common
                 catch (Exception e)
                 {
                     Logger.Warning?.Print(LogClass.Application, $"[Nextendo][notif] notification not shown: {e.Message}");
+                }
+                finally
+                {
+                    Ryujinx.Horizon.Ovln.NotificationTurn.Release();
                 }
             }
         }

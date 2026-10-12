@@ -28,7 +28,7 @@ namespace Ryujinx.Horizon.Ovln.Ipc
                     {
                         string[] f = item.Split(':');
                         System.Threading.Thread.Sleep((int)(double.Parse(f[0], System.Globalization.CultureInfo.InvariantCulture) * 1000));
-                        OvlnQueue.Notify(System.Convert.ToUInt32(f[1], 16), System.Convert.FromHexString(f.Length > 2 ? f[2] : ""));
+                        OvlnNotifications.Post(System.Convert.ToUInt32(f[1], 16), System.Convert.FromHexString(f.Length > 2 ? f[2] : ""));
                     }
                 }) { IsBackground = true }.Start();
             }
