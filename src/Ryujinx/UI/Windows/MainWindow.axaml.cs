@@ -614,6 +614,13 @@ namespace Ryujinx.Ava.UI.Windows
             // picture of the running emulation; "update available" while the HOME Menu runs.
             NextendoConsoleToasts.Target = () => ViewModel?.AppHost?.Device?.Gpu?.Window;
             Ryujinx.Ava.Systems.NextendoUpdateNotifier.Start();
+            NextendoEventNotifications.Initialize(() =>
+            {
+                if (ViewModel?.AppHost is { } host)
+                {
+                    host.ScreenshotRequested = true;
+                }
+            });
 
             // [Nextendo] L'historique ne partait qu'a la fin d'un jeu ou a la fermeture de la
             // fenetre : un emulateur tue ou plante n'envoyait donc rien, et une longue session
@@ -680,8 +687,18 @@ namespace Ryujinx.Ava.UI.Windows
 
             if (e.NumAppsLoaded == e.NumAppsFound)
             {
-                // The library is complete: a running HOME Menu lists its titles again.
-                Ryujinx.HLE.HOS.HomeMenuLibrary.NotifyChanged();
+                // The library is complete: a running HOME Menu lists its titles again. The games
+                // reach the list on the interface thread: told once they are all there.
+                Dispatcher.UIThread.Post(() =>
+                {
+                    Ryujinx.HLE.HOS.HomeMenuLibrary.NotifyChanged();
+
+                    // [Nextendo] On the HOME Menu, a game never seen before is told.
+                    if (Ryujinx.HLE.HOS.HomeMenuStatus.Running)
+                    {
+                        TellNewGames();
+                    }
+                }, DispatcherPriority.Background);
             }
 
             Dispatcher.UIThread.Post(() =>
@@ -909,6 +926,18 @@ namespace Ryujinx.Ava.UI.Windows
             {
                 LoadApplications();
             }
+
+            // [Nextendo] Games put in the folders while the emulator was closed are told once the
+            // HOME Menu shows; those put in while it runs, at once.
+            WatchGameFolders();
+
+            System.Threading.Tasks.Task.Delay(15000).ContinueWith(_ => Dispatcher.UIThread.Post(() =>
+            {
+                if (Ryujinx.HLE.HOS.HomeMenuStatus.Running)
+                {
+                    TellNewGames();
+                }
+            }));
 
             Ryujinx.HLE.HOS.HomeMenuLibrary.SetProvider(() =>
             {
@@ -1431,6 +1460,73 @@ namespace Ryujinx.Ava.UI.Windows
                     Close();
                 }
             });
+        }
+
+        // [Nextendo, HOME Menu work] The games of the library never seen before, told as notifications.
+        private void TellNewGames()
+        {
+            List<(ulong, string, byte[])> titles = ViewModel.Applications.ToArray()
+                .Where(app => app.Id >= 0x0100000000010000)
+                .Select(app => (app.Id, app.Name, app.Icon))
+                .ToList();
+
+            System.Threading.Tasks.Task.Run(() => NextendoEventNotifications.LibraryLoaded(titles));
+        }
+
+        // [Nextendo, HOME Menu work] While the HOME Menu runs, a game put in a game folder is added
+        // at once: the library is read again (the HOME Menu then lists it) and the game is told.
+        private readonly List<System.IO.FileSystemWatcher> _gameFolderWatchers = [];
+        private System.Threading.Timer _gameFolderSettle;
+
+        private void WatchGameFolders()
+        {
+            if (_gameFolderWatchers.Count > 0)
+            {
+                return;
+            }
+
+            foreach (string folder in ConfigurationState.Instance.UI.GameDirs.Value ?? [])
+            {
+                if (!System.IO.Directory.Exists(folder))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    System.IO.FileSystemWatcher watcher = new(folder)
+                    {
+                        IncludeSubdirectories = true,
+                        NotifyFilter = System.IO.NotifyFilters.FileName | System.IO.NotifyFilters.Size,
+                    };
+
+                    System.IO.FileSystemEventHandler changed = (_, e) => GameFileChanged(e.FullPath);
+
+                    watcher.Created += changed;
+                    watcher.Renamed += (_, e) => GameFileChanged(e.FullPath);
+                    watcher.EnableRaisingEvents = true;
+
+                    _gameFolderWatchers.Add(watcher);
+                }
+                catch (Exception e)
+                {
+                    Logger.Warning?.Print(LogClass.Application, $"[Nextendo] game folder not watched ({folder}): {e.Message}");
+                }
+            }
+        }
+
+        private void GameFileChanged(string path)
+        {
+            string extension = System.IO.Path.GetExtension(path).ToLowerInvariant();
+
+            if (extension is not (".nsp" or ".xci" or ".nsz" or ".xcz" or ".nro" or ".nca") || !Ryujinx.HLE.HOS.HomeMenuStatus.Running)
+            {
+                return;
+            }
+
+            // A copy in progress fires many times: read once it has settled.
+            _gameFolderSettle?.Dispose();
+            _gameFolderSettle = new System.Threading.Timer(_ => Dispatcher.UIThread.Post(LoadApplications), null, 4000, System.Threading.Timeout.Infinite);
         }
 
         public void LoadApplications()

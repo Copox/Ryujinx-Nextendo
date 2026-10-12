@@ -58,6 +58,7 @@
     <EmbeddedResource Include="Debugger\Gdb\Xml\target32.xml" />
     <EmbeddedResource Include="Debugger\Gdb\Xml\target64.xml" />
     <EmbeddedResource Include="Homebrew.npdm" />
+    <EmbeddedResource Include="HOS\Services\Sdb\Pl\PlayStationButtons.bin" />
     <EmbeddedResource Include="HOS\Services\Am\AppletAE\SdCard\*.nro" />
     <EmbeddedResource Include="HOS\Applets\SoftwareKeyboard\Resources\Logo_Ryujinx.png" />
     <EmbeddedResource Include="HOS\Applets\SoftwareKeyboard\Resources\Icon_BtnA.png" />

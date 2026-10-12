@@ -82,6 +82,11 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
                                 romfs.OpenFile(ref fontFile.Ref, ("/" + fontFilename).ToU8Span(), OpenMode.Read).ThrowIfFailure();
 
                                 data = DecryptFont(fontFile.Get.AsStream());
+
+                                if (name == "FontNintendoExtended" && PlayStationButtonFont.Enabled)
+                                {
+                                    data = PlayStationButtonFont.Apply(data);
+                                }
                             }
 
                             FontInfo info = new((int)fontOffset, data.Length);

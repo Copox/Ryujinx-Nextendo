@@ -442,6 +442,19 @@ namespace Ryujinx.Ava.Systems
                         SaveBitmapAsPng(bitmapToSave, path);
 
                         Logger.Notice.Print(LogClass.Application, $"Screenshot saved to '{path}'.", "Screenshot");
+
+                        // [Nextendo] Told with a small copy of the picture.
+                        try
+                        {
+                            using SKBitmap small = bitmapToSave.Resize(new SKImageInfo(256, 144), SKFilterQuality.Medium);
+                            using SKData png = small.Encode(SKEncodedImageFormat.Png, 90);
+
+                            Ryujinx.Ava.Common.NextendoEventNotifications.ScreenshotSaved(png.ToArray());
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Warning?.Print(LogClass.Application, $"[Nextendo] screenshot notification: {ex.Message}");
+                        }
                     }
                 });
             }
@@ -1014,6 +1027,12 @@ namespace Ryujinx.Ava.Systems
                     VulkanHelper.GetRequiredInstanceExtensions),
                 _ => new OpenGLRenderer()
             };
+
+            // [Nextendo] A PlayStation controller for player 1: its symbols in the HOME Menu.
+            Ryujinx.HLE.HOS.Services.Sdb.Pl.PlayStationButtonFont.Enabled =
+                (ConfigurationState.Instance.Hid.InputConfig.Value?.Find(c => c?.PlayerIndex == Ryujinx.Common.Configuration.Hid.PlayerIndex.Player1) is { Backend: Ryujinx.Common.Configuration.Hid.InputBackendType.GamepadSDL3 } first
+                    && Ryujinx.HLE.HOS.Services.Sdb.Pl.PlayStationButtonFont.IsPlayStation(first.Name))
+                || Environment.GetEnvironmentVariable("NEXTENDO_PS_BUTTONS") == "1";
 
             // Initialize Configuration.
             Device = new Switch(ConfigurationState.Instance.CreateHleConfiguration()

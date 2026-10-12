@@ -3,6 +3,8 @@ using SkiaSharp;
 using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.IO;
+using System.Text.RegularExpressions;
 using System.Threading;
 
 namespace Ryujinx.Ava.Common
@@ -20,16 +22,16 @@ namespace Ryujinx.Ava.Common
         private const double SlideSeconds = 0.25;
         private const double HoldSeconds = 4.5;
 
-        private static readonly ConcurrentQueue<(string Title, string Text, byte[] Icon)> _queue = new();
+        private static readonly ConcurrentQueue<(string Title, string Text, byte[] Icon, string Glyph)> _queue = new();
         private static Thread _thread;
         private static readonly object _lock = new();
 
         /// <summary>The window of the GPU to lay the card over (the running emulation's), or null.</summary>
         public static Func<Ryujinx.Graphics.Gpu.Window> Target { get; set; }
 
-        public static void Show(string title, string text, byte[] icon = null)
+        public static void Show(string title, string text, byte[] icon = null, string glyph = null)
         {
-            _queue.Enqueue((title, text, icon));
+            _queue.Enqueue((title, text, icon, glyph));
 
             lock (_lock)
             {
@@ -45,11 +47,11 @@ namespace Ryujinx.Ava.Common
 
         private static void Run()
         {
-            while (_queue.TryDequeue(out (string Title, string Text, byte[] Icon) toast))
+            while (_queue.TryDequeue(out (string Title, string Text, byte[] Icon, string Glyph) toast))
             {
                 try
                 {
-                    Play(toast.Title, toast.Text, toast.Icon);
+                    Play(toast.Title, toast.Text, toast.Icon, toast.Glyph);
                 }
                 catch (Exception e)
                 {
@@ -58,14 +60,14 @@ namespace Ryujinx.Ava.Common
             }
         }
 
-        private static void Play(string title, string text, byte[] icon)
+        private static void Play(string title, string text, byte[] icon, string glyph)
         {
             if (Target?.Invoke() is not { } window)
             {
                 return;
             }
 
-            window.SetNotificationPicture(Draw(title, text, icon), CardWidth, CardHeight);
+            window.SetNotificationPicture(Draw(title, text, icon, glyph), CardWidth, CardHeight);
 
             float width = CardWidth / 1920f;
             float height = CardHeight / 1080f;
@@ -98,12 +100,57 @@ namespace Ryujinx.Ava.Common
             window.SetNotificationPlace(false, 0, 0, 0, 0);
         }
 
+        private static readonly Regex _svgPath = new(@"<path[^>]*? fill=""#([0-9A-Fa-f]{6})""[^>]*? d=""([^""]+)""", RegexOptions.Compiled);
+
+        // The paths of an SVG of the assets (fill, then even-odd outline: holes are cut out).
+        private static void DrawPictogram(SKCanvas canvas, string name, SKRect place)
+        {
+            string svg;
+
+            try
+            {
+                using Stream stream = typeof(NextendoConsoleToasts).Assembly.GetManifestResourceStream($"Ryujinx.Assets.ControllerIcons.{name}.svg");
+
+                if (stream == null)
+                {
+                    return;
+                }
+
+                using StreamReader reader = new(stream);
+                svg = reader.ReadToEnd();
+            }
+            catch (Exception)
+            {
+                return;
+            }
+
+            canvas.Save();
+            canvas.Translate(place.Left, place.Top);
+            canvas.Scale(place.Width / 64f, place.Height / 64f);
+
+            foreach (Match match in _svgPath.Matches(svg))
+            {
+                using SKPath path = SKPath.ParseSvgPathData(match.Groups[2].Value);
+
+                if (path == null)
+                {
+                    continue;
+                }
+
+
+                using SKPaint paint = new() { Color = SKColor.Parse(match.Groups[1].Value), IsAntialias = true };
+                canvas.DrawPath(path, paint);
+            }
+
+            canvas.Restore();
+        }
+
         private static double EaseOut(double t) => 1 - Math.Pow(1 - Math.Clamp(t, 0, 1), 3);
 
         private static double EaseIn(double t) => Math.Pow(Math.Clamp(t, 0, 1), 3);
 
         // The card: the console's dark grey, a thin light edge, the icon in a circle, the text in white.
-        private static byte[] Draw(string title, string text, byte[] icon)
+        private static byte[] Draw(string title, string text, byte[] icon, string glyph)
         {
             SKImageInfo info = new(CardWidth, CardHeight, SKColorType.Rgba8888, SKAlphaType.Unpremul);
 
@@ -119,8 +166,26 @@ namespace Ryujinx.Ava.Common
 
             const float iconSize = 76;
             SKRect iconRect = SKRect.Create(26, (CardHeight - iconSize) / 2, iconSize, iconSize);
+            SKBitmap decoded = icon != null ? SKBitmap.Decode(icon) : null;
 
-            if (icon != null && SKBitmap.Decode(icon) is { } picture)
+            if (decoded != null && decoded.Width > decoded.Height * 1.3f)
+            {
+                // A screenshot: a 16:9 frame with rounded corners.
+                iconRect = SKRect.Create(22, (CardHeight - 72) / 2, 128, 72);
+
+                using (decoded)
+                using (SKPath frame = new())
+                {
+                    frame.AddRoundRect(iconRect, 6, 6);
+                    canvas.Save();
+                    canvas.ClipPath(frame, SKClipOperation.Intersect, true);
+                    canvas.DrawBitmap(decoded, iconRect, new SKPaint { FilterQuality = SKFilterQuality.High, IsAntialias = true });
+                    canvas.Restore();
+                }
+
+                decoded = null;
+            }
+            else if (decoded is { } picture)
             {
                 using (picture)
                 using (SKPath circle = new())
@@ -134,6 +199,13 @@ namespace Ryujinx.Ava.Common
 
                 using SKPaint ring = new() { Color = new SKColor(0x60, 0x60, 0x60), Style = SKPaintStyle.Stroke, StrokeWidth = 2, IsAntialias = true };
                 canvas.DrawOval(iconRect, ring);
+            }
+            else if (!string.IsNullOrEmpty(glyph))
+            {
+                // A pictogram of Assets/ControllerIcons (Kenney's Input Prompts, 64x64), white like
+                // the HOME Menu's own.
+                iconRect = SKRect.Create(18, (CardHeight - 92) / 2f, 92, 92);
+                DrawPictogram(canvas, glyph, iconRect);
             }
 
             float textLeft = iconRect.Right + 28;
