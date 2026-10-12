@@ -420,6 +420,9 @@ namespace Ryujinx.HLE.HOS.Themes
                 process.CpuMemory.Write(at + 0x400, data.AsSpan(0x400, 0x1000));
                 process.CpuMemory.Write(at + 0x1800, data.AsSpan(0x1800, 0x20 * MaxEntries));
                 process.CpuMemory.Write(at + 0x2400, data.AsSpan(0x2400, 0x240));
+                process.CpuMemory.Write(at + QlaunchSettingsPage.ValuesAt, data.AsSpan(QlaunchSettingsPage.ValuesAt, QlaunchSettingsPage.ValuesSize));
+                process.CpuMemory.Write(at + QlaunchSettingsPage.BoxesAt, data.AsSpan(QlaunchSettingsPage.BoxesAt, QlaunchSettingsPage.BoxesSize));
+                process.CpuMemory.Write(at + QlaunchSettingsPage.LabelsAt, data.AsSpan(QlaunchSettingsPage.LabelsAt, QlaunchSettingsPage.LabelsSize));
                 process.CpuMemory.Write(at + 0x3F8, data.AsSpan(0x3F8, 4));
             }
             catch (Exception e)
@@ -501,27 +504,6 @@ namespace Ryujinx.HLE.HOS.Themes
             _bDown = down;
 
             KProcess process = _process;
-
-            // The values of a setting of the "Ryujinx | Nextendo" section: back to the settings.
-            if (pressed && process != null && QlaunchSettingsPage.ValuesShown)
-            {
-                try
-                {
-                    if (PageFocused(process))
-                    {
-                        Rebuild(process, QlaunchSettingsPage.Back());
-                        _bSwallowed = true;
-
-                        return true;
-                    }
-                }
-                catch (Exception e)
-                {
-                    Logger.Warning?.Print(LogClass.ServiceSet, $"[settings] B in the HOME Menu settings: {e.Message}");
-                }
-
-                return false;
-            }
 
             if (!pressed || process == null || _menuPack == null)
             {
@@ -625,6 +607,7 @@ namespace Ryujinx.HLE.HOS.Themes
             process.CpuMemory.Write(at + 0x400, data.AsSpan(0x400, 0x1000));
             process.CpuMemory.Write(at + 0x1800, data.AsSpan(0x1800, 0x20 * MaxEntries));
             process.CpuMemory.Write(at + 0x2400, data.AsSpan(0x2400, 0x200));
+            process.CpuMemory.Write(at + QlaunchSettingsPage.ValuesAt, data.AsSpan(QlaunchSettingsPage.ValuesAt, QlaunchSettingsPage.ValuesSize));
             process.CpuMemory.Write(at + 0x3E8, focus);
             process.CpuMemory.Write(at + 0x3D4, 1);
         }
@@ -786,6 +769,13 @@ namespace Ryujinx.HLE.HOS.Themes
                 process.CpuMemory.Write(baseAddress + slots[i], slot);
             }
 
+            // [Nextendo, HOME Menu work] +0x420: the page uses select boxes (the "Ryujinx |
+            // Nextendo" section), its base then makes their request holder (+0xBB8).
+            byte[] selectBoxes = new byte[8];
+
+            BinaryPrimitives.WriteUInt64LittleEndian(selectBoxes, Cave + 0x38);
+            process.CpuMemory.Write(baseAddress + BuildSlot + 0x60, selectBoxes);
+
             // The page's own code, changed to know the added entries (Qlaunch/build.py).
             byte[] patches = Ryujinx.Common.EmbeddedResources.Read("Ryujinx.HLE/HOS/Themes/Qlaunch/theme_page.patches");
             int count = BinaryPrimitives.ReadInt32LittleEndian(patches);
@@ -829,13 +819,7 @@ namespace Ryujinx.HLE.HOS.Themes
             {
                 try
                 {
-                    int row = process.CpuMemory.Read<int>(_base + Cave + CodeSize + 0x3D8);
-                    int focus = QlaunchSettingsPage.Pick(row);
-
-                    if (focus >= 0)
-                    {
-                        Rebuild(process, focus);
-                    }
+                    QlaunchSettingsPage.Open(process, _base + Cave + CodeSize, process.CpuMemory.Read<int>(_base + Cave + CodeSize + 0x3D8));
                 }
                 catch (Exception e)
                 {
@@ -893,6 +877,34 @@ namespace Ryujinx.HLE.HOS.Themes
             return true;
         }
 
+        /// <summary>
+        /// [Nextendo, HOME Menu work] A choice made in a select box of the "Ryujinx | Nextendo"
+        /// section (the added code says so): the setting takes it, the entries show it.
+        /// </summary>
+        internal static bool TakeSettingsResult(KProcess process)
+        {
+            if (process != _process)
+            {
+                return false;
+            }
+
+            try
+            {
+                int row = QlaunchSettingsPage.TakeResult(process, _base + Cave + CodeSize);
+
+                if (row >= 0)
+                {
+                    Rebuild(process, row);
+                }
+            }
+            catch (Exception e)
+            {
+                Logger.Warning?.Print(LogClass.ServiceSet, $"[settings] HOME Menu settings: {e.Message}");
+            }
+
+            return true;
+        }
+
         /// <summary>The program has started (its modules are known): the added code may run.</summary>
         internal static void Activate(KProcess process)
         {
@@ -920,7 +932,7 @@ namespace Ryujinx.HLE.HOS.Themes
 
             if (QlaunchSettingsPage.Active)
             {
-                QlaunchSettingsPage.Write(data, EntriesToMake(Math.Min(packs.Count, MaxEntries)), RefreshSignal);
+                QlaunchSettingsPage.Write(data, EntriesToMake(Math.Min(packs.Count, MaxEntries)), RefreshSignal, _base + Cave + CodeSize);
 
                 return;
             }

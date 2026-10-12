@@ -14,6 +14,9 @@ namespace Ryujinx.Common.Configuration
         public string[] Values { get; init; }
         public Func<int> Get { get; init; }
         public Action<int> Set { get; init; }
+
+        /// <summary>Taken into account when the emulation starts again (it then starts again).</summary>
+        public bool Restart { get; init; }
     }
 
     /// <summary>The emulator's settings for the HOME Menu, given by the interface.</summary>

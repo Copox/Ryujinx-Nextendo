@@ -181,6 +181,29 @@ namespace Ryujinx.HLE.HOS
                     count++;
                 }
 
+                // ... and the titles and choices of its select boxes (as Region's: a title, a
+                // label per choice), in the language of that file.
+                if (programId == 0x0100000000001000 && entry.FullPath.EndsWith("/setting.msbt.szs", StringComparison.Ordinal))
+                {
+                    foreach (Ryujinx.Common.Configuration.NextendoEmulatorSetting setting in Ryujinx.Common.Configuration.NextendoEmulatorSettings.List)
+                    {
+                        if (AddMsbtLabel(patched, Themes.QlaunchSettingsPage.TitleLabel(setting.Key), Themes.QlaunchSettingsPage.Text(setting.Key, language), "SetCntHardware_BtnSelRegion") is { } withTitle)
+                        {
+                            patched = withTitle;
+                            count++;
+                        }
+
+                        for (int choice = 0; choice < setting.Values.Length; choice++)
+                        {
+                            if (AddMsbtLabel(patched, Themes.QlaunchSettingsPage.ChoiceLabel(setting.Key, choice), Themes.QlaunchSettingsPage.Shown(setting.Values[choice], language), "SetArea_Japan") is { } withChoice)
+                            {
+                                patched = withChoice;
+                                count++;
+                            }
+                        }
+                    }
+                }
+
                 if (count > 0)
                 {
                     changed[entry.FullPath] = Yaz0Encode(patched);
@@ -245,6 +268,16 @@ namespace Ryujinx.HLE.HOS
 
             // [Nextendo] The Controllers page: its Pro Controller picture follows the controller of
             // player 1 (PlayStation, Xbox), its layers drawn from Kenney's Input Prompts (CC0).
+            // [Nextendo, HOME Menu work] The entries of the themes page get a value on the right,
+            // hidden (the "Ryujinx | Nextendo" section shows it), and room for longer names.
+            const string SettingsLayout = "/lyt/Set.szs";
+
+            if (programId == 0x0100000000001000 && Exists(baseRom, SettingsLayout) &&
+                AddEntryValueText(Yaz0Decode(changed.TryGetValue(SettingsLayout, out byte[] themedSettings) ? themedSettings : Read(baseRom, SettingsLayout))) is { } withValues)
+            {
+                changed[SettingsLayout] = Yaz0Encode(withValues);
+            }
+
             const string ControllerLayout = "/lyt/Controller.szs";
 
             if (programId == 0x0100000000001003 && ControllerPagePictures() is { } pictures && Exists(baseRom, ControllerLayout))
@@ -344,6 +377,85 @@ namespace Ryujinx.HLE.HOS
             }
 
             return false;
+        }
+
+        // The theme chosen in the HOME Menu (nextendo_color_set.txt: 0 Basic White, 1 Basic Black,
+        // the latter when none was chosen).
+        private static bool WhiteTheme()
+        {
+            try
+            {
+                string saved = System.IO.Path.Combine(Ryujinx.Common.Configuration.AppDataManager.BaseDirPath, "nextendo_color_set.txt");
+
+                return File.Exists(saved) && File.ReadAllText(saved).Trim() == "0";
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        // The entry of the themes page (SetBtnListCheckTheme_) with the value text of System's lists
+        // (T_Value of BtnListSelBox, "Language ..... English") under its right side, hidden, and
+        // room for 63 characters in it and in the name. Null when it cannot be done.
+        private static byte[] AddEntryValueText(byte[] settings)
+        {
+            try
+            {
+                Themes.SarcArchive archive = Themes.SarcArchive.Read(settings);
+
+                if (!archive.Files.TryGetValue("blyt/SetBtnListCheckTheme_.bflyt", out byte[] entryData) ||
+                    !archive.Files.TryGetValue("blyt/BtnListSelBox.bflyt", out byte[] selectData))
+                {
+                    return null;
+                }
+
+                Themes.LayoutFile entry = new(entryData);
+                Themes.LayoutFile select = new(selectData);
+                Themes.LayoutFile.Section value = select.Pane("T_Value");
+                int right = entry.FindPane("N_R");
+
+                if (entry.FindPane("T_Value") >= 0 || value == null || right < 0 || right + 1 >= entry.Sections.Count || entry.Sections[right + 1].Magic != "pas1")
+                {
+                    return null;
+                }
+
+                List<byte[]> materials = entry.Materials();
+
+                materials.Add(select.Materials()[BitConverter.ToUInt16(value.Data, 0x58)]);
+                entry.SetMaterials(materials);
+
+                byte[] text = (byte[])value.Data.Clone();
+
+                BitConverter.TryWriteBytes(text.AsSpan(0x54), (ushort)0x80);                 // room
+                BitConverter.TryWriteBytes(text.AsSpan(0x58), (ushort)(materials.Count - 1)); // its material
+                BitConverter.TryWriteBytes(text.AsSpan(0x5A), (ushort)0);                     // the entry's font
+                text[0x08] &= 0xFE;                                                           // hidden
+
+                // The colour of System's values: the accent of the theme in use (Basic White:
+                // blue, Basic Black: teal), as the HOME Menu starts again when it changes.
+                string accent = WhiteTheme() ? "FFFF5032" : "FFC8FF00";
+
+                Themes.LayoutFile.SetColor(text, 0x68, accent); // font, top
+                Themes.LayoutFile.SetColor(text, 0x6C, accent); // font, bottom
+
+                entry.Sections.Insert(right + 2, new Themes.LayoutFile.Section("txt1", text));
+
+                if (entry.Pane("T_00") is { } name && BitConverter.ToUInt16(name.Data, 0x54) < 0x80)
+                {
+                    BitConverter.TryWriteBytes(name.Data.AsSpan(0x54), (ushort)0x80);
+                }
+
+                archive.Files["blyt/SetBtnListCheckTheme_.bflyt"] = entry.Write();
+
+                return archive.Write();
+            }
+            catch (Exception e)
+            {
+                Logger.Warning?.Print(LogClass.ModLoader, $"[Nextendo] themes page entries left as they are: {e.Message}");
+
+                return null;
+            }
         }
 
         // Puts new texture data (GPU layout of the original, same size) in place of a texture of a

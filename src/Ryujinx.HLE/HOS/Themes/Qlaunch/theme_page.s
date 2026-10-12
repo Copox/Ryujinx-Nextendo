@@ -61,6 +61,7 @@
     b footer_focus                ; +0x2C
     b settings_scene              ; +0x30
     b themes_scene                ; +0x34
+    b uses_select_boxes           ; +0x38 (vtable slot +0x420 of the page)
 
 ; ---------------------------------------------------------------------------------------------
 ; [Nextendo, HOME Menu work] The settings menu builds the page of a section (a switch on its
@@ -308,6 +309,13 @@ build_entry:
     b build_entry
 
 build_done:
+    ; the "Ryujinx | Nextendo" section: a select box per setting, as System has
+    adrp x8, @DATA
+    ldr w9, [x8, #0x3c0]
+    cbz w9, build_done_boxes
+    mov x0, x19
+    bl settings_build
+build_done_boxes:
     adrp x8, @DATA                ; the entries made
     ldr w9, [x8, #0x3e4]
     cmp w9, #16
@@ -1091,6 +1099,7 @@ main_poll:
     mov x29, sp
     stp x19, x20, [sp, #0x10]
     stp x21, x22, [sp, #0x20]
+    bl settings_poll
     adrp x20, @DATA
     ldr w8, [x20, #0x3d4]
     cbz w8, main_poll_done
@@ -1447,6 +1456,8 @@ refresh_checks:
     add w24, w24, #1
     b refresh_checks
 refresh_checks_done:
+    mov x0, x19
+    bl settings_style
     ldp x25, x26, [sp, #0x130]
     ldp x23, x24, [sp, #0x120]
     ldp x21, x22, [sp, #0x110]
@@ -1713,6 +1724,7 @@ destroy:
     stp x21, x22, [sp, #0x20]
     stp x23, x24, [sp, #0x30]
     mov x19, x0
+    bl settings_free
     adrp x8, @DATA
     str xzr, [x8, #0x38]
 
@@ -1784,6 +1796,489 @@ destroy_page_picture:
     ldp x29, x30, [sp], #0x40
     b #0x98e0c0
 
+
+; ---------------------------------------------------------------------------------------------
+; [Nextendo, HOME Menu work] The "Ryujinx | Nextendo" section (+0x3C0 set): its entries look
+; like those of System ("Resolution .......... 2x"): the value on the right, in the texts of the
+; check (+0x3000: 0x80 bytes per entry, UTF-16, the page's own two first), the check shown.
+; x0 = the page
+settings_style:
+    adrp x8, @DATA
+    ldr w9, [x8, #0x3c0]
+    cbz w9, settings_style_done
+    stp x29, x30, [sp, #-0x30]!
+    mov x29, sp
+    stp x19, x20, [sp, #0x10]
+    str x21, [sp, #0x20]
+    mov x19, x0
+    ldr x0, [x19, #0xcd0]
+    mov w1, #0
+    bl settings_entry
+    ldr x0, [x19, #0xcf0]
+    mov w1, #1
+    bl settings_entry
+    mov w20, wzr
+settings_style_entry:
+    adrp x8, @DATA
+    ldr w9, [x8, #0x3ec]
+    cmp w20, w9
+    b.ge settings_style_end
+    add x8, x8, #0x100
+    add x8, x8, x20, lsl #5
+    ldr x0, [x8, #0x10]
+    add w1, w20, #2
+    bl settings_entry
+    add w20, w20, #1
+    b settings_style_entry
+settings_style_end:
+    ldr x21, [sp, #0x20]
+    ldp x19, x20, [sp, #0x10]
+    ldp x29, x30, [sp], #0x30
+settings_style_done:
+    ret
+
+; one entry: x0 = its button, w1 = its row (the value at +0x3000 + 0x80 * row)
+settings_entry:
+    cbz x0, settings_entry_done
+    stp x29, x30, [sp, #-0x20]!
+    mov x29, sp
+    stp x19, x20, [sp, #0x10]
+    mov x19, x0
+    adrp x20, @DATA
+    add x20, x20, #0x3000
+    add x20, x20, x1, lsl #7
+    mov w1, #0
+    bl show_check
+    mov x0, x19
+    mov w1, #0
+    bl show_picture
+    mov x0, x19
+    adr x1, name_value
+    mov x2, x20
+    bl set_named_text
+    mov x0, x19
+    mov w1, #1
+    adr x2, name_value
+    bl show_pane
+    ; the name where the picture was: N_LPos (x 105) at 0
+    ldr x8, [x19, #0x20]
+    ldr x0, [x8, #0x18]
+    adr x1, name_lpos
+    bl #0xb94e20
+    cbz x0, settings_entry_end
+    mov w9, #0x42d20000
+    mov x10, #0
+settings_entry_lpos:
+    cmp x10, #0x80
+    b.ge settings_entry_end
+    ldr w11, [x0, x10]
+    cmp w11, w9
+    b.ne settings_entry_lpos_next
+    str wzr, [x0, x10]
+    b settings_entry_end
+settings_entry_lpos_next:
+    add x10, x10, #4
+    b settings_entry_lpos
+settings_entry_end:
+    ldp x19, x20, [sp, #0x10]
+    ldp x29, x30, [sp], #0x20
+settings_entry_done:
+    ret
+
+; a text of an entry: x0 = its button, x1 = the pane's name, x2 = the text (UTF-16)
+set_named_text:
+    cbz x0, set_named_text_done
+    stp x29, x30, [sp, #-0x30]!
+    mov x29, sp
+    str x19, [sp, #0x20]
+    mov x19, x2
+    ldr x8, [x0, #0x20]
+    ldr x0, [x8, #0x18]
+    bl #0xb94e20
+    cbz x0, set_named_text_end
+    str x0, [sp, #0x10]
+    str x19, [sp, #0x18]
+    add x0, sp, #0x10
+    add x1, sp, #0x18
+    bl #0xb98e80
+set_named_text_end:
+    ldr x19, [sp, #0x20]
+    ldp x29, x30, [sp], #0x30
+set_named_text_done:
+    ret
+
+
+; ---------------------------------------------------------------------------------------------
+; [Nextendo, HOME Menu work] The select boxes of the "Ryujinx | Nextendo" section: the system's
+; own (those of System: Region, Language), one per setting, made as System makes them
+; (0x890670): a manager (0x400 bytes, 0xB10E60 / 0xB10FD0), then each box (0x178 bytes, its
+; fields, 0xB15230 with its parameters, 0xB15820 per choice, 0xB18BC0 its title, 0xB15720).
+; Opened as System opens Region's (0x8955C0): the page's select box request (+0xBB8, made by
+; the page's base when vtable +0x420 says so) given the box, and the request to the system.
+; Data page (written by the emulator):
+;   +0x3A00 u64   the manager; +0x3A08 u64 per setting: its box
+;   +0x3B00 u32   number of settings; +0x3B04 u8 per setting: its number of choices
+;   +0x3B40 u32   per setting: its choice in use
+;   +0x4000 0x40 bytes per setting: u64 pointers to its title's label, then its choices'
+;   +0x03C4 u32   the setting whose box to open, plus one (the emulator, on A); 0 when done
+;   +0x03C8 s32   the choice made, +0x03CC u32 its setting (then "NxSettng" to the emulator)
+
+; vtable +0x420: the page uses select boxes (in the "Ryujinx | Nextendo" section)
+uses_select_boxes:
+    adrp x8, @DATA
+    ldr w0, [x8, #0x3c0]
+    cmp w0, #0
+    cset w0, ne
+    ret
+
+; the boxes made: x0 = the page
+settings_build:
+    stp x29, x30, [sp, #-0x1a0]!
+    mov x29, sp
+    stp x19, x20, [sp, #0x10]
+    stp x21, x22, [sp, #0x20]
+    stp x23, x24, [sp, #0x30]
+    stp x25, x26, [sp, #0x40]
+    stp x27, x28, [sp, #0x50]
+    mov x19, x0
+    adrp x28, @DATA
+    ldr x20, [x28, #8]            ; the build argument: the allocator's holder
+    ; the manager
+    ldr x0, [x20]
+    ldr x8, [x0]
+    ldr x8, [x8, #0x10]
+    mov w1, #0x400
+    mov w2, #8
+    blr x8
+    cbz x0, settings_build_end
+    mov x21, x0
+    bl #0xb10e60
+    add x8, x28, #0x3000
+    str x21, [x8, #0xa00]
+    add x1, sp, #0x90
+    str x20, [x1]
+    str wzr, [x1, #8]
+    str xzr, [x1, #0x10]
+    adrp x9, #0xef9000
+    add x9, x9, #0x4c
+    str x9, [x1, #0x18]
+    str x9, [x1, #0x20]
+    str wzr, [x1, #0x28]
+    mov x0, x21
+    bl #0xb10fd0
+    mov w22, wzr
+settings_build_box:
+    add x8, x28, #0x3000
+    ldr w9, [x8, #0xb00]
+    cmp w22, w9
+    b.ge settings_build_end
+    cmp w22, #16
+    b.ge settings_build_end
+    ; the box
+    ldr x0, [x20]
+    ldr x8, [x0]
+    ldr x8, [x8, #0x10]
+    mov w1, #0x178
+    mov w2, #8
+    blr x8
+    cbz x0, settings_build_end
+    mov x23, x0
+    bl select_box_fields
+    add x8, x28, #0x3000
+    add x8, x8, #0xa08
+    str x23, [x8, x22, lsl #3]
+    ; its parameters (0x90 bytes at sp+0xC0)
+    add x1, sp, #0xc0
+    mov x9, #0
+settings_build_zero:
+    str xzr, [x1, x9]
+    add x9, x9, #8
+    cmp x9, #0x90
+    b.lt settings_build_zero
+    str x20, [x1]
+    add x8, x28, #0x3000
+    add x8, x8, #0xb04
+    ldrb w9, [x8, x22]
+    str w9, [x1, #8]
+    adrp x9, #0x108a000
+    add x9, x9, #0x988            ; an empty function
+    str x9, [x1, #0x10]
+    add x10, x1, #0x20
+    str x10, [x1, #0x18]
+    str x9, [x1, #0x40]
+    adrp x9, #0x1085000
+    add x9, x9, #0x288            ; a method of the page
+    str x9, [x1, #0x20]
+    str x19, [x1, #0x28]
+    adr x9, settings_results
+    add x9, x9, x22, lsl #3
+    str x9, [x1, #0x30]
+    adrp x9, #0xef9000
+    add x9, x9, #0x4c
+    str x9, [x1, #0x78]
+    add x8, x28, #0x3000
+    ldr x9, [x8, #0xa00]
+    str x9, [x1, #0x88]
+    mov x0, x23
+    bl #0xb15230
+    ; its choices
+    mov w24, wzr
+settings_build_choice:
+    add x8, x28, #0x3000
+    add x8, x8, #0xb04
+    ldrb w9, [x8, x22]
+    cmp w24, w9
+    b.ge settings_build_title
+    cmp w24, #7
+    b.ge settings_build_title
+    add x8, x28, #0x4000
+    add x8, x8, x22, lsl #6
+    add x8, x8, #8
+    ldr x9, [x8, x24, lsl #3]
+    add x1, sp, #0x70
+    str x9, [x1]
+    adrp x9, #0xef9000
+    add x9, x9, #0x4a
+    str x9, [x1, #8]
+    strb wzr, [x1, #0x10]
+    mov x0, x23
+    bl #0xb15820
+    add w24, w24, #1
+    b settings_build_choice
+settings_build_title:
+    add x8, x28, #0x4000
+    add x8, x8, x22, lsl #6
+    ldr x1, [x8]
+    ldr x0, [x23, #0x38]
+    cbz x0, settings_build_finish
+    bl #0xb18bc0
+settings_build_finish:
+    mov x0, x23
+    bl #0xb15720
+    add w22, w22, #1
+    b settings_build_box
+settings_build_end:
+    ldp x27, x28, [sp, #0x50]
+    ldp x25, x26, [sp, #0x40]
+    ldp x23, x24, [sp, #0x30]
+    ldp x21, x22, [sp, #0x20]
+    ldp x19, x20, [sp, #0x10]
+    ldp x29, x30, [sp], #0x1a0
+    ret
+
+; a new box's fields: x0 = the box
+select_box_fields:
+    adrp x8, #0x10e2000
+    add x8, x8, #0x258
+    str x8, [x0]
+    str xzr, [x0, #8]
+    str wzr, [x0, #0x10]
+    stp xzr, xzr, [x0, #0x18]
+    stp xzr, xzr, [x0, #0x28]
+    stp xzr, xzr, [x0, #0x38]
+    adrp x8, #0x10e1000
+    add x8, x8, #0x478
+    stp xzr, x8, [x0, #0x48]
+    stp xzr, xzr, [x0, #0x58]
+    strb wzr, [x0, #0x68]
+    adrp x9, #0x108a000
+    add x9, x9, #0x988
+    stp x9, xzr, [x0, #0x70]
+    stp x9, xzr, [x0, #0xa0]
+    stp x9, xzr, [x0, #0xd0]
+    stp x9, xzr, [x0, #0x100]
+    stp x9, xzr, [x0, #0x130]
+    str wzr, [x0, #0x160]
+    add x8, x0, #0x160
+    stur wzr, [x8, #3]
+    mov w8, #0x101
+    add x9, x0, #0x167
+    strh w8, [x9]
+    mov x8, #0x7fffffff00000000
+    add x9, x0, #0x16c
+    str x8, [x9]
+    strb wzr, [x0, #0x174]
+    ret
+
+; once a frame: a box to open (asked by the emulator): its choice in use ticked, then shown
+settings_poll:
+    adrp x8, @DATA
+    ldr w9, [x8, #0x3c4]
+    cbz w9, settings_poll_done
+    str wzr, [x8, #0x3c4]
+    sub w9, w9, #1
+    cmp w9, #16
+    b.ge settings_poll_done
+    add x10, x8, #0x3000
+    add x10, x10, #0xa08
+    ldr x0, [x10, x9, lsl #3]
+    cbz x0, settings_poll_done
+    add x10, x8, #0x3000
+    add x10, x10, #0xb40
+    ldr w1, [x10, x9, lsl #2]
+    ; the tick: every choice cleared, the one in use set (as System does for Region)
+    ldr x11, [x0, #0x40]
+    ldr x12, [x11, #0x70]
+    ldrb w13, [x11, #0x80]
+    tbnz w13, #0, settings_poll_tick
+    ldr w13, [x12, #0x10]
+    mov w14, wzr
+settings_poll_clear:
+    cmp w14, w13
+    b.ge settings_poll_tick
+    ldp w15, w16, [x12, #8]
+    add w17, w14, w16
+    cmp w17, w15
+    csel w15, wzr, w15, lt
+    sub w17, w17, w15
+    mov w15, #0x28
+    smull x17, w17, w15
+    ldr x15, [x12]
+    strb wzr, [x15, x17]
+    add w14, w14, #1
+    b settings_poll_clear
+settings_poll_tick:
+    ldp w15, w16, [x12, #8]
+    add w17, w1, w16
+    cmp w17, w15
+    csel w15, wzr, w15, lt
+    sub w17, w17, w15
+    mov w15, #0x28
+    smull x17, w17, w15
+    ldr x15, [x12]
+    mov w13, #1
+    strb w13, [x15, x17]
+    str w1, [x12, #0x30]
+    ; the request: the page's (+0xBB8), free, given the box, then to the system
+    ldr x10, [x8, #0x38]
+    cbz x10, settings_poll_done
+    ldr x11, [x10, #0xbb8]
+    cbz x11, settings_poll_done
+    ldr w12, [x11, #0x30]
+    cbnz w12, settings_poll_done
+    str x0, [x11]
+    mov w12, #1
+    str w12, [x11, #0x30]
+    adrp x13, #0x4254000
+    ldr x13, [x13, #0x558]
+    str x11, [x13]
+settings_poll_done:
+    ret
+
+; a choice made in a box (x0 = the page, w1 = its setting, w2 = the choice, -1 when left)
+settings_result:
+    cmn w2, #1
+    b.eq settings_result_done
+    adrp x8, @DATA
+    str w2, [x8, #0x3c8]
+    str w1, [x8, #0x3cc]
+    adr x0, settings_signal
+    mov x1, #8
+    svc #0x27
+settings_result_done:
+    ret
+
+; one entry per setting (its number given to settings_result)
+settings_results:
+    mov w1, #0
+    b settings_result
+    mov w1, #1
+    b settings_result
+    mov w1, #2
+    b settings_result
+    mov w1, #3
+    b settings_result
+    mov w1, #4
+    b settings_result
+    mov w1, #5
+    b settings_result
+    mov w1, #6
+    b settings_result
+    mov w1, #7
+    b settings_result
+    mov w1, #8
+    b settings_result
+    mov w1, #9
+    b settings_result
+    mov w1, #10
+    b settings_result
+    mov w1, #11
+    b settings_result
+    mov w1, #12
+    b settings_result
+    mov w1, #13
+    b settings_result
+    mov w1, #14
+    b settings_result
+    mov w1, #15
+    b settings_result
+
+; the boxes and the manager freed with the page (as System frees its own, 0x8935F8)
+settings_free:
+    stp x29, x30, [sp, #-0x30]!
+    mov x29, sp
+    stp x19, x20, [sp, #0x10]
+    str x21, [sp, #0x20]
+    adrp x19, @DATA
+    mov w20, wzr
+settings_free_box:
+    cmp w20, #16
+    b.ge settings_free_manager
+    add x8, x19, #0x3000
+    add x8, x8, #0xa08
+    ldr x21, [x8, x20, lsl #3]
+    str xzr, [x8, x20, lsl #3]
+    cbz x21, settings_free_next
+    mov x0, x21
+    bl #0xb15460
+    mov x0, x21
+    bl #0xb14ff0
+    mov x0, x21
+    mov w1, #0x178
+    bl #0x33c560
+settings_free_next:
+    add w20, w20, #1
+    b settings_free_box
+settings_free_manager:
+    add x8, x19, #0x3000
+    ldr x21, [x8, #0xa00]
+    str xzr, [x8, #0xa00]
+    cbz x21, settings_free_done
+    ; as System (0x89365C): its object told first, then deleted, then the manager's parts
+    ldr x0, [x21]
+    cbz x0, settings_free_manager_parts
+    ldr x8, [x0]
+    ldr x8, [x8, #0x18]
+    blr x8
+    ldr x0, [x21]
+    str xzr, [x21]
+    cbz x0, settings_free_manager_parts
+    ldr x8, [x0]
+    ldr x8, [x8, #8]
+    blr x8
+settings_free_manager_parts:
+    add x0, x21, #0x230
+    bl #0xb2c6f0
+    add x0, x21, #8
+    bl #0xb3b3f0
+settings_free_manager_mem:
+    mov x0, x21
+    mov w1, #0x400
+    bl #0x33c560
+settings_free_done:
+    ldr x21, [sp, #0x20]
+    ldp x19, x20, [sp, #0x10]
+    ldp x29, x30, [sp], #0x30
+    ret
+
+name_value:
+    .byte 84, 95, 86, 97, 108, 117, 101, 0
+name_lpos:
+    .byte 78, 95, 76, 80, 111, 115, 0
+    .byte 0, 0, 0, 0, 0, 0, 0, 0
+
 ; the name of the "Ryujinx | Nextendo" button (a label added to setting.msbt)
 nav_label:
     .byte 78, 120, 95, 83, 101, 116, 78, 97, 118, 95, 82, 121, 117, 106, 105, 110, 120, 0
+settings_signal:
+    .byte 78, 120, 83, 101, 116, 116, 110, 103

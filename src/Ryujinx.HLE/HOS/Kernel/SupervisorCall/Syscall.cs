@@ -1969,6 +1969,13 @@ namespace Ryujinx.HLE.HOS.Kernel.SupervisorCall
                 return;
             }
 
+            // [Nextendo, HOME Menu work] A choice made in a select box of the HOME Menu's
+            // "Ryujinx | Nextendo" settings.
+            if (str == HOS.Themes.QlaunchSettingsPage.ResultSignal && HOS.Themes.QlaunchThemePage.TakeSettingsResult(process))
+            {
+                return;
+            }
+
             Logger.Warning?.Print(LogClass.KernelSvc, str);
         }
 

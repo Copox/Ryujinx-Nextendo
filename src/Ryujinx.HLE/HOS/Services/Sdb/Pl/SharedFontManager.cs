@@ -48,9 +48,10 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
 
         public void Initialize()
         {
-            _fontData?.Clear();
-            _fontData = null;
-
+            // [Nextendo, HOME Menu work] Called again whenever a process starts (the HOME Menu's
+            // applets): the fonts in the shared memory were then wiped and written again while
+            // the HOME Menu drew text with them, and it stopped on a glyph read as zeros. They do
+            // not change while the emulation runs (a new one has a new manager): kept once loaded.
         }
 
         public void EnsureInitialized(ContentManager contentManager)
