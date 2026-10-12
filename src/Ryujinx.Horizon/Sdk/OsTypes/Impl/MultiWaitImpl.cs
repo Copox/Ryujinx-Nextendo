@@ -89,7 +89,7 @@ namespace Ryujinx.Horizon.Sdk.OsTypes.Impl
 
             int count = FillObjectsArray(objectHandlesSpan, objectsSpan);
 
-            long endTime = infinite ? long.MaxValue : PerformanceCounter.ElapsedMilliseconds * 1000000;
+            long endTime = infinite ? long.MaxValue : PerformanceCounter.ElapsedMilliseconds * 1000000 + timeout;
 
             while (true)
             {
