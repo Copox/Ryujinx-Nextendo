@@ -73,10 +73,10 @@ namespace Ryujinx.Ava.Common
         }
 
         private static void ControllerDisconnected(string name) =>
-            NextendoConsoleToasts.Show(LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_NotifControllerDisconnected], name, null, PictogramOf(name));
+            NextendoConsoleToasts.Show(LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_NotifControllerDisconnected], name, null, PictogramOf(name) + "+flair_disconnected");
 
         private static void ControllerBatteryLow(string name, int percent) =>
-            NextendoConsoleToasts.Show(LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_NotifBatteryLow], $"{name} ({percent} %)", null, "battery_low");
+            NextendoConsoleToasts.Show(LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_NotifBatteryLow], $"{name} ({percent} %)", null, PictogramOf(name) + "+flair_battery");
 
         /// <summary>A screenshot was saved: its picture as the icon.</summary>
         public static void ScreenshotSaved(byte[] png) =>

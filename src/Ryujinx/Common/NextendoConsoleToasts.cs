@@ -187,25 +187,35 @@ namespace Ryujinx.Ava.Common
             }
             else if (decoded is { } picture)
             {
+                // A game icon or a badge: a square with slightly rounded corners.
                 using (picture)
-                using (SKPath circle = new())
+                using (SKPath square = new())
                 {
-                    circle.AddOval(iconRect);
+                    square.AddRoundRect(iconRect, 6, 6);
                     canvas.Save();
-                    canvas.ClipPath(circle, SKClipOperation.Intersect, true);
+                    canvas.ClipPath(square, SKClipOperation.Intersect, true);
                     canvas.DrawBitmap(picture, iconRect, new SKPaint { FilterQuality = SKFilterQuality.High, IsAntialias = true });
                     canvas.Restore();
                 }
-
-                using SKPaint ring = new() { Color = new SKColor(0x60, 0x60, 0x60), Style = SKPaintStyle.Stroke, StrokeWidth = 2, IsAntialias = true };
-                canvas.DrawOval(iconRect, ring);
             }
             else if (!string.IsNullOrEmpty(glyph))
             {
                 // A pictogram of Assets/ControllerIcons (Kenney's Input Prompts, 64x64), white like
                 // the HOME Menu's own.
                 iconRect = SKRect.Create(18, (CardHeight - 92) / 2f, 92, 92);
-                DrawPictogram(canvas, glyph, iconRect);
+                // "controller+flair": the controller a little smaller at the top left, the flair
+                // (battery, disconnected) over its bottom right corner, as Kenney composes them.
+                string[] parts = glyph.Split('+');
+
+                if (parts.Length > 1)
+                {
+                    DrawPictogram(canvas, parts[0], SKRect.Create(iconRect.Left, iconRect.Top, iconRect.Width * 0.86f, iconRect.Height * 0.86f));
+                    DrawPictogram(canvas, parts[1], iconRect);
+                }
+                else
+                {
+                    DrawPictogram(canvas, glyph, iconRect);
+                }
             }
 
             float textLeft = iconRect.Right + 28;
