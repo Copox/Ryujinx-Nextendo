@@ -757,6 +757,12 @@ namespace Ryujinx.HLE.HOS.Themes
         /// <summary>Puts the code and the data after the image, and points the page at them.</summary>
         internal static void Apply(KProcess process, ulong baseAddress)
         {
+            // [Nextendo] the HOME Menu as the console has it: no themes page, no added section
+            if (Ryujinx.Common.Configuration.NextendoHomeMenuVanilla.Enabled)
+            {
+                return;
+            }
+
             byte[] code = Ryujinx.Common.EmbeddedResources.Read("Ryujinx.HLE/HOS/Themes/Qlaunch/theme_page.bin");
             byte[] data = new byte[DataSize];
 

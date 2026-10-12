@@ -52,6 +52,7 @@ namespace Ryujinx.HLE.HOS.Themes
                 ["shadercache"] = "Shader cache", ["recompression"] = "Tex. recompress", ["macrohle"] = "Macro HLE",
                 ["on"] = "On", ["off"] = "Off", ["auto"] = "Auto", ["native"] = "Native", ["tv"] = "TV", ["handheld"] = "Handheld",
                 ["stretch"] = "Stretched",
+                ["vanilla"] = "HOME Menu as on the console",
                 ["restart"] = "To apply these settings, Ryujinx | Nextendo needs to restart:",
             },
             ["fr"] = new()
@@ -61,6 +62,7 @@ namespace Ryujinx.HLE.HOS.Themes
                 ["shadercache"] = "Cache shaders", ["recompression"] = "Recomp. textures", ["macrohle"] = "Macro HLE",
                 ["on"] = "Oui", ["off"] = "Non", ["auto"] = "Auto", ["native"] = "Native", ["tv"] = "TV", ["handheld"] = "Portable",
                 ["stretch"] = "Étiré",
+                ["vanilla"] = "Menu HOME comme sur la console",
                 ["restart"] = "Pour appliquer ces paramètres, Ryujinx | Nextendo doit redémarrer :",
             },
             ["es"] = new()
@@ -70,6 +72,7 @@ namespace Ryujinx.HLE.HOS.Themes
                 ["shadercache"] = "Caché shaders", ["recompression"] = "Recomp. texturas", ["macrohle"] = "Macro HLE",
                 ["on"] = "Sí", ["off"] = "No", ["auto"] = "Auto", ["native"] = "Nativa", ["tv"] = "TV", ["handheld"] = "Portátil",
                 ["stretch"] = "Estirado",
+                ["vanilla"] = "Menú HOME como en la consola",
                 ["restart"] = "Para aplicar estos ajustes, Ryujinx | Nextendo debe reiniciarse:",
             },
             ["de"] = new()
@@ -79,6 +82,7 @@ namespace Ryujinx.HLE.HOS.Themes
                 ["shadercache"] = "Shader-Cache", ["recompression"] = "Textur-Komp.", ["macrohle"] = "Macro HLE",
                 ["on"] = "An", ["off"] = "Aus", ["auto"] = "Auto", ["native"] = "Nativ", ["tv"] = "TV", ["handheld"] = "Handheld",
                 ["stretch"] = "Gestreckt",
+                ["vanilla"] = "HOME-Menü wie auf der Konsole",
                 ["restart"] = "Um diese Einstellungen zu übernehmen, muss Ryujinx | Nextendo neu starten:",
             },
             ["it"] = new()
@@ -88,6 +92,7 @@ namespace Ryujinx.HLE.HOS.Themes
                 ["shadercache"] = "Cache shader", ["recompression"] = "Ricomp. texture", ["macrohle"] = "Macro HLE",
                 ["on"] = "Sì", ["off"] = "No", ["auto"] = "Auto", ["native"] = "Nativa", ["tv"] = "TV", ["handheld"] = "Portatile",
                 ["stretch"] = "Allungato",
+                ["vanilla"] = "Menu HOME come sulla console",
                 ["restart"] = "Per applicare queste impostazioni, Ryujinx | Nextendo deve riavviarsi:",
             },
             ["pt"] = new()
@@ -97,6 +102,7 @@ namespace Ryujinx.HLE.HOS.Themes
                 ["shadercache"] = "Cache shaders", ["recompression"] = "Recomp. texturas", ["macrohle"] = "Macro HLE",
                 ["on"] = "Sim", ["off"] = "Não", ["auto"] = "Auto", ["native"] = "Nativa", ["tv"] = "TV", ["handheld"] = "Portátil",
                 ["stretch"] = "Esticado",
+                ["vanilla"] = "Menu HOME como no console",
                 ["restart"] = "Para aplicar estas configurações, o Ryujinx | Nextendo precisa reiniciar:",
             },
             ["ja"] = new()
@@ -106,6 +112,7 @@ namespace Ryujinx.HLE.HOS.Themes
                 ["shadercache"] = "シェーダー", ["recompression"] = "テクスチャ圧縮", ["macrohle"] = "Macro HLE",
                 ["on"] = "ON", ["off"] = "OFF", ["auto"] = "自動", ["native"] = "ネイティブ", ["tv"] = "TV", ["handheld"] = "携帯",
                 ["stretch"] = "引き伸ばし",
+                ["vanilla"] = "本体と同じHOMEメニュー",
                 ["restart"] = "これらの設定を反映するには、Ryujinx | Nextendoを再起動する必要があります：",
             },
         };

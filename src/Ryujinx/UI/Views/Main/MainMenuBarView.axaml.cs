@@ -51,6 +51,8 @@ namespace Ryujinx.Ava.UI.Views.Main
             RestartEmulationMenuItem.Command = Commands.Create(() => ViewModel.RestartEmulation());
             XCITrimmerMenuItem.Command = Commands.Create(XciTrimmerView.Show);
             HomeMenuMenuItem.Command = Commands.Create(() => Window?.LaunchHomeMenu());
+            // [Nextendo, diagnostics] Where every thread of the console is, written to the log.
+            NextendoDiagnosticMenuItem.Command = Commands.Create(() => System.Threading.Tasks.Task.Run(() => ViewModel.AppHost?.Device?.DumpGuestThreads()));
             NextendoLoginMenuItem.Command = Commands.Create(OpenNextendoAccount);
             NextendoHomeMenuSettingsMenuItem.Command = Commands.Create(NextendoHomeMenuWindow.Open);
             NextendoFriendsMenuItem.Command = Commands.Create(NextendoFriendsWindow.Open);

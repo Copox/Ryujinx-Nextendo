@@ -51,6 +51,11 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
 
         public static byte[] Apply(byte[] ttf)
         {
+            if (Ryujinx.Common.Configuration.NextendoHomeMenuVanilla.Enabled)
+            {
+                return ttf;
+            }
+
             string[] sets = Style switch
             {
                 ControllerStyle.PlayStation4 => ["ps", "ps4"],

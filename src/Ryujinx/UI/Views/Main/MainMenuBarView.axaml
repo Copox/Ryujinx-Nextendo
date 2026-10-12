@@ -237,6 +237,10 @@
                     Name="NextendoRecentMenuItem"
                     Header="{ext:Locale Dialog_Nextendo_MenuBarRecent}"
                     Icon="{ext:Icon fa-solid fa-clock-rotate-left}" />
+                <MenuItem
+                    Name="NextendoDiagnosticMenuItem"
+                    Header="Diagnostic (gel de la console)"
+                    Icon="{ext:Icon fa-solid fa-stethoscope}" />
                 <Separator />
                 <MenuItem Header="Refresh service information" Command="{Binding RefreshServiceInformationCommand}" Icon="{ext:Icon fa-solid fa-arrows-rotate}" />
                 <MenuItem

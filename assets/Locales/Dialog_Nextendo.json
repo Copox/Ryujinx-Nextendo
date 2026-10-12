@@ -10475,7 +10475,32 @@
         "zh_TW": "在背景載入（視窗直接顯示選單，沒有載入畫面）"
       }
     },
-    {
+        {
+      "ID": "QLaunchVanilla",
+      "Translations": {
+        "ar_SA": "قائمة HOME الأصلية (بدون إضافات Nextendo)",
+        "de_DE": "Original-HOME-Menü (ohne Nextendo-Extras)",
+        "el_GR": "Αρχικό μενού HOME (χωρίς τις προσθήκες Nextendo)",
+        "en_US": "Original HOME Menu (without the Nextendo additions)",
+        "es_ES": "Menú HOME original (sin los añadidos de Nextendo)",
+        "fr_FR": "Menu HOME d'origine (sans les ajouts Nextendo)",
+        "he_IL": "תפריט HOME המקורי (ללא התוספות של Nextendo)",
+        "it_IT": "Menu HOME originale (senza le aggiunte Nextendo)",
+        "ja_JP": "本体と同じHOMEメニュー（Nextendoの追加なし）",
+        "ko_KR": "원래 HOME 메뉴 (Nextendo 추가 기능 없음)",
+        "no_NO": "Original HOME-meny (uten Nextendo-tilleggene)",
+        "pl_PL": "Oryginalne menu HOME (bez dodatków Nextendo)",
+        "pt_BR": "Menu HOME original (sem os acréscimos da Nextendo)",
+        "ru_RU": "Оригинальное меню HOME (без дополнений Nextendo)",
+        "sv_SE": "Original-HOME-meny (utan Nextendos tillägg)",
+        "th_TH": "เมนู HOME ดั้งเดิม (ไม่มีส่วนเสริมของ Nextendo)",
+        "tr_TR": "Orijinal HOME Menüsü (Nextendo eklemeleri olmadan)",
+        "uk_UA": "Оригінальне меню HOME (без доповнень Nextendo)",
+        "zh_CN": "原版HOME菜单（不含Nextendo的附加内容）",
+        "zh_TW": "原版HOME選單（不含Nextendo的附加內容）"
+      }
+    },
+{
       "ID": "QLaunchFullscreen",
       "Translations": {
         "ar_SA": "فتح قائمة HOME بملء الشاشة",

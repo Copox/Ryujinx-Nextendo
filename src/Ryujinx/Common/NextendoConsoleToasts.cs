@@ -31,6 +31,12 @@ namespace Ryujinx.Ava.Common
 
         public static void Show(string title, string text, byte[] icon = null, string glyph = null)
         {
+            // [Nextendo] the HOME Menu as the console has it: only the system's own notifications
+            if (Ryujinx.Common.Configuration.NextendoHomeMenuVanilla.Enabled)
+            {
+                return;
+            }
+
             _queue.Enqueue((title, text, icon, glyph));
 
             lock (_lock)

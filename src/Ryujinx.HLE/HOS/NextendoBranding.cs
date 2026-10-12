@@ -79,7 +79,7 @@ namespace Ryujinx.HLE.HOS
             }
         }
 
-        public static bool Enabled => Environment.GetEnvironmentVariable("NEXTENDO_BRANDING") != "0";
+        public static bool Enabled => Environment.GetEnvironmentVariable("NEXTENDO_BRANDING") != "0" && !Ryujinx.Common.Configuration.NextendoHomeMenuVanilla.Enabled;
 
         public static IStorage Appliquer(ulong programId, IStorage baseStorage, IStorage originalStorage = null)
         {
@@ -570,6 +570,11 @@ namespace Ryujinx.HLE.HOS
         /// </summary>
         public static IStorage ControllerIcons(IStorage storage)
         {
+            if (Ryujinx.Common.Configuration.NextendoHomeMenuVanilla.Enabled)
+            {
+                return storage;
+            }
+
             string style = ControllerStyleName();
 
             if (style == null)

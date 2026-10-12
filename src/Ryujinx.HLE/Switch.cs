@@ -173,6 +173,23 @@ namespace Ryujinx.HLE
         public void PresentFrame(Action swapBuffersCallback) => Gpu.Window.Present(swapBuffersCallback);
         public void DisposeGpu() => Gpu.Dispose();
 
+        /// <summary>
+        /// [Nextendo, diagnostics] Writes to the log where every guest thread of every program is
+        /// (Nextendo menu): to see what a frozen HOME Menu waits for.
+        /// </summary>
+        public void DumpGuestThreads()
+        {
+            foreach (HOS.Kernel.Process.KProcess process in System.KernelContext.Processes.Values)
+            {
+                string threads = process.DescribeGuestThreads();
+
+                if (threads.Length > 0)
+                {
+                    Common.Logging.Logger.Notice.Print(Common.Logging.LogClass.Application, $"[diag] process {process.Pid} {process.Name} ({process.TitleId:X16}):\n{threads}");
+                }
+            }
+        }
+
         public void Dispose()
         {
             GC.SuppressFinalize(this);

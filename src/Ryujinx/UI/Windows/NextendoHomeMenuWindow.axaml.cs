@@ -52,6 +52,10 @@ namespace Ryujinx.Ava.UI.Windows
 
             ShowAlbumHint();
 
+            // [Nextendo] the HOME Menu as the console has it (taken when it starts again)
+            VanillaCheck.IsChecked = Ryujinx.Common.Configuration.NextendoHomeMenuVanilla.Enabled;
+            VanillaCheck.IsCheckedChanged += (_, _) => Ryujinx.Common.Configuration.NextendoHomeMenuVanilla.Enabled = VanillaCheck.IsChecked == true;
+
             AutoStartCheck.IsCheckedChanged += (_, _) =>
             {
                 NextendoHomeMenuSettings.AutoStart = AutoStartCheck.IsChecked == true;

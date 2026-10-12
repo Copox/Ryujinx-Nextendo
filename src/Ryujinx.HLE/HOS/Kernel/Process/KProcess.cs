@@ -57,6 +57,47 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
 
         public string Name { get; private set; }
 
+        /// <summary>
+        /// [Nextendo, diagnostics] The guest threads of the process: where each one is (its state,
+        /// its stack trace), to see what a frozen program waits for.
+        /// </summary>
+        public string DescribeGuestThreads()
+        {
+            List<KThread> threads = [];
+
+            KernelContext.CriticalSection.Enter();
+
+            foreach (KThread thread in _threads)
+            {
+                threads.Add(thread);
+            }
+
+            KernelContext.CriticalSection.Leave();
+
+            System.Text.StringBuilder text = new();
+
+            foreach (KThread thread in threads)
+            {
+                if (thread.HostThread?.Name?.StartsWith("HLE.GuestThread") != true)
+                {
+                    continue;
+                }
+
+                text.Append($"--- thread {thread.ThreadUid} ({thread.HostThread.Name}) state={thread.SchedFlags}\n");
+
+                try
+                {
+                    text.Append(thread.GetGuestStackTrace()).Append('\n');
+                }
+                catch (Exception e)
+                {
+                    text.Append($"(no stack trace: {e.Message})\n");
+                }
+            }
+
+            return text.ToString();
+        }
+
         private int _threadCount;
 
         public ProcessCreationFlags Flags { get; private set; }
