@@ -518,8 +518,7 @@ namespace Ryujinx.HLE.HOS.Themes
         /// <summary>The parts given applied to a layout archive (null when none concerns it).</summary>
         public static byte[] Apply(ulong programId, string archiveName, byte[] sarc, List<ThemePart> parts)
         {
-            // [Nextendo] the HOME Menu as the console has it: the system's own look
-            if (parts.Count == 0 || Ryujinx.Common.Configuration.NextendoHomeMenuVanilla.Enabled)
+            if (parts.Count == 0)
             {
                 return null;
             }

@@ -79,7 +79,10 @@ namespace Ryujinx.HLE.HOS
             }
         }
 
-        public static bool Enabled => Environment.GetEnvironmentVariable("NEXTENDO_BRANDING") != "0" && !Ryujinx.Common.Configuration.NextendoHomeMenuVanilla.Enabled;
+        public static bool Enabled => Environment.GetEnvironmentVariable("NEXTENDO_BRANDING") != "0";
+
+        // [Nextendo] the HOME Menu as the console has it: only the theme chosen is applied
+        private static bool Vanilla => Ryujinx.Common.Configuration.NextendoHomeMenuVanilla.Enabled;
 
         public static IStorage Appliquer(ulong programId, IStorage baseStorage, IStorage originalStorage = null)
         {
@@ -142,7 +145,7 @@ namespace Ryujinx.HLE.HOS
             }
             int strings = 0;
 
-            foreach (DirectoryEntryEx entry in baseRom.EnumerateEntries().Where(f => f.Type == DirectoryEntryType.File &&
+            foreach (DirectoryEntryEx entry in baseRom.EnumerateEntries().Where(f => !Vanilla && f.Type == DirectoryEntryType.File &&
                          f.FullPath.StartsWith("/message/", StringComparison.Ordinal) && f.FullPath.EndsWith(".msbt.szs", StringComparison.Ordinal)))
             {
                 string language = LanguageOf(entry.FullPath);
@@ -255,7 +258,7 @@ namespace Ryujinx.HLE.HOS
             // The "Nintendo Switch Online" button of the HOME Menu (and its picture on the screen
             // that resumes a system applet): the Nextendo logo instead, as single-channel masks the
             // layouts colour, of the size and GPU layout of the originals.
-            if (programId == 0x0100000000001000)
+            if (programId == 0x0100000000001000 && !Vanilla)
             {
                 foreach ((string path, string texture, string asset) in _logos)
                 {
@@ -282,7 +285,7 @@ namespace Ryujinx.HLE.HOS
             // hidden (the "Ryujinx | Nextendo" section shows it), and room for longer names.
             const string SettingsLayout = "/lyt/Set.szs";
 
-            if (programId == 0x0100000000001000 && Exists(baseRom, SettingsLayout) &&
+            if (programId == 0x0100000000001000 && !Vanilla && Exists(baseRom, SettingsLayout) &&
                 AddEntryValueText(Yaz0Decode(changed.TryGetValue(SettingsLayout, out byte[] themedSettings) ? themedSettings : Read(baseRom, SettingsLayout))) is { } withValues)
             {
                 changed[SettingsLayout] = Yaz0Encode(withValues);
@@ -290,7 +293,7 @@ namespace Ryujinx.HLE.HOS
 
             const string ControllerLayout = "/lyt/Controller.szs";
 
-            if (programId == 0x0100000000001003 && ControllerPagePictures() is { } pictures && Exists(baseRom, ControllerLayout))
+            if (programId == 0x0100000000001003 && !Vanilla && ControllerPagePictures() is { } pictures && Exists(baseRom, ControllerLayout))
             {
                 byte[] layout = Yaz0Decode(changed.TryGetValue(ControllerLayout, out byte[] earlier) ? earlier : Read(baseRom, ControllerLayout));
                 int replaced = pictures.Count(p => ReplaceTexture(layout, p.Name, p.Data));
