@@ -35,9 +35,13 @@ if len(code) > DATA - CAVE:
 
 open(os.path.join(here, 'theme_page.bin'), 'wb').write(code)
 
+# The name of the "Ryujinx | Nextendo" button, at the end of the code.
+LABEL = CAVE + code.index(b'Nx_SetNav_Ryujinx' + bytes(1))
+
 # Changes to the program's own code, assembled at their place: (address, instructions).
 ENTRY = {'index_of_button': CAVE + 0x10, 'index_of_focus': CAVE + 0x14, 'get_focused': CAVE + 0x18,
-         'pick': CAVE + 0x1C, 'current': CAVE + 0x20, 'entry_button': CAVE + 0x24, 'main_poll': CAVE + 0x28, 'footer_focus': CAVE + 0x2C}
+         'pick': CAVE + 0x1C, 'current': CAVE + 0x20, 'entry_button': CAVE + 0x24, 'main_poll': CAVE + 0x28, 'footer_focus': CAVE + 0x2C,
+         'settings_scene': CAVE + 0x30, 'themes_scene': CAVE + 0x34}
 PATCHES = [
     # the page's buttons: room for the added entries (it reserves 2)
     (0x98CEE0, ['mov w1, #18']),
@@ -57,6 +61,11 @@ PATCHES = [
     (0x98EEF0, [f'b #{ENTRY["get_focused"]:#x}']),
     # the main loop, once a frame after the keys: main_poll (it does "ldr x8, [x19]")
     (0xBB90A4, [f'bl #{ENTRY["main_poll"]:#x}']),
+    # the settings menu: Bluetooth Audio (3) builds the themes page as "Ryujinx | Nextendo",
+    # Themes (11) as the themes; its button named with a label added to setting.msbt
+    (0x7DDF48, [f'bl #{ENTRY["settings_scene"]:#x}']),
+    (0x7DDE28, [f'bl #{ENTRY["themes_scene"]:#x}']),
+    (0x7DE620, [f'adrp x1, #{(LABEL & ~0xFFF):#x}', f'add x1, x1, #{(LABEL & 0xFFF):#x}']),
 ]
 
 with open(os.path.join(here, 'theme_page.patches'), 'wb') as f:

@@ -59,6 +59,24 @@
     b entry_button                ; +0x24
     b main_poll                   ; +0x28
     b footer_focus                ; +0x2C
+    b settings_scene              ; +0x30
+    b themes_scene                ; +0x34
+
+; ---------------------------------------------------------------------------------------------
+; [Nextendo, HOME Menu work] The settings menu builds the page of a section (a switch on its
+; number, 0x7DDD4C): Themes (11) and, in the place of Bluetooth Audio (3), "Ryujinx | Nextendo",
+; both the themes page. The data page (+0x3C0) tells the emulator which one is built.
+
+settings_scene:
+    adrp x9, @DATA
+    mov w10, #1
+    str w10, [x9, #0x3c0]
+    b #0x7e3e10
+
+themes_scene:
+    adrp x9, @DATA
+    str wzr, [x9, #0x3c0]
+    b #0x7e3e10
 
 ; ---------------------------------------------------------------------------------------------
 ; helpers for the page's own code (patched to call them; see build.py)
@@ -1765,3 +1783,7 @@ destroy_page_picture:
     ldp x19, x20, [sp, #0x10]
     ldp x29, x30, [sp], #0x40
     b #0x98e0c0
+
+; the name of the "Ryujinx | Nextendo" button (a label added to setting.msbt)
+nav_label:
+    .byte 78, 120, 95, 83, 101, 116, 78, 97, 118, 95, 82, 121, 117, 106, 105, 110, 120, 0

@@ -85,6 +85,9 @@ namespace Ryujinx.HLE.HOS.Themes
         // about 21 characters: kept short).
         private static string _language = "en";
 
+        /// <summary>The language of the page's texts ("en", "fr"...).</summary>
+        internal static string LanguageKey => _language;
+
         private static readonly Dictionary<string, Dictionary<string, string>> _texts = new()
         {
             ["en"] = new()
@@ -390,9 +393,18 @@ namespace Ryujinx.HLE.HOS.Themes
                 return false;
             }
 
-            // Built by the system: the themes.
+            // Built by the system: the themes, or the "Ryujinx | Nextendo" section.
             _menuPack = null;
             _confirm = -1;
+
+            try
+            {
+                QlaunchSettingsPage.Active = process.CpuMemory.Read<int>(_base + Cave + CodeSize + 0x3C0) == 1;
+            }
+            catch (Exception)
+            {
+                QlaunchSettingsPage.Active = false;
+            }
 
             try
             {
@@ -433,7 +445,7 @@ namespace Ryujinx.HLE.HOS.Themes
 
             KProcess process = _process;
 
-            if (!pressed || process == null || _menuPack != null)
+            if (!pressed || process == null || _menuPack != null || QlaunchSettingsPage.Active)
             {
                 return;
             }
@@ -489,6 +501,27 @@ namespace Ryujinx.HLE.HOS.Themes
             _bDown = down;
 
             KProcess process = _process;
+
+            // The values of a setting of the "Ryujinx | Nextendo" section: back to the settings.
+            if (pressed && process != null && QlaunchSettingsPage.ValuesShown)
+            {
+                try
+                {
+                    if (PageFocused(process))
+                    {
+                        Rebuild(process, QlaunchSettingsPage.Back());
+                        _bSwallowed = true;
+
+                        return true;
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.Warning?.Print(LogClass.ServiceSet, $"[settings] B in the HOME Menu settings: {e.Message}");
+                }
+
+                return false;
+            }
 
             if (!pressed || process == null || _menuPack == null)
             {
@@ -792,6 +825,26 @@ namespace Ryujinx.HLE.HOS.Themes
                 return false;
             }
 
+            if (QlaunchSettingsPage.Active)
+            {
+                try
+                {
+                    int row = process.CpuMemory.Read<int>(_base + Cave + CodeSize + 0x3D8);
+                    int focus = QlaunchSettingsPage.Pick(row);
+
+                    if (focus >= 0)
+                    {
+                        Rebuild(process, focus);
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.Warning?.Print(LogClass.ServiceSet, $"[settings] HOME Menu settings: {e.Message}");
+                }
+
+                return false;
+            }
+
             if (_menuPack != null)
             {
                 try
@@ -864,6 +917,13 @@ namespace Ryujinx.HLE.HOS.Themes
             List<string> packs = NextendoThemes.Packs();
 
             _packs = packs;
+
+            if (QlaunchSettingsPage.Active)
+            {
+                QlaunchSettingsPage.Write(data, EntriesToMake(Math.Min(packs.Count, MaxEntries)), RefreshSignal);
+
+                return;
+            }
 
             if (_menuPack != null)
             {

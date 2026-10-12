@@ -298,6 +298,9 @@ namespace Ryujinx.Ava.UI.ViewModels
                 ConfigurationState.Instance.ToFileFormat().SaveConfig(Program.ConfigurationPath);
             });
 
+            // [Nextendo, HOME Menu work] The emulator's settings in the HOME Menu's settings.
+            Ryujinx.Ava.Common.NextendoHomeMenuSettings.Register();
+
             // [Nextendo, HOME Menu work] Region, date and time, time zone: the HOME Menu's are the emulator's.
             Ryujinx.Common.Configuration.NextendoSystemSettings.RegionChanged += region => Dispatcher.UIThread.Post(() =>
             {

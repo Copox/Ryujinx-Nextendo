@@ -172,6 +172,15 @@ namespace Ryujinx.HLE.HOS
                     count++;
                 }
 
+                // [Nextendo, HOME Menu work] The "Ryujinx | Nextendo" section of the settings, in
+                // the place of Bluetooth Audio: its button's name.
+                if (programId == 0x0100000000001000 && entry.FullPath.EndsWith("/setting.msbt.szs", StringComparison.Ordinal) &&
+                    AddMsbtLabel(patched, "Nx_SetNav_Ryujinx", $"{Emulator}", "SetNav_BtnSound") is { } withSettings)
+                {
+                    patched = withSettings;
+                    count++;
+                }
+
                 if (count > 0)
                 {
                     changed[entry.FullPath] = Yaz0Encode(patched);
