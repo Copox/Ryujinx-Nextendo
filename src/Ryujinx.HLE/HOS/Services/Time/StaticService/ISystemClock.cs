@@ -62,7 +62,16 @@ namespace Ryujinx.HLE.HOS.Services.Time.StaticService
 
             ITickSource tickSource = context.Device.System.TickSource;
 
-            return _clockCore.SetCurrentTime(tickSource, posixTime);
+            ResultCode result = _clockCore.SetCurrentTime(tickSource, posixTime);
+
+            // [Nextendo, HOME Menu work] The date and time set by hand in the HOME Menu: the
+            // emulator keeps the distance to the computer's clock.
+            if (result == ResultCode.Success && _clockCore is StandardLocalSystemClockCore or StandardUserSystemClockCore)
+            {
+                Ryujinx.Common.Configuration.NextendoSystemSettings.SetTimeOffset(posixTime - DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+            }
+
+            return result;
         }
 
         [CommandCmif(2)]

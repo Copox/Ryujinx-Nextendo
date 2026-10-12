@@ -298,6 +298,38 @@ namespace Ryujinx.Ava.UI.ViewModels
                 ConfigurationState.Instance.ToFileFormat().SaveConfig(Program.ConfigurationPath);
             });
 
+            // [Nextendo, HOME Menu work] Region, date and time, time zone: the HOME Menu's are the emulator's.
+            Ryujinx.Common.Configuration.NextendoSystemSettings.RegionChanged += region => Dispatcher.UIThread.Post(() =>
+            {
+                ConfigurationState.Instance.System.Region.Value = (Ryujinx.Ava.Systems.Configuration.System.Region)region;
+                ConfigurationState.Instance.ToFileFormat().SaveConfig(Program.ConfigurationPath);
+            });
+
+            Ryujinx.Common.Configuration.NextendoSystemSettings.TimeOffsetChanged += offset => Dispatcher.UIThread.Post(() =>
+            {
+                ConfigurationState.Instance.System.SystemTimeOffset.Value = offset;
+                ConfigurationState.Instance.System.MatchSystemTime.Value = false;
+                ConfigurationState.Instance.ToFileFormat().SaveConfig(Program.ConfigurationPath);
+            });
+
+            Ryujinx.Common.Configuration.NextendoSystemSettings.AutomaticTimeChanged += enabled => Dispatcher.UIThread.Post(() =>
+            {
+                ConfigurationState.Instance.System.MatchSystemTime.Value = enabled;
+
+                if (enabled)
+                {
+                    ConfigurationState.Instance.System.SystemTimeOffset.Value = 0;
+                }
+
+                ConfigurationState.Instance.ToFileFormat().SaveConfig(Program.ConfigurationPath);
+            });
+
+            Ryujinx.Common.Configuration.NextendoSystemSettings.TimeZoneChanged += location => Dispatcher.UIThread.Post(() =>
+            {
+                ConfigurationState.Instance.System.TimeZone.Value = location;
+                ConfigurationState.Instance.ToFileFormat().SaveConfig(Program.ConfigurationPath);
+            });
+
             Applications.ToObservableChangeSet()
                 .Filter(Filter)
                 .Sort(GetComparer())

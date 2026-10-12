@@ -29,6 +29,22 @@ namespace Ryujinx.HLE.HOS.Services.Settings
 
         public ISystemSettingsServer(ServiceCtx context) { }
 
+        [CommandCmif(57)]
+        // SetRegionCode(u32)
+        public ResultCode SetRegionCode(ServiceCtx context)
+        {
+            // [Nextendo, HOME Menu work] "Region" of the HOME Menu settings: the emulator's.
+            int region = context.RequestData.ReadInt32();
+
+            if (region is >= 0 and <= 6)
+            {
+                context.Device.System.State.SetRegion((Ryujinx.HLE.HOS.SystemState.RegionCode)region);
+                Ryujinx.Common.Configuration.NextendoSystemSettings.SetRegion(region);
+            }
+
+            return ResultCode.Success;
+        }
+
         [CommandCmif(0)]
         // SetLanguageCode(nn::settings::LanguageCode)
         public ResultCode SetLanguageCode(ServiceCtx context)

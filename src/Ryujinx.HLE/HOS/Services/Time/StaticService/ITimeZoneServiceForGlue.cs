@@ -41,7 +41,15 @@ namespace Ryujinx.HLE.HOS.Services.Time.StaticService
 
             string locationName = StringUtils.ReadInlinedAsciiString(context.RequestData, 0x24);
 
-            return _timeZoneContentManager.SetDeviceLocationName(locationName);
+            ResultCode result = _timeZoneContentManager.SetDeviceLocationName(locationName);
+
+            // [Nextendo, HOME Menu work] The time zone chosen in the HOME Menu: the emulator's.
+            if (result == ResultCode.Success)
+            {
+                Ryujinx.Common.Configuration.NextendoSystemSettings.SetTimeZone(locationName);
+            }
+
+            return result;
         }
 
         [CommandCmif(2)]

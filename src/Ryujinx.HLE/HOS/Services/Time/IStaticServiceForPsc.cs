@@ -168,6 +168,12 @@ namespace Ryujinx.HLE.HOS.Services.Time
 
             ResultCode result = userClock.SetAutomaticCorrectionEnabled(tickSource, autoCorrectionEnabled);
 
+            // [Nextendo, HOME Menu work] "Synchronise clock via Internet": the computer's clock.
+            if (result == ResultCode.Success)
+            {
+                Ryujinx.Common.Configuration.NextendoSystemSettings.SetAutomaticTime(autoCorrectionEnabled);
+            }
+
             if (result == ResultCode.Success)
             {
                 _timeManager.SharedMemory.SetAutomaticCorrectionEnabled(autoCorrectionEnabled);
