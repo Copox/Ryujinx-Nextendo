@@ -278,7 +278,9 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             // details the OUTPUT, one entry per requested id, in the SAME order — an entry we cannot
             // resolve stays IsValid=false rather than being skipped, otherwise the caller mis-pairs
             // the remaining ids with the wrong friends.
-            IReadOnlyList<NextendoFriends.Entry> known = NextendoFriends.Get();
+            // A list not loaded yet (the overlay of the system asks right after a friend comes online)
+            // is waited for a little.
+            IReadOnlyList<NextendoFriends.Entry> known = NextendoFriends.GetWarm(1500);
 
             for (int i = 0; i < friendIds.Length && i < info.Length; i++)
             {
@@ -300,6 +302,11 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                         // de rejoindre des parties qui n'existent pas.
                         PresenceStatus st = e.Status > 0 ? PresenceStatus.OnlinePlay : PresenceStatus.Offline;
                         info[i] = MakeNextendoFriend(wanted, e.Name, st, e.AppField, sameApp: e.Status > 0);
+
+                        // [Nextendo, HOME Menu work] As on a console, the record names the user of
+                        // the console whose friend it is: the overlay of the system checks it is a
+                        // user here before showing "online" (and asks the picture with it).
+                        info[i].UserId = userId;
 
                         break;
                     }

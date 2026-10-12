@@ -40,6 +40,10 @@ namespace Ryujinx.Ava.Common
         private static HashSet<ulong> _knownRequests = [];
         // Friends online at the last poll (the HOME Menu says so when one comes online).
         private static HashSet<ulong> _knownOnline = [];
+        // When each friend was last seen online (the console tells a friend coming back after
+        // more than 30 minutes away, not one that flickers).
+        private static Dictionary<ulong, DateTime> _lastSeenOnline = [];
+        private static bool _summaryShown;
         // pid -> the game we last ANNOUNCED for that friend. Only a change to a different game (or a
         // first game after coming online) fires; a presence flicker to "online, no game" does NOT
         // reset it, so a friend staying in one game is announced exactly once.
@@ -114,6 +118,11 @@ namespace Ryujinx.Ava.Common
                 {
                     _knownRequests = requests.Select(r => r.Pid).ToHashSet();
                     _knownOnline = friends.Where(f => f.OnlineStatus != 0).Select(f => f.Pid).ToHashSet();
+
+                    foreach (ulong pid in _knownOnline)
+                    {
+                        _lastSeenOnline[pid] = DateTime.UtcNow;
+                    }
                     _announcedGame = friends
                         .Where(f => f.OnlineStatus != 0 && !string.IsNullOrEmpty(f.AppId))
                         .GroupBy(f => f.Pid)
@@ -146,8 +155,8 @@ namespace Ryujinx.Ava.Common
                 // (drawn by its overlay applet) say it: a friend request, friends coming online.
                 bool console = Ryujinx.HLE.HOS.HomeMenuStatus.Running;
                 bool newRequest = false;
-                int cameOnline = 0;
                 int online = 0;
+                List<ulong> toAnnounce = new();
 
                 lock (_lock)
                 {
@@ -157,8 +166,19 @@ namespace Ryujinx.Ava.Common
                     }
 
                     HashSet<ulong> nowOnline = friends.Where(f => f.OnlineStatus != 0).Select(f => f.Pid).ToHashSet();
+                    DateTime seenAt = DateTime.UtcNow;
 
-                    cameOnline = nowOnline.Count(pid => !_knownOnline.Contains(pid));
+                    foreach (ulong pid in nowOnline)
+                    {
+                        if (!_knownOnline.Contains(pid) &&
+                            (!_lastSeenOnline.TryGetValue(pid, out DateTime seen) || seenAt - seen > TimeSpan.FromMinutes(30)))
+                        {
+                            toAnnounce.Add(pid);
+                        }
+
+                        _lastSeenOnline[pid] = seenAt;
+                    }
+
                     online = nowOnline.Count;
                     _knownOnline = nowOnline;
                     newRequest = requests.Any(r => !_knownRequests.Contains(r.Pid));
@@ -196,7 +216,17 @@ namespace Ryujinx.Ava.Common
                         }
 
                         _announcedGame.TryGetValue(f.Pid, out string announced);
-                        if (now != announced)
+                        if (now != announced && console)
+                        {
+                            // On the HOME Menu the console says it (friend online, with the game).
+                            if (!toAnnounce.Contains(f.Pid))
+                            {
+                                toAnnounce.Add(f.Pid);
+                            }
+
+                            _announcedGame[f.Pid] = now;
+                        }
+                        else if (now != announced)
                         {
                             fresh.Add(Build(f,
                                 LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_NotifPlayingTitle],
@@ -214,9 +244,16 @@ namespace Ryujinx.Ava.Common
                         NextendoSystemNotifications.FriendRequestReceived();
                     }
 
-                    if (cameOnline > 0)
+                    // How many are online, once (as the console says it when it starts).
+                    if (!_summaryShown && online > 0)
                     {
+                        _summaryShown = true;
                         NextendoSystemNotifications.FriendsOnline(online);
+                    }
+
+                    foreach (ulong pid in toAnnounce)
+                    {
+                        NextendoSystemNotifications.FriendOnline(pid);
                     }
                 }
 

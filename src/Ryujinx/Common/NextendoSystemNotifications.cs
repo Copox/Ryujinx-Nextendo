@@ -19,6 +19,28 @@ namespace Ryujinx.Ava.Common
         // "Friends online: N" (the user, then the number of friends online).
         private const uint FriendsOnlineTag = 0x1B59;
 
+        // A friend online, with the game being played (the user, the friend's id, then how long
+        // the friend was away in seconds: under 30 minutes the console says nothing).
+        private const uint FriendOnlineTag = 0x1B5A;
+
+        public static void FriendOnline(ulong friendId)
+        {
+            if (UserBytes() is not { } user)
+            {
+                return;
+            }
+
+            byte[] data = new byte[0x20];
+
+            user.CopyTo(data, 0);
+            BitConverter.TryWriteBytes(data.AsSpan(0x10, 8), friendId);
+            BitConverter.TryWriteBytes(data.AsSpan(0x18, 4), 3600u);
+
+            OvlnNotifications.Post(FriendOnlineTag, data);
+
+            Logger.Info?.Print(LogClass.Application, $"[Nextendo][notif] console notification: friend {friendId:X} online");
+        }
+
         public static void FriendRequestReceived()
         {
             if (UserBytes() is { } user)
