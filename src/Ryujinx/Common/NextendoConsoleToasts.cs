@@ -114,6 +114,15 @@ namespace Ryujinx.Ava.Common
         {
             string svg;
 
+            // "fit:name": the drawing made as big as the place (a flair alone, drawn small in a
+            // corner of its square for going over a controller).
+            bool fit = name.StartsWith("fit:", StringComparison.Ordinal);
+
+            if (fit)
+            {
+                name = name[4..];
+            }
+
             try
             {
                 using Stream stream = typeof(NextendoConsoleToasts).Assembly.GetManifestResourceStream($"Ryujinx.Assets.ControllerIcons.{name}.svg");
@@ -131,9 +140,31 @@ namespace Ryujinx.Ava.Common
                 return;
             }
 
+            SKRect drawing = SKRect.Create(0, 0, 64, 64);
+
+            if (fit)
+            {
+                drawing = SKRect.Empty;
+
+                foreach (Match match in _svgPath.Matches(svg))
+                {
+                    using SKPath path = SKPath.ParseSvgPathData(match.Groups[2].Value);
+
+                    if (path != null)
+                    {
+                        drawing = drawing.IsEmpty ? path.Bounds : SKRect.Union(drawing, path.Bounds);
+                    }
+                }
+
+                // square, centred on the drawing
+                float side = Math.Max(drawing.Width, drawing.Height) * 1.1f;
+                drawing = SKRect.Create(drawing.MidX - side / 2, drawing.MidY - side / 2, side, side);
+            }
+
             canvas.Save();
             canvas.Translate(place.Left, place.Top);
-            canvas.Scale(place.Width / 64f, place.Height / 64f);
+            canvas.Scale(place.Width / drawing.Width, place.Height / drawing.Height);
+            canvas.Translate(-drawing.Left, -drawing.Top);
 
             foreach (Match match in _svgPath.Matches(svg))
             {
@@ -143,7 +174,6 @@ namespace Ryujinx.Ava.Common
                 {
                     continue;
                 }
-
 
                 using SKPaint paint = new() { Color = SKColor.Parse(match.Groups[1].Value), IsAntialias = true };
                 canvas.DrawPath(path, paint);

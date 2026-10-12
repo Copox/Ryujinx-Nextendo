@@ -32,6 +32,8 @@ namespace Ryujinx.Ava.Common
         public static readonly ObservableCollection<NextendoToastModel> Toasts = [];
 
         private static readonly object _lock = new();
+        private static int _failedPolls;
+        private static bool _serverLost;
         private static Timer _timer;
         private static bool _active;
         private static long _nextId;
@@ -148,6 +150,26 @@ namespace Ryujinx.Ava.Common
             try
             {
                 (List<NextendoApi.Friend> friends, List<NextendoApi.Friend> requests) = await NextendoApi.GetSocialAsync();
+
+                // [Nextendo] The server unreachable for 45 seconds, then back: said once each.
+                if (!NextendoApi.LastSocialReachable)
+                {
+                    if (++_failedPolls == 3)
+                    {
+                        _serverLost = true;
+                        NextendoEventNotifications.ServerConnection(false);
+                    }
+
+                    return;
+                }
+
+                _failedPolls = 0;
+
+                if (_serverLost)
+                {
+                    _serverLost = false;
+                    NextendoEventNotifications.ServerConnection(true);
+                }
 
                 List<NextendoToastModel> fresh = new();
 

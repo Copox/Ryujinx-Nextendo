@@ -45,6 +45,9 @@ namespace Ryujinx.Ava.Common
         {
             Ryujinx.Input.SDL3.SDL3GamepadDriver.NextendoControllerDisconnected += ControllerDisconnected;
             Ryujinx.Input.SDL3.SDL3GamepadDriver.NextendoControllerBatteryLow += ControllerBatteryLow;
+            Ryujinx.Input.SDL3.SDL3GamepadDriver.NextendoControllerConnected += ControllerConnected;
+
+            _pcBatteryTimer = new Timer(_ => CheckPcBattery(), null, TimeSpan.FromSeconds(20), TimeSpan.FromMinutes(1));
 
             _badgeTimer = new Timer(_ => _ = CheckBadgesAsync(), null, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(10));
 
@@ -55,6 +58,14 @@ namespace Ryujinx.Ava.Common
                 {
                     await Task.Delay(25000);
                     ControllerDisconnected("Xbox Wireless Controller");
+                    await Task.Delay(7000);
+                    ControllerConnected("DualSense Wireless Controller");
+                    await Task.Delay(7000);
+                    PcBatteryLow(11);
+                    await Task.Delay(7000);
+                    ServerConnection(false);
+                    await Task.Delay(7000);
+                    ServerConnection(true);
                     await Task.Delay(7000);
                     ControllerDisconnected("PS4 Controller");
                     await Task.Delay(7000);
@@ -74,6 +85,43 @@ namespace Ryujinx.Ava.Common
 
         private static void ControllerDisconnected(string name) =>
             NextendoConsoleToasts.Show(LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_NotifControllerDisconnected], name, null, PictogramOf(name) + "+flair_disconnected");
+
+        private static void ControllerConnected(string name) =>
+            NextendoConsoleToasts.Show(LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_NotifControllerConnected], name, null, PictogramOf(name));
+
+        // ---- The computer's battery (a laptop): low, as the console says it ----
+
+        private static Timer _pcBatteryTimer;
+        private static bool _pcBatteryTold;
+
+        private static void CheckPcBattery()
+        {
+            Ryujinx.HLE.HOS.Services.Ptm.Psm.HostBattery.State state = Ryujinx.HLE.HOS.Services.Ptm.Psm.HostBattery.Read();
+
+            if (state.Plugged || state.Percent > 20)
+            {
+                _pcBatteryTold = false;
+
+                return;
+            }
+
+            if (state.Percent <= 15 && !_pcBatteryTold)
+            {
+                _pcBatteryTold = true;
+                PcBatteryLow(state.Percent);
+            }
+        }
+
+        /// <summary>The Nextendo server lost (false) or back (true).</summary>
+        public static void ServerConnection(bool back) =>
+            NextendoConsoleToasts.Show(
+                LocaleManager.Instance[back ? LocaleKeys.Dialog_Nextendo_NotifServerBack : LocaleKeys.Dialog_Nextendo_NotifServerLost],
+                LocaleManager.Instance[back ? LocaleKeys.Dialog_Nextendo_NotifServerBackText : LocaleKeys.Dialog_Nextendo_NotifServerLostText],
+                Ryujinx.Common.EmbeddedResources.Read("Ryujinx/Assets.UIImages.Logo_Nextendo.png"));
+
+        private static void PcBatteryLow(int percent) =>
+            NextendoConsoleToasts.Show(LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_NotifPcBatteryLow],
+                string.Format(LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_NotifPcBatteryText], percent), null, "fit:flair_battery");
 
         private static void ControllerBatteryLow(string name, int percent) =>
             NextendoConsoleToasts.Show(LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_NotifBatteryLow], $"{name} ({percent} %)", null, PictogramOf(name) + "+flair_battery");

@@ -120,6 +120,11 @@ namespace Ryujinx.Input.SDL3
         // [Nextendo] Controllers of the computer, for the emulator's notifications: one gone, one
         // low on battery (by name). The keyboard is no controller here: it has neither.
         public static event Action<string> NextendoControllerDisconnected;
+        // A controller plugged in or paired while the emulator runs (those found when it starts
+        // are not told).
+        public static event Action<string> NextendoControllerConnected;
+
+        private static readonly DateTime _nextendoSince = DateTime.UtcNow;
         public static event Action<string, int> NextendoControllerBatteryLow;
 
         private readonly System.Collections.Concurrent.ConcurrentDictionary<SDL_JoystickID, string> _names = new();
@@ -211,6 +216,11 @@ namespace Ryujinx.Input.SDL3
                 if (_gamepadsInstanceIdsMapping.TryAdd(joystickInstanceId, id))
                 {
                     _names[joystickInstanceId] = SDL_GetGamepadNameForID(joystickInstanceId);
+
+                    if (DateTime.UtcNow - _nextendoSince > TimeSpan.FromSeconds(10) && !string.IsNullOrEmpty(_names[joystickInstanceId]))
+                    {
+                        NextendoControllerConnected?.Invoke(_names[joystickInstanceId]);
+                    }
 
                     lock (_lock)
                     {

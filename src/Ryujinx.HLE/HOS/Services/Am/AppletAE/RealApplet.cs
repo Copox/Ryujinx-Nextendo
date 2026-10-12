@@ -515,6 +515,15 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
                 return null;
             }
 
+            // [Nextendo] The web applets of the firmware need the browser engine of the console
+            // (system data the emulator does not run): started by the HOME Menu (Parental
+            // Controls, the help pages), the real one ended at once and the HOME Menu stopped
+            // (2000-0000). The emulator's own answers as a page the user closed.
+            if (appletId is AppletId.LibAppletWeb or AppletId.LibAppletOff or AppletId.LibAppletWhitelisted)
+            {
+                return null;
+            }
+
             if (programId == 0)
             {
                 return null;

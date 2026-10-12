@@ -625,6 +625,9 @@ namespace Ryujinx.Ava.Common
         }
 
         // Returns the account's accepted friends AND incoming friend requests.
+        /// <summary>[Nextendo] Whether the last friends list came from the server (it was reachable).</summary>
+        public static bool LastSocialReachable { get; private set; } = true;
+
         public static async Task<(List<Friend> friends, List<Friend> requests)> GetSocialAsync()
         {
             List<Friend> friends = [];
@@ -634,6 +637,8 @@ namespace Ryujinx.Ava.Common
                 using HttpClient http = Client();
                 HttpResponseMessage resp = await http.GetAsync($"{BaseUrl()}/api/friends");
                 HealIfRejected(resp); // 401 → jeton révoqué/expiré, purge la session locale (anti-usurpation)
+                // An answer, even a refusal, is a server that is reachable.
+                LastSocialReachable = true;
                 using JsonDocument doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
                 if (doc.RootElement.TryGetProperty("friends", out JsonElement fa) && fa.ValueKind == JsonValueKind.Array)
                 {
@@ -652,6 +657,11 @@ namespace Ryujinx.Ava.Common
             }
             catch (Exception ex)
             {
+                if (ex is HttpRequestException or TaskCanceledException)
+                {
+                    LastSocialReachable = false;
+                }
+
                 Logger.Warning?.Print(LogClass.Application, $"[Nextendo] GetSocial failed: {ex.Message}");
             }
 
