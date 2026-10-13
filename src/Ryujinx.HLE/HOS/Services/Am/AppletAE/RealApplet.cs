@@ -384,6 +384,12 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
 
             foreach ((ulong pid, AppletStateMgr state) in _systemApplets)
             {
+                // the overlay applet is one of them: the button is the HOME Menu's
+                if (IsOverlay(pid))
+                {
+                    continue;
+                }
+
                 RunningApplication application = _application;
 
                 if (application != null && !application.Exited && application.Pid != 0)
