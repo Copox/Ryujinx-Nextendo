@@ -445,6 +445,23 @@ namespace Ryujinx.Graphics.Gpu
         /// Performs deferred actions.
         /// This is useful for actions that must run on the render thread, such as resource disposal.
         /// </summary>
+        /// <summary>
+        /// [Nextendo, HOME Menu work] New pixels for the textures of a program that have this size
+        /// and one byte a pixel (the font texture of the HOME Menu, redrawn by the emulator: the
+        /// program only sends it to the graphics processor when it draws a character itself).
+        /// Done on the thread of the graphics processor.
+        /// </summary>
+        public void NextendoUploadTexture(ulong pid, int width, int height, byte[] pixels)
+        {
+            DeferredActions.Enqueue(() =>
+            {
+                if (PhysicalMemoryRegistry.TryGetValue(pid, out PhysicalMemory memory))
+                {
+                    memory.TextureCache.NextendoUpload(width, height, pixels);
+                }
+            });
+        }
+
         internal void RunDeferredActions()
         {
             while (DeferredActions.TryDequeue(out Action action))

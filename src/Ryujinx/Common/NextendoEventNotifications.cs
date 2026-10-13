@@ -144,6 +144,13 @@ namespace Ryujinx.Ava.Common
                         await Task.Delay(Math.Max(0, at - waited) * 1000);
                         waited = at;
                         // "seconds:peek:address:size[:offset from the pointer there]" reads the overlay applet's memory
+                        if (parts[1] == "glyphs")
+                        {
+                            Ryujinx.HLE.HOS.NextendoButtonGlyphs.Study(Console?.Invoke(), parts.Length > 2 ? parts[2] : null);
+
+                            continue;
+                        }
+
                         if (parts[1] == "peek")
                         {
                             byte[] read = Console?.Invoke()?.PeekGuest(0x010000000000100C, Convert.ToUInt64(parts[2], 16), Convert.ToInt32(parts[3], 16), parts.Length > 4 ? Convert.ToInt64(parts[4], 16) : -1, parts.Length > 5 ? Convert.FromHexString(parts[5]) : null);

@@ -103,6 +103,21 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
                                 _storage.GetRef<byte>(fontOffset) = data[fontOffset - start];
                             }
 
+                            if (name == "FontNintendoExtended")
+                            {
+                                // [Nextendo] The font of another kind of controller, written over this one
+                                // while the console runs (same size, see ControllerButtonFont).
+                                int length = data.Length;
+
+                                ControllerButtonFont.Rewrite = font =>
+                                {
+                                    for (int i = 0; i < length && i < font.Length; i++)
+                                    {
+                                        _storage.GetRef<byte>((ulong)(start + i)) = font[i];
+                                    }
+                                };
+                            }
+
                             return info;
                         }
                         else

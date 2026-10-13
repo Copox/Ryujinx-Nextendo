@@ -59,7 +59,23 @@ namespace Ryujinx.HLE.HOS
                     return;
                 }
 
+                ControllerStyle before = ControllerButtonFont.Style;
+
                 ControllerButtonFont.Style = style;
+
+                // The button symbols: the font the programs read, then the ones already drawn.
+                if (device != null && !Ryujinx.Common.Configuration.NextendoHomeMenuVanilla.Enabled && ControllerButtonFont.Variant(style) is { } font)
+                {
+                    try
+                    {
+                        ControllerButtonFont.Rewrite?.Invoke(font);
+                        NextendoButtonGlyphs.Redraw(device, before, style);
+                    }
+                    catch (Exception e)
+                    {
+                        Logger.Warning?.Print(LogClass.Application, $"[Nextendo] button symbols left as they are: {e.Message}");
+                    }
+                }
 
                 if (device == null || Ryujinx.Common.Configuration.NextendoHomeMenuVanilla.Enabled || Original == null)
                 {

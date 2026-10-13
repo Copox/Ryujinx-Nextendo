@@ -56,34 +56,85 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
                 return ttf;
             }
 
-            string[] sets = Style switch
-            {
-                ControllerStyle.PlayStation4 => ["ps", "ps4"],
-                ControllerStyle.PlayStation5 => ["ps", "ps5"],
-                ControllerStyle.Xbox => ["xbox"],
-                _ => [],
-            };
-
-            if (sets.Length == 0)
-            {
-                return ttf;
-            }
-
+            // The font of every kind of controller, all of the same size and layout (only the
+            // glyphs and their index differ): the one shown can then be changed while the
+            // console runs, when another controller is plugged in.
             try
             {
-                Dictionary<uint, byte[]> glyphs = [];
+                Dictionary<ControllerStyle, byte[]> variants = [];
+                int longest = 0;
 
-                foreach (string set in sets)
+                foreach (ControllerStyle style in Enum.GetValues<ControllerStyle>())
                 {
-                    ReadGlyphs(set, glyphs);
+                    Dictionary<uint, byte[]> glyphs = [];
+
+                    foreach (string set in Sets(style))
+                    {
+                        ReadGlyphs(set, glyphs);
+                    }
+
+                    if (Patch(ttf, glyphs) is not { } variant)
+                    {
+                        return ttf;
+                    }
+
+                    variants[style] = variant;
+                    longest = Math.Max(longest, variant.Length);
                 }
 
-                return Patch(ttf, glyphs) ?? ttf;
+                foreach (ControllerStyle style in Enum.GetValues<ControllerStyle>())
+                {
+                    _variants[style] = Pad(variants[style], longest);
+                }
+
+                return _variants[Style];
             }
             catch (Exception)
             {
+                _variants.Clear();
+
                 return ttf;
             }
+        }
+
+        private static readonly Dictionary<ControllerStyle, byte[]> _variants = [];
+
+        /// <summary>The system's button font for a kind of controller (null: not built).</summary>
+        public static byte[] Variant(ControllerStyle style) => _variants.TryGetValue(style, out byte[] font) ? font : null;
+
+        /// <summary>Writes a font in place of the one the programs read (set by the shared font memory).</summary>
+        public static Action<byte[]> Rewrite { get; set; }
+
+        private static string[] Sets(ControllerStyle style) => style switch
+        {
+            ControllerStyle.PlayStation4 => ["ps", "ps4"],
+            ControllerStyle.PlayStation5 => ["ps", "ps5"],
+            ControllerStyle.Xbox => ["xbox"],
+            _ => [],
+        };
+
+        // The font made as long as the longest one: its glyph table (the last thing in it) grows.
+        private static byte[] Pad(byte[] font, int length)
+        {
+            byte[] padded = new byte[length];
+
+            font.CopyTo(padded, 0);
+
+            int tables = BinaryPrimitives.ReadUInt16BigEndian(font.AsSpan(4));
+
+            for (int i = 0; i < tables; i++)
+            {
+                int entry = 12 + i * 16;
+
+                if (System.Text.Encoding.ASCII.GetString(font, entry, 4) == "glyf")
+                {
+                    uint offset = BinaryPrimitives.ReadUInt32BigEndian(font.AsSpan(entry + 8));
+
+                    BinaryPrimitives.WriteUInt32BigEndian(padded.AsSpan(entry + 12), (uint)length - offset);
+                }
+            }
+
+            return padded;
         }
 
         private static void ReadGlyphs(string set, Dictionary<uint, byte[]> glyphs)
@@ -141,11 +192,6 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
                 {
                     byGlyph[id] = data;
                 }
-            }
-
-            if (byGlyph.Count == 0)
-            {
-                return null;
             }
 
             using MemoryStream newGlyf = new();

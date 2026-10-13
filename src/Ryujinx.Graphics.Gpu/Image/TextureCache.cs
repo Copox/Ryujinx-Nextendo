@@ -18,6 +18,19 @@ namespace Ryujinx.Graphics.Gpu.Image
     /// </summary>
     class TextureCache : IDisposable
     {
+        /// <summary>[Nextendo] See GpuContext.NextendoUploadTexture.</summary>
+        public void NextendoUpload(int width, int height, byte[] pixels)
+        {
+            foreach (Texture texture in _textures)
+            {
+                if (texture.Info.Width == width && texture.Info.Height == height && texture.Info.FormatInfo.BytesPerPixel == 1 &&
+                    texture.Info.Levels == 1 && texture.Info.GetLayers() == 1 && pixels.Length == width * height)
+                {
+                    texture.SetData(Ryujinx.Common.Memory.MemoryOwner<byte>.RentCopy(pixels));
+                }
+            }
+        }
+
         private readonly struct OverlapInfo
         {
             public TextureViewCompatibility Compatibility { get; }
