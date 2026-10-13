@@ -11,6 +11,37 @@ using System.Reflection;
 
 namespace Ryujinx.HLE.HOS.Services
 {
+    /// <summary>
+    /// [Nextendo, diagnostics] The last requests served (service, command, result), always kept:
+    /// written by the Diagnostic command, to see what a frozen program keeps asking.
+    /// </summary>
+    static class IpcRecent
+    {
+        private const int Size = 256;
+        private static readonly string[] _entries = new string[Size];
+        private static int _next;
+
+        public static void Record(string service, int command, int result)
+        {
+            int at = System.Threading.Interlocked.Increment(ref _next) - 1;
+
+            _entries[at & (Size - 1)] = $"{System.DateTime.Now:HH:mm:ss.fff} {service} {command} -> 0x{result:X}";
+        }
+
+        public static string Dump()
+        {
+            System.Text.StringBuilder text = new();
+            int next = _next;
+
+            for (int i = System.Math.Max(0, next - Size); i < next; i++)
+            {
+                text.Append(_entries[i & (Size - 1)]).Append('\n');
+            }
+
+            return text.ToString();
+        }
+    }
+
     abstract class IpcService
     {
         // [Nextendo, HOME Menu work] NEXTENDO_IPC_TRACE=1 logs every CMIF call and failed result.
@@ -157,6 +188,8 @@ namespace Ryujinx.HLE.HOS.Services
                     _parameters[0] = context;
                     
                     result = (ResultCode)processRequest.Invoke(service, _parameters);
+
+                    IpcRecent.Record(service.GetType().Name, commandId, (int)result);
 
                     if (_ipcTrace && context.Response.HandleDesc?.ToCopy is { Length: > 0 } copied)
                     {

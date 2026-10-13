@@ -179,6 +179,8 @@ namespace Ryujinx.HLE
         /// </summary>
         public void DumpGuestThreads()
         {
+            Common.Logging.Logger.Notice.Print(Common.Logging.LogClass.Application, "[diag] last requests:\n" + HOS.Services.IpcRecent.Dump());
+
             foreach (HOS.Kernel.Process.KProcess process in System.KernelContext.Processes.Values)
             {
                 string threads = process.DescribeGuestThreads();
