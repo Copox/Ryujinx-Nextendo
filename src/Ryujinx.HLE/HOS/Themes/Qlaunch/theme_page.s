@@ -2308,6 +2308,20 @@ restart_dialog_poll:
     stp x21, x22, [sp, #0x20]
     adrp x20, @DATA
     add x20, x20, #0x6000
+    ; Cancel was picked (+0x114): the dialog, once over (state 4), is closed as System closes
+    ; its own (0x7D7B60: the dialog on top, state 7, its close), until it is (state above 4)
+    ldr w8, [x20, #0x114]
+    cbz w8, restart_dialog_no_close
+    bl #0x7d7b60
+    ldr x9, [x20, #0x100]
+    cbz x9, restart_dialog_closed
+    ldr w8, [x9, #0x24]
+    cmp w8, #5
+    b.lt restart_dialog_no_close
+restart_dialog_closed:
+    str wzr, [x20, #0x114]
+    str xzr, [x20, #0x100]
+restart_dialog_no_close:
     ldr w8, [x20, #0x10c]
     cbz w8, restart_dialog_end
     str wzr, [x20, #0x10c]
@@ -2410,9 +2424,11 @@ restart_callback_buttons:
     adrp x8, @DATA
     add x8, x8, #0x6000
     str w1, [x8, #0x108]
+    str w1, [x8, #0x114]          ; Cancel (1): the dialog is to be closed
     adr x0, restart_signal
     mov x1, #8
     svc #0x27
+    mov w0, #1                    ; the dialog closes
     ret
 
 ; the dialog (x1): kept, its answer read once a frame

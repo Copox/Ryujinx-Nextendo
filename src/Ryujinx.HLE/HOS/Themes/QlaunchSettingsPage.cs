@@ -268,6 +268,8 @@ namespace Ryujinx.HLE.HOS.Themes
             process.CpuMemory.Write(dataAddress + 0x6200, label);
             process.CpuMemory.Write(dataAddress + 0x6110, dataAddress + 0x6200);
             process.CpuMemory.Write(dataAddress + 0x610C, 1);
+
+            Logger.Info?.Print(LogClass.ServiceSet, $"[settings] restart dialog asked ({RestartLabel(mask)})");
         }
 
         /// <summary>

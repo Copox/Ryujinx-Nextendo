@@ -975,7 +975,28 @@ namespace Ryujinx.HLE.HOS.Themes
             {
                 if (QlaunchSettingsPage.TakeRestartAnswer(process, _base + Cave + CodeSize))
                 {
-                    Rebuild(process, 0);
+                    // The values as they were, shown once the dialog is closed: asked while it is
+                    // still open, the page took the focus back and the dialog stayed on screen.
+                    System.Threading.Tasks.Task.Delay(700).ContinueWith(_ =>
+                    {
+                        try
+                        {
+                            if (Environment.GetEnvironmentVariable("NEXTENDO_DLG_TRACE") == "1")
+                            {
+                                ulong dialog = process.CpuMemory.Read<ulong>(_base + Cave + CodeSize + 0x6100);
+                                Logger.Notice.Print(LogClass.ServiceSet, $"[settings] dialog {dialog:X}: state {(dialog != 0 ? process.CpuMemory.Read<int>(dialog + 0x24) : -1)} button {(dialog != 0 ? process.CpuMemory.Read<int>(dialog + 0xAF0) : -1)}");
+                            }
+
+                            if (process == _process && QlaunchSettingsPage.Active)
+                            {
+                                Rebuild(process, -1);
+                            }
+                        }
+                        catch (Exception)
+                        {
+                            // the HOME Menu is gone
+                        }
+                    });
                 }
             }
             catch (Exception e)
