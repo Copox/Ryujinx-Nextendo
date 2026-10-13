@@ -632,6 +632,14 @@ namespace Ryujinx.Ava.Common
         {
             List<Friend> friends = [];
             List<Friend> requests = [];
+
+            // No account signed in: nothing to ask (the watchers call this every few seconds,
+            // and the server refused each of these requests).
+            if (string.IsNullOrEmpty(NextendoAccount.NexToken))
+            {
+                return (friends, requests);
+            }
+
             try
             {
                 using HttpClient http = Client();
