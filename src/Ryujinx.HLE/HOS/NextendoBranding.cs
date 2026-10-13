@@ -296,7 +296,7 @@ namespace Ryujinx.HLE.HOS
             {
                 try
                 {
-                    byte[] page = NextendoFriendPage.Patch(Yaz0Decode(changed.TryGetValue(NextendoFriendPage.Archive, out byte[] themedPage) ? themedPage : Read(baseRom, NextendoFriendPage.Archive)));
+                    byte[] page = NextendoFriendPage.Patch(NextendoFriendProfile.PaintOwn(), Yaz0Decode(changed.TryGetValue(NextendoFriendPage.Archive, out byte[] themedPage) ? themedPage : Read(baseRom, NextendoFriendPage.Archive)));
 
                     if (page != null)
                     {

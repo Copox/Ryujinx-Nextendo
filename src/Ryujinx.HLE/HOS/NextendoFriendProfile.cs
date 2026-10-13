@@ -93,6 +93,43 @@ namespace Ryujinx.HLE.HOS
             });
         }
 
+        /// <summary>The banner of the own profile of the user (their badges, from the account server), or null when not signed in.</summary>
+        public static byte[] PaintOwn()
+        {
+            try
+            {
+                if (NextendoHomeMenuVanilla.Enabled || string.IsNullOrEmpty(NextendoAccount.NexToken))
+                {
+                    return null;
+                }
+
+                using HttpRequestMessage request = new(HttpMethod.Get, NextendoEndpoint.BaseUrl().TrimEnd('/') + "/api/me");
+
+                request.Headers.Add("Authorization", "Bearer " + NextendoAccount.NexToken);
+
+                using HttpResponseMessage response = _http.Send(request);
+                using System.Text.Json.JsonDocument answer = System.Text.Json.JsonDocument.Parse(response.Content.ReadAsStream());
+
+                if (!answer.RootElement.TryGetProperty("account", out System.Text.Json.JsonElement account))
+                {
+                    return null;
+                }
+
+                string[] badges = account.TryGetProperty("badges", out System.Text.Json.JsonElement list) && list.ValueKind == System.Text.Json.JsonValueKind.Array
+                    ? [.. list.EnumerateArray().Select(b => b.GetString() ?? "").Where(b => b.Length > 0)]
+                    : [];
+                string colour = account.TryGetProperty("color", out System.Text.Json.JsonElement chosen) && chosen.ValueKind == System.Text.Json.JsonValueKind.String ? chosen.GetString() : "";
+
+                return Paint(NextendoAccount.Pid, colour, badges);
+            }
+            catch (Exception e)
+            {
+                Logger.Warning?.Print(LogClass.Application, $"[Nextendo] own page: banner not painted: {e.Message}");
+
+                return null;
+            }
+        }
+
         // The icon of a badge on the website.
         private static string Icon(string badge)
         {

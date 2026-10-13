@@ -27,7 +27,9 @@ namespace Ryujinx.HLE.HOS
         private const string Layout = "blyt/FrdCntDetail.bflyt";
         private const string Textures = "timg/__Combined.bntx";
 
+        private const string OwnLayout = "blyt/MypMyStatus.bflyt";
         private const string BannerTexture = "MypNoLink3dsNnid^w";
+        private const string OwnBannerTexture = "MypNoRecoWiiU^s";
         private const string MaskTexture = "MypNoReco3DS^s";
 
         // The layouts whose picture gets round corners (the profile picture of the page, the icons
@@ -37,10 +39,13 @@ namespace Ryujinx.HLE.HOS
             ["blyt/MypUserIcon.bflyt"] = "P_Image",
             ["blyt/MypBtnPresencePlate.bflyt"] = "P_Icon",
             ["blyt/MypBtnGamePlate.bflyt"] = "P_Icon",
+            ["blyt/MypBtnUserIcon.bflyt"] = "P_Image",
+            ["blyt/MypBtnPresence.bflyt"] = "P_Icon",
+            ["blyt/MypBtnGame.bflyt"] = "P_Icon",
         };
 
         // The square plate behind a profile picture: it would show at the corners.
-        private const string PlatePane = "P_CardBase";
+        private static readonly string[] _platePanes = ["P_CardBase", "P_BtnShdw"];
 
         // A size no other texture of the applet has: the emulator finds the banner by it. Twice
         // the size it shows at, for the picture to stay sharp when the emulator draws larger.
@@ -53,10 +58,17 @@ namespace Ryujinx.HLE.HOS
         private const float TopHeight = 152f;
         private static readonly (float X, float Y, float W, float H) _banner = (0f, -80f, 574f, 112f);
 
+        // The own page of the user: 720 wide, under the title of the applet; all of it goes down
+        // by the room the banner takes.
+        private const float OwnShift = 132f;
+        private static readonly (float X, float Y, float W, float H) _ownBanner = (0f, -174f, 720f, 140f);
+
         /// <summary>The layout archive of the applet (not compressed) with the banner and the round corners, or null.</summary>
-        public static byte[] Patch(byte[] archive)
+        /// <param name="ownBanner">The banner of the own profile of the user (BannerWidth x BannerHeight, four bytes a pixel), or null.</param>
+        public static byte[] Patch(byte[] ownBanner, byte[] archive)
         {
             List<(string Name, byte[] Data)> files = ReadArchive(archive, out uint multiplier);
+            byte[] page = files.Find(f => f.Name == Layout).Data;
             bool layoutDone = false, texturesDone = false;
 
             for (int i = 0; i < files.Count; i++)
@@ -72,7 +84,11 @@ namespace Ryujinx.HLE.HOS
                 {
                     files[i] = (name, picture);
                 }
-                else if (name == Textures && PatchTextures(files[i].Data) is { } textures)
+                else if (name == OwnLayout && page != null && PatchOwnPage(files[i].Data, page) is { } own)
+                {
+                    files[i] = (name, own);
+                }
+                else if (name == Textures && PatchTextures(files[i].Data, ownBanner) is { } textures)
                 {
                     files[i] = (name, textures);
                     texturesDone = true;
@@ -240,7 +256,15 @@ namespace Ryujinx.HLE.HOS
 
             if (at < 0)
             {
-                return -1;
+                // a layout that uses none: the list comes before the fonts and the materials
+                at = sections.FindIndex(s => Kind(s) is "fnl1" or "mat1");
+
+                if (at < 0)
+                {
+                    return -1;
+                }
+
+                sections.Insert(at, [.. "txl1"u8, 12, 0, 0, 0, 0, 0, 0, 0]);
             }
 
             byte[] s = sections[at];
@@ -347,30 +371,10 @@ namespace Ryujinx.HLE.HOS
                 return null;
             }
 
-            // its material: the one of a plain picture of the page, with the new texture
-            byte[] material = (byte[])model.Clone();
-
-            Array.Clear(material, 0, 0x1C);
-            Encoding.ASCII.GetBytes("P_NxBanner").CopyTo(material, 0);
-            BinaryPrimitives.WriteUInt32LittleEndian(material.AsSpan(0x24), 0x00000000); // no colour added
-            BinaryPrimitives.WriteUInt32LittleEndian(material.AsSpan(0x28), 0xFFFFFFFF); // the texture as it is
-            BinaryPrimitives.WriteUInt16LittleEndian(material.AsSpan(0x2C), (ushort)texture);
-            materials.Add(material);
+            materials.Add(BannerMaterial(model, texture));
             sections[materialsAt] = MaterialSection(materials);
 
-            byte[] banner = (byte[])picture.Clone();
-
-            banner[8] = 1;    // shown
-            banner[9] = 0;    // placed by its centre
-            banner[10] = 255; // opaque
-            Array.Clear(banner, 0xC, 0x18);
-            Encoding.ASCII.GetBytes("P_NxBanner").CopyTo(banner, 0xC);
-            BinaryPrimitives.WriteSingleLittleEndian(banner.AsSpan(0x2C), _banner.X);
-            BinaryPrimitives.WriteSingleLittleEndian(banner.AsSpan(0x30), _banner.Y);
-            BinaryPrimitives.WriteSingleLittleEndian(banner.AsSpan(0x4C), _banner.W);
-            BinaryPrimitives.WriteSingleLittleEndian(banner.AsSpan(0x50), _banner.H);
-            banner.AsSpan(0x54, 16).Fill(0xFF); // the four corners: the texture's own colours
-            BinaryPrimitives.WriteUInt16LittleEndian(banner.AsSpan(0x54 + 16), (ushort)(materials.Count - 1));
+            byte[] banner = BannerPane(picture, _banner, materials.Count - 1);
 
             BinaryPrimitives.WriteSingleLittleEndian(sections[top].AsSpan(0x50), TopHeight);
 
@@ -386,6 +390,79 @@ namespace Ryujinx.HLE.HOS
 
             BinaryPrimitives.WriteSingleLittleEndian(banner.AsSpan(0x30), TopHeight + _banner.Y);
             sections.Insert(inside + 1, banner);
+
+            return Layout_(layout, header, sections);
+        }
+
+        // The material of a banner: the one of a plain picture of the page of a friend, with its texture.
+        private static byte[] BannerMaterial(byte[] model, int texture)
+        {
+            byte[] material = (byte[])model.Clone();
+
+            Array.Clear(material, 0, 0x1C);
+            Encoding.ASCII.GetBytes("P_NxBanner").CopyTo(material, 0);
+            BinaryPrimitives.WriteUInt32LittleEndian(material.AsSpan(0x24), 0x00000000); // no colour added
+            BinaryPrimitives.WriteUInt32LittleEndian(material.AsSpan(0x28), 0xFFFFFFFF); // the texture as it is
+            BinaryPrimitives.WriteUInt16LittleEndian(material.AsSpan(0x2C), (ushort)texture);
+
+            return material;
+        }
+
+        private static byte[] BannerPane(byte[] picture, (float X, float Y, float W, float H) place, int material)
+        {
+            byte[] banner = (byte[])picture.Clone();
+
+            banner[8] = 1;    // shown
+            banner[9] = 0;    // placed by its centre
+            banner[10] = 255; // opaque
+            Array.Clear(banner, 0xC, 0x18);
+            Encoding.ASCII.GetBytes("P_NxBanner").CopyTo(banner, 0xC);
+            BinaryPrimitives.WriteSingleLittleEndian(banner.AsSpan(0x2C), place.X);
+            BinaryPrimitives.WriteSingleLittleEndian(banner.AsSpan(0x30), place.Y);
+            BinaryPrimitives.WriteSingleLittleEndian(banner.AsSpan(0x4C), place.W);
+            BinaryPrimitives.WriteSingleLittleEndian(banner.AsSpan(0x50), place.H);
+            banner.AsSpan(0x54, 16).Fill(0xFF); // the four corners: the colours of the texture
+            BinaryPrimitives.WriteUInt16LittleEndian(banner.AsSpan(0x54 + 16), (ushort)material);
+
+            return banner;
+        }
+
+        // The own page of the user: their banner above their picture and name, the rest moved down.
+        private static byte[] PatchOwnPage(byte[] layout, byte[] friendPage)
+        {
+            List<byte[]> models = Sections(friendPage, out _);
+            byte[] model = Materials(models, out _)?.Find(m => MaterialName(m) == "P_Pict");
+            byte[] picture = models.Find(s => Kind(s) == "pic1" && PaneName(s) == "P_LineVertical");
+
+            List<byte[]> sections = Sections(layout, out int header);
+            int texture = AddTexture(sections, OwnBannerTexture);
+            List<byte[]> materials = Materials(sections, out int materialsAt);
+            int top = sections.FindIndex(s => Kind(s) == "pan1" && PaneName(s) == "N_Top");
+            int inside = top < 0 ? -1 : sections.FindIndex(top, s => Kind(s) == "pas1");
+
+            if (model == null || picture == null || texture < 0 || materials == null || inside < 0 || inside > top + 2)
+            {
+                return null;
+            }
+
+            materials.Add(BannerMaterial(model, texture));
+            sections[materialsAt] = MaterialSection(materials);
+
+            foreach (byte[] s in sections.Where(s => Kind(s) == "pan1"))
+            {
+                string name = PaneName(s);
+
+                if (name == "N_Top")
+                {
+                    BinaryPrimitives.WriteSingleLittleEndian(s.AsSpan(0x50), BinaryPrimitives.ReadSingleLittleEndian(s.AsSpan(0x50)) + OwnShift);
+                }
+                else if (name is "N_User" or "N_NoNA" or "N_HeaderLogList" or "N_Btm" || name.StartsWith("N_LogList_", StringComparison.Ordinal))
+                {
+                    BinaryPrimitives.WriteSingleLittleEndian(s.AsSpan(0x30), BinaryPrimitives.ReadSingleLittleEndian(s.AsSpan(0x30)) - OwnShift);
+                }
+            }
+
+            sections.Insert(inside + 1, BannerPane(picture, _ownBanner, materials.Count - 1));
 
             return Layout_(layout, header, sections);
         }
@@ -429,7 +506,7 @@ namespace Ryujinx.HLE.HOS
             materials[at] = material.ToArray();
             sections[materialsAt] = MaterialSection(materials);
 
-            if (sections.Find(s => Kind(s) == "pic1" && PaneName(s) == PlatePane) is { } plate)
+            foreach (byte[] plate in sections.Where(s => Kind(s) == "pic1" && _platePanes.Contains(PaneName(s))))
             {
                 plate[8] &= 0xFE; // not shown
             }
@@ -439,7 +516,7 @@ namespace Ryujinx.HLE.HOS
 
         // ------------------------------------------------------------------ the textures (BNTX)
 
-        private static byte[] PatchTextures(byte[] bntx)
+        private static byte[] PatchTextures(byte[] bntx, byte[] ownBanner)
         {
             // the corners of the profile pictures: white, opaque inside a rounded square
             byte[] mask = new byte[MaskSize * MaskSize];
@@ -464,10 +541,19 @@ namespace Ryujinx.HLE.HOS
             // the banner before it is painted: nothing
             byte[] bannerData = new byte[(BannerWidth * 4 + 63) / 64 * 64 * ((BannerHeight + 127) / 128 * 128)];
 
+            // the own banner of the user does not change while the applet runs: there from the start
+            byte[] ownData = new byte[bannerData.Length];
+
+            if (ownBanner is { Length: BannerWidth * BannerHeight * 4 })
+            {
+                LayoutConverter.ConvertLinearToBlockLinear(ownData, BannerWidth, BannerHeight, BannerWidth * 4, 4, 1 << BlockHeightLog2, ownBanner);
+            }
+
             // red in the opacity of a white texture, as the applet's own masks; the banner's colours as they are
             return AddData(bntx, [
                 (MaskTexture, MaskSize, MaskSize, 0x0201u, 0x02010101u, BlockHeightLog2, maskData),
                 (BannerTexture, BannerWidth, BannerHeight, 0x0B01u, 0x05040302u, BlockHeightLog2, bannerData),
+                (OwnBannerTexture, BannerWidth, BannerHeight, 0x0B01u, 0x05040302u, BlockHeightLog2, ownData),
             ]);
         }
 
