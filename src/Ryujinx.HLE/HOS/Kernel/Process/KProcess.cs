@@ -1301,6 +1301,24 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
 
             Logger.Flush();
 
+            // [Nextendo, HOME Menu work] An applet of the HOME Menu that crashes ends alone: the
+            // HOME Menu sees it exit and comes back, as on the console, instead of the whole
+            // emulator closing. The thread that faulted cannot go on (it is in the middle of an
+            // instruction): its program is ended from here and the thread never runs again.
+            KThread faulting = KernelStatic.GetCurrentThread();
+
+            if (faulting?.Owner is { } crashed && Services.Am.AppletAE.RealAppletManager.TryGet(crashed.Pid, out _))
+            {
+                Logger.Error?.Print(LogClass.ServiceAm, $"[applet] program {crashed.TitleId:X16} (process {crashed.Pid}) crashed: it is closed, the HOME Menu goes on");
+                Logger.Flush();
+
+                System.Threading.Thread.CurrentThread.IsBackground = true;
+
+                crashed.TerminateCurrentProcess();
+
+                System.Threading.Thread.Sleep(System.Threading.Timeout.Infinite);
+            }
+
             return false;
         }
 
