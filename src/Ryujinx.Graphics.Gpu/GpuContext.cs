@@ -451,9 +451,12 @@ namespace Ryujinx.Graphics.Gpu
         /// program only sends it to the graphics processor when it draws a character itself).
         /// Done on the thread of the graphics processor.
         /// </summary>
+        // Asked from other threads than the renderer's (the deferred actions are its own, not shared).
+        private readonly ConcurrentQueue<Action> _nextendoUploads = new();
+
         public void NextendoUploadTexture(ulong pid, int width, int height, byte[] pixels, int bytesPerPixel = 1)
         {
-            DeferredActions.Enqueue(() =>
+            _nextendoUploads.Enqueue(() =>
             {
                 if (PhysicalMemoryRegistry.TryGetValue(pid, out PhysicalMemory memory))
                 {
@@ -464,6 +467,11 @@ namespace Ryujinx.Graphics.Gpu
 
         internal void RunDeferredActions()
         {
+            while (_nextendoUploads.TryDequeue(out Action upload))
+            {
+                upload();
+            }
+
             while (DeferredActions.TryDequeue(out Action action))
             {
                 action();

@@ -57,6 +57,9 @@ namespace Ryujinx.HLE.HOS
         // the size it shows at, for the picture to stay sharp when the emulator draws larger.
         public const int BannerWidth = 1148, BannerHeight = 224;
 
+        // The banner of the own page: another width, for the one of a friend never to be painted over it.
+        public const int OwnBannerWidth = 1152;
+
         private const int MaskSize = 256;
         private const float MaskRadius = 52f;
 
@@ -70,7 +73,7 @@ namespace Ryujinx.HLE.HOS
         private static readonly (float X, float Y, float W, float H) _ownBanner = (0f, -174f, 720f, 140f);
 
         /// <summary>The layout archive of the applet (not compressed) with the banner and the round corners, or null.</summary>
-        /// <param name="ownBanner">The banner of the own profile of the user (BannerWidth x BannerHeight, four bytes a pixel), or null.</param>
+        /// <param name="ownBanner">The banner of the own profile of the user (OwnBannerWidth x BannerHeight, four bytes a pixel), or null.</param>
         public static byte[] Patch(byte[] ownBanner, byte[] archive)
         {
             List<(string Name, byte[] Data)> files = ReadArchive(archive, out uint multiplier);
@@ -666,18 +669,18 @@ namespace Ryujinx.HLE.HOS
             byte[] bannerData = new byte[(BannerWidth * 4 + 63) / 64 * 64 * ((BannerHeight + 127) / 128 * 128)];
 
             // the own banner of the user does not change while the applet runs: there from the start
-            byte[] ownData = new byte[bannerData.Length];
+            byte[] ownData = new byte[OwnBannerWidth * 4 * ((BannerHeight + 127) / 128 * 128)];
 
-            if (ownBanner is { Length: BannerWidth * BannerHeight * 4 })
+            if (ownBanner is { Length: OwnBannerWidth * BannerHeight * 4 })
             {
-                LayoutConverter.ConvertLinearToBlockLinear(ownData, BannerWidth, BannerHeight, BannerWidth * 4, 4, 1 << BlockHeightLog2, ownBanner);
+                LayoutConverter.ConvertLinearToBlockLinear(ownData, OwnBannerWidth, BannerHeight, OwnBannerWidth * 4, 4, 1 << BlockHeightLog2, ownBanner);
             }
 
             // red in the opacity of a white texture, as the applet's own masks; the banner's colours as they are
             return AddData(bntx, [
                 (MaskTexture, MaskSize, MaskSize, 0x0201u, 0x02010101u, BlockHeightLog2, maskData),
                 (BannerTexture, BannerWidth, BannerHeight, 0x0B01u, 0x05040302u, BlockHeightLog2, bannerData),
-                (OwnBannerTexture, BannerWidth, BannerHeight, 0x0B01u, 0x05040302u, BlockHeightLog2, ownData),
+                (OwnBannerTexture, OwnBannerWidth, BannerHeight, 0x0B01u, 0x05040302u, BlockHeightLog2, ownData),
             ]);
         }
 

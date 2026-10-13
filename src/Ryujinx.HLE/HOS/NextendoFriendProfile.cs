@@ -30,9 +30,15 @@ namespace Ryujinx.HLE.HOS
         private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(6) };
         private static readonly ConcurrentDictionary<string, SKBitmap> _badges = new();
 
+        // An animated banner: no more pictures than this (each one is a megabyte), none shown
+        // for less than this long.
+        private const int MostFrames = 60;
+        private const int ShortestFrame = 40;
+
         private static Switch _device;
         private static bool _listening;
         private static int _shown;
+        private static int _own;
 
         public static void Attach(Switch device)
         {
@@ -63,32 +69,96 @@ namespace Ryujinx.HLE.HOS
                     NextendoFriends.Entry friend = NextendoFriends.Get().FirstOrDefault(f => f.Pid == pid);
                     // NEXTENDO_FRIEND_BADGES="admin,donor,...": those on every page, to see them drawn
                     string forced = Environment.GetEnvironmentVariable("NEXTENDO_FRIEND_BADGES");
-                    byte[] banner = Paint(pid, friend.Color, string.IsNullOrEmpty(forced) ? friend.Badges ?? [] : forced.Split(','));
+                    List<(byte[] Pixels, int Milliseconds)> banner = Banner(pid, friend.Color, string.IsNullOrEmpty(forced) ? friend.Badges ?? [] : forced.Split(','), NextendoFriendPage.BannerWidth);
 
-                    Logger.Info?.Print(LogClass.Application, $"[Nextendo] friend page: banner of 0x{pid:X} ({friend.Badges?.Length ?? 0} badge(s), colour \"{friend.Color}\")");
+                    Logger.Info?.Print(LogClass.Application, $"[Nextendo] friend page: banner of 0x{pid:X} ({friend.Badges?.Length ?? 0} badge(s), colour \"{friend.Color}\", {banner.Count} picture(s))");
 
-                    foreach (int delay in _delays)
+                    // a still one: given again for a while (an animated one is given all the time)
+                    foreach (int delay in banner.Count > 1 ? [] : _delays)
                     {
                         await Task.Delay(delay);
 
-                        // another friend's page meanwhile: theirs is the one to show
+                        // the page of another friend meanwhile: theirs is the one to show
                         if (turn != _shown || device != _device)
                         {
                             return;
                         }
 
-                        foreach (KProcess process in device.System.KernelContext.Processes.Values)
+                        Upload(device, NextendoFriendPage.BannerWidth, banner[0].Pixels);
+                    }
+
+                    // an animated one: its pictures in turn, as long as this page is the one shown
+                    for (int at = 0; banner.Count > 1 && turn == _shown && device == _device; at = (at + 1) % banner.Count)
+                    {
+                        if (!Upload(device, NextendoFriendPage.BannerWidth, banner[at].Pixels))
                         {
-                            if (process.TitleId == MyPageProgram)
-                            {
-                                device.Gpu.NextendoUploadTexture(process.Pid, NextendoFriendPage.BannerWidth, NextendoFriendPage.BannerHeight, banner, 4);
-                            }
+                            return; // the applet is closed
                         }
+
+                        await Task.Delay(banner[at].Milliseconds);
                     }
                 }
                 catch (Exception e)
                 {
                     Logger.Warning?.Print(LogClass.Application, $"[Nextendo] friend page: banner not painted: {e.Message}");
+                }
+            });
+        }
+
+        // A banner given to the renderer, for the applet to show: false when the applet does not run.
+        private static bool Upload(Switch device, int width, byte[] pixels)
+        {
+            bool running = false;
+
+            foreach (KProcess process in device.System.KernelContext.Processes.Values)
+            {
+                if (process.TitleId == MyPageProgram && process.State != ProcessState.Exited)
+                {
+                    device.Gpu.NextendoUploadTexture(process.Pid, width, NextendoFriendPage.BannerHeight, pixels, 4);
+                    running = true;
+                }
+            }
+
+            return running;
+        }
+
+        // The own banner, when it is an animated one: its pictures in turn while the applet runs
+        // (the first one is in the textures of the applet from the start).
+        private static void AnimateOwn(List<(byte[] Pixels, int Milliseconds)> banner)
+        {
+            Switch device = _device;
+            int turn = Interlocked.Increment(ref _own);
+
+            if (device == null || banner.Count < 2)
+            {
+                return;
+            }
+
+            Task.Run(async () =>
+            {
+                try
+                {
+                    // the applet is only being loaded when its textures are made
+                    long until = Environment.TickCount64 + 20000;
+                    bool seen = false;
+
+                    for (int at = 0; turn == _own && device == _device; at = (at + 1) % banner.Count)
+                    {
+                        if (Upload(device, NextendoFriendPage.OwnBannerWidth, banner[at].Pixels))
+                        {
+                            seen = true;
+                        }
+                        else if (seen || Environment.TickCount64 > until)
+                        {
+                            return;
+                        }
+
+                        await Task.Delay(banner[at].Milliseconds);
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.Warning?.Print(LogClass.Application, $"[Nextendo] own page: banner not animated: {e.Message}");
                 }
             });
         }
@@ -120,7 +190,11 @@ namespace Ryujinx.HLE.HOS
                     : [];
                 string colour = account.TryGetProperty("color", out System.Text.Json.JsonElement chosen) && chosen.ValueKind == System.Text.Json.JsonValueKind.String ? chosen.GetString() : "";
 
-                return Paint(NextendoAccount.Pid, colour, badges);
+                List<(byte[] Pixels, int Milliseconds)> banner = Banner(NextendoAccount.Pid, colour, badges, NextendoFriendPage.OwnBannerWidth);
+
+                AnimateOwn(banner);
+
+                return banner[0].Pixels;
             }
             catch (Exception e)
             {
@@ -175,10 +249,80 @@ namespace Ryujinx.HLE.HOS
             return SKColor.FromHsv((pid * 2654435761u >> 8) % 360, 62, 86);
         }
 
-        /// <summary>The banner of a profile: red, green, blue and opacity of each pixel, the top row first.</summary>
-        public static byte[] Paint(ulong pid, string colour, IReadOnlyList<string> badges)
+        // The picture a profile has for its banner (a still one or an animated one, as a file), or
+        // null: Nextendo Network has none yet. NEXTENDO_BANNER_TEST=<file>: that one on every
+        // profile, to see a picture or an animation drawn.
+        private static byte[] Picture(ulong pid)
         {
-            const int Width = NextendoFriendPage.BannerWidth, Height = NextendoFriendPage.BannerHeight;
+            string test = Environment.GetEnvironmentVariable("NEXTENDO_BANNER_TEST");
+
+            return !string.IsNullOrEmpty(test) && System.IO.File.Exists(test) ? System.IO.File.ReadAllBytes(test) : null;
+        }
+
+        /// <summary>The banner of a profile, one picture or the pictures of an animation with how long each shows.</summary>
+        public static List<(byte[] Pixels, int Milliseconds)> Banner(ulong pid, string colour, IReadOnlyList<string> badges, int width)
+        {
+            byte[] file = Picture(pid);
+
+            if (file != null)
+            {
+                try
+                {
+                    using SKCodec codec = SKCodec.Create(new System.IO.MemoryStream(file));
+
+                    if (codec != null)
+                    {
+                        SKImageInfo info = new(codec.Info.Width, codec.Info.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
+                        using SKBitmap frame = new(info);
+                        int count = Math.Max(1, codec.FrameCount);
+                        int step = (count + MostFrames - 1) / MostFrames;
+                        List<(byte[], int)> pictures = [];
+                        int waited = 0;
+
+                        for (int i = 0; i < count; i++)
+                        {
+                            // each picture of an animation is drawn over the one before
+                            SKCodecResult result = count > 1
+                                ? codec.GetPixels(info, frame.GetPixels(), new SKCodecOptions(i, i > 0 ? i - 1 : -1))
+                                : codec.GetPixels(info, frame.GetPixels());
+
+                            if (result is not (SKCodecResult.Success or SKCodecResult.IncompleteInput))
+                            {
+                                break;
+                            }
+
+                            waited += count > 1 ? Math.Max(ShortestFrame, codec.FrameInfo[i].Duration) : 0;
+
+                            if (i % step == step - 1 || i == count - 1)
+                            {
+                                pictures.Add((Paint(pid, colour, badges, width, frame), waited));
+                                waited = 0;
+                            }
+                        }
+
+                        if (pictures.Count > 0)
+                        {
+                            return pictures;
+                        }
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.Warning?.Print(LogClass.Application, $"[Nextendo] banner picture not read: {e.Message}");
+                }
+            }
+
+            return [(Paint(pid, colour, badges, width, null), 0)];
+        }
+
+        /// <summary>
+        /// A banner: red, green, blue and opacity of each pixel, the top row first. Made of the
+        /// picture given (it fills the banner, cut at its centre), or made up when there is none.
+        /// </summary>
+        public static byte[] Paint(ulong pid, string colour, IReadOnlyList<string> badges, int width, SKBitmap background)
+        {
+            int Width = width;
+            const int Height = NextendoFriendPage.BannerHeight;
             const float Corner = 28f;
 
             SKColor main = Colour(pid, colour);
@@ -195,6 +339,51 @@ namespace Ryujinx.HLE.HOS
             canvas.Clear(SKColors.Transparent);
             canvas.ClipRoundRect(new SKRoundRect(new SKRect(0, 0, Width, Height), Corner), antialias: true);
 
+            if (background != null)
+            {
+                float scale = Math.Max((float)Width / background.Width, (float)Height / background.Height);
+                float w = background.Width * scale, h = background.Height * scale;
+
+                using SKPaint filling = new() { IsAntialias = true, FilterQuality = SKFilterQuality.High };
+
+                canvas.DrawBitmap(background, SKRect.Create((Width - w) / 2, (Height - h) / 2, w, h), filling);
+            }
+            else
+            {
+                PaintMadeUp(canvas, paint, pid, Width, Height, dark, main, light);
+            }
+
+            paint.BlendMode = SKBlendMode.SrcOver;
+            paint.Style = SKPaintStyle.Fill;
+
+            // darker at the bottom, where the badges are
+            paint.Shader = SKShader.CreateLinearGradient(new SKPoint(0, Height * 0.45f), new SKPoint(0, Height), [SKColors.Transparent, SKColors.Black.WithAlpha(90)], SKShaderTileMode.Clamp);
+            canvas.DrawPaint(paint);
+            paint.Shader = null;
+
+            PaintBadges(canvas, paint, badges, Width, Height);
+            canvas.Flush();
+
+            // as the page blends it: colours not multiplied by their opacity
+            byte[] pixels = picture.Bytes;
+
+            for (int i = 0; i < pixels.Length; i += 4)
+            {
+                int opacity = pixels[i + 3];
+
+                if (opacity is > 0 and < 255)
+                {
+                    pixels[i] = (byte)Math.Min(255, pixels[i] * 255 / opacity);
+                    pixels[i + 1] = (byte)Math.Min(255, pixels[i + 1] * 255 / opacity);
+                    pixels[i + 2] = (byte)Math.Min(255, pixels[i + 2] * 255 / opacity);
+                }
+            }
+
+            return pixels;
+        }
+
+        private static void PaintMadeUp(SKCanvas canvas, SKPaint paint, ulong pid, int Width, int Height, SKColor dark, SKColor main, SKColor light)
+        {
             paint.Shader = SKShader.CreateLinearGradient(new SKPoint(0, Height), new SKPoint(Width, 0), [dark, main, light], [0f, 0.55f, 1f], SKShaderTileMode.Clamp);
             canvas.DrawPaint(paint);
             paint.Shader = null;
@@ -239,13 +428,10 @@ namespace Ryujinx.HLE.HOS
                 canvas.DrawCircle(random.Next(0, Width), random.Next(0, Height), random.Next(2, 7), paint);
             }
 
-            paint.BlendMode = SKBlendMode.SrcOver;
+        }
 
-            // darker at the bottom, where the badges are
-            paint.Shader = SKShader.CreateLinearGradient(new SKPoint(0, Height * 0.45f), new SKPoint(0, Height), [SKColors.Transparent, SKColors.Black.WithAlpha(90)], SKShaderTileMode.Clamp);
-            canvas.DrawPaint(paint);
-            paint.Shader = null;
-
+        private static void PaintBadges(SKCanvas canvas, SKPaint paint, IReadOnlyList<string> badges, int Width, int Height)
+        {
             // the badges: in a dark pill at the bottom right
             List<SKBitmap> icons = [.. badges.Take(6).Select(Badge).Where(b => b != null)];
 
@@ -268,24 +454,6 @@ namespace Ryujinx.HLE.HOS
                 }
             }
 
-            canvas.Flush();
-
-            // as the page blends it: colours not multiplied by their opacity
-            byte[] pixels = picture.Bytes;
-
-            for (int i = 0; i < pixels.Length; i += 4)
-            {
-                int opacity = pixels[i + 3];
-
-                if (opacity is > 0 and < 255)
-                {
-                    pixels[i] = (byte)Math.Min(255, pixels[i] * 255 / opacity);
-                    pixels[i + 1] = (byte)Math.Min(255, pixels[i + 1] * 255 / opacity);
-                    pixels[i + 2] = (byte)Math.Min(255, pixels[i + 2] * 255 / opacity);
-                }
-            }
-
-            return pixels;
         }
     }
 }
