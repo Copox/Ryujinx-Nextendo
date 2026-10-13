@@ -140,6 +140,8 @@ namespace Ryujinx.Ava.Systems
         public string ApplicationPath { get; private set; }
         public ulong ApplicationId { get; private set; }
         public bool ScreenshotRequested { get; set; }
+        private bool _consoleHomeKeyDown;
+        private bool _consoleCaptureKeyDown;
 
         public AppHost(
             RendererHost renderer,
@@ -1472,6 +1474,30 @@ namespace Ryujinx.Ava.Systems
                         _keyboardInterface.IsPressed((Key)ConfigurationState.Instance.Hid.Hotkeys.Value.TurboMode) != Device.TurboMode)
                     {
                         Device.ToggleTurbo();
+                    }
+
+                    // [Nextendo, HOME Menu work] The console's HOME and Capture buttons of a keyboard
+                    // configuration (input settings), in a HOME Menu session.
+                    if (Ryujinx.HLE.HOS.HomeMenuStatus.Running &&
+                        NpadManager?.GetPlayerInputConfigByIndex(0) is Ryujinx.Common.Configuration.Hid.Keyboard.StandardKeyboardInputConfig keys)
+                    {
+                        bool homeKey = keys.RightJoycon.ButtonHome != Ryujinx.Common.Configuration.Hid.PhysicalKey.Unbound &&
+                                       _keyboardInterface.IsPressed((Key)(int)keys.RightJoycon.ButtonHome);
+                        bool captureKey = keys.LeftJoycon.ButtonCapture != Ryujinx.Common.Configuration.Hid.PhysicalKey.Unbound &&
+                                          _keyboardInterface.IsPressed((Key)(int)keys.LeftJoycon.ButtonCapture);
+
+                        if (homeKey && !_consoleHomeKeyDown)
+                        {
+                            Device.System.PressHomeButton();
+                        }
+
+                        if (captureKey && !_consoleCaptureKeyDown)
+                        {
+                            ScreenshotRequested = true;
+                        }
+
+                        _consoleHomeKeyDown = homeKey;
+                        _consoleCaptureKeyDown = captureKey;
                     }
 
                     switch (currentHotkeyState)

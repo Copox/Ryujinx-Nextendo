@@ -622,7 +622,25 @@ namespace Ryujinx.Ava.UI.Views.Misc
             }
 
             GamepadStateSnapshot snapshot = gamepad.GetStateSnapshot();
-            bool home = snapshot.IsPressed(GamepadButtonInputId.Guide);
+
+            // The buttons chosen in the input settings (the Home and Share buttons when none is).
+            GamepadButtonInputId homeButton = GamepadButtonInputId.Guide;
+            GamepadButtonInputId captureButton = GamepadButtonInputId.Misc1;
+
+            if (ViewModel?.AppHost?.NpadManager?.GetPlayerInputConfigByIndex(0) is Ryujinx.Common.Configuration.Hid.Controller.StandardControllerInputConfig pad)
+            {
+                if (pad.RightJoycon.ButtonHome != Ryujinx.Common.Configuration.Hid.Controller.GamepadInputId.Unbound)
+                {
+                    homeButton = (GamepadButtonInputId)pad.RightJoycon.ButtonHome;
+                }
+
+                if (pad.LeftJoycon.ButtonCapture != Ryujinx.Common.Configuration.Hid.Controller.GamepadInputId.Unbound)
+                {
+                    captureButton = (GamepadButtonInputId)pad.LeftJoycon.ButtonCapture;
+                }
+            }
+
+            bool home = snapshot.IsPressed(homeButton);
 
             // [Nextendo, HOME Menu work] In a HOME Menu session the controller is the console's:
             // its Home button is the console's HOME button (the dashboard stays in the Nextendo
@@ -647,7 +665,7 @@ namespace Ryujinx.Ava.UI.Views.Misc
                 _profileHomePressed = false;
             }
 
-            bool capture = console && snapshot.IsPressed(GamepadButtonInputId.Misc1);
+            bool capture = console && snapshot.IsPressed(captureButton);
 
             if (capture && !_consoleCapturePressed && ViewModel?.AppHost is { } host)
             {

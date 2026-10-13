@@ -87,6 +87,12 @@ namespace Ryujinx.Ava.UI.Views.Input
                                 case "ButtonMinus":
                                     viewModel.Config.ButtonMinus = buttonValue.AsHidType<PhysicalKey>();
                                     break;
+                                case "ButtonCapture":
+                                    viewModel.Config.ButtonCapture = buttonValue.AsHidType<PhysicalKey>();
+                                    break;
+                                case "ButtonHome":
+                                    viewModel.Config.ButtonHome = buttonValue.AsHidType<PhysicalKey>();
+                                    break;
                                 case "LeftStickButton":
                                     viewModel.Config.LeftStickButton = buttonValue.AsHidType<PhysicalKey>();
                                     break;
@@ -213,6 +219,8 @@ namespace Ryujinx.Ava.UI.Views.Input
                     { "ButtonZl", () => ViewModel.Config.ButtonZl = PhysicalKey.Unbound },
                     { "ButtonL", () => ViewModel.Config.ButtonL = PhysicalKey.Unbound },
                     { "ButtonMinus", () => ViewModel.Config.ButtonMinus = PhysicalKey.Unbound },
+                    { "ButtonCapture", () => ViewModel.Config.ButtonCapture = PhysicalKey.Unbound },
+                    { "ButtonHome", () => ViewModel.Config.ButtonHome = PhysicalKey.Unbound },
                     { "LeftStickButton", () => ViewModel.Config.LeftStickButton = PhysicalKey.Unbound },
                     { "LeftStickUp", () => ViewModel.Config.LeftStickUp = PhysicalKey.Unbound },
                     { "LeftStickDown", () => ViewModel.Config.LeftStickDown = PhysicalKey.Unbound },

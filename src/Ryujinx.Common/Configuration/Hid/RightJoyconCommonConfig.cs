@@ -3,6 +3,8 @@ namespace Ryujinx.Common.Configuration.Hid
     public class RightJoyconCommonConfig<TButton>
     {
         public TButton ButtonPlus { get; set; }
+        // [Nextendo, HOME Menu work] The console's HOME button (HOME Menu sessions).
+        public TButton ButtonHome { get; set; }
         public TButton ButtonR { get; set; }
         public TButton ButtonZr { get; set; }
         public TButton ButtonSl { get; set; }

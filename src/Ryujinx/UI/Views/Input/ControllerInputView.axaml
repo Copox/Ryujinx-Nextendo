@@ -98,6 +98,23 @@
                                     TextAlignment="Center" />
                             </ToggleButton>
                         </StackPanel>
+                        <StackPanel
+                            Grid.Column="1"
+                            Grid.Row="0"
+                            Orientation="Horizontal">
+                            <TextBlock
+                                Width="20"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Text="&#x25A3;"
+                                ToolTip.Tip="Capture"
+                                TextAlignment="Center" />
+                            <ToggleButton Name="ButtonCapture" ToolTip.Tip="Capture">
+                                <TextBlock
+                                    Text="{Binding Config.ButtonCapture, Converter={x:Static helpers:KeyValueConverter.Instance}}"
+                                    TextAlignment="Center" />
+                            </ToggleButton>
+                        </StackPanel>
                     </Grid>
                 </Border>
                 <!-- Left Joystick -->
@@ -617,6 +634,25 @@
                             <ToggleButton Name="ButtonPlus">
                                 <TextBlock
                                     Text="{Binding Config.ButtonPlus, Converter={x:Static helpers:KeyValueConverter.Instance}}"
+                                    TextAlignment="Center" />
+                            </ToggleButton>
+                        </StackPanel>
+                        <StackPanel
+                            Grid.Column="0"
+                            Grid.Row="0"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Center"
+                            Orientation="Horizontal">
+                            <TextBlock
+                                Width="20"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                Text="&#x2302;"
+                                ToolTip.Tip="HOME"
+                                TextAlignment="Center" />
+                            <ToggleButton Name="ButtonHome" ToolTip.Tip="HOME">
+                                <TextBlock
+                                    Text="{Binding Config.ButtonHome, Converter={x:Static helpers:KeyValueConverter.Instance}}"
                                     TextAlignment="Center" />
                             </ToggleButton>
                         </StackPanel>

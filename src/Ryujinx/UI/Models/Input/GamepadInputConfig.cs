@@ -76,6 +76,13 @@ namespace Ryujinx.Ava.UI.Models.Input
         [ObservableProperty]
         public partial GamepadInputId ButtonPlus { get; set; }
 
+        // [Nextendo, HOME Menu work] The console's HOME and Capture buttons.
+        [ObservableProperty]
+        public partial GamepadInputId ButtonHome { get; set; }
+
+        [ObservableProperty]
+        public partial GamepadInputId ButtonCapture { get; set; }
+
         [ObservableProperty]
         public partial GamepadInputId ButtonA { get; set; }
 
@@ -195,6 +202,9 @@ namespace Ryujinx.Ava.UI.Models.Input
                 DpadRight = controllerInput.LeftJoycon.DpadRight;
                 ButtonL = controllerInput.LeftJoycon.ButtonL;
                 ButtonMinus = controllerInput.LeftJoycon.ButtonMinus;
+                // a configuration made before these two existed: the buttons they had
+                ButtonCapture = controllerInput.LeftJoycon.ButtonCapture == GamepadInputId.Unbound ? GamepadInputId.Misc1 : controllerInput.LeftJoycon.ButtonCapture;
+                ButtonHome = controllerInput.RightJoycon.ButtonHome == GamepadInputId.Unbound ? GamepadInputId.Guide : controllerInput.RightJoycon.ButtonHome;
                 LeftButtonSl = controllerInput.LeftJoycon.ButtonSl;
                 LeftButtonSr = controllerInput.LeftJoycon.ButtonSr;
                 ButtonZl = controllerInput.LeftJoycon.ButtonZl;
@@ -272,6 +282,7 @@ namespace Ryujinx.Ava.UI.Models.Input
                     DpadRight = DpadRight,
                     ButtonL = ButtonL,
                     ButtonMinus = ButtonMinus,
+                    ButtonCapture = ButtonCapture,
                     ButtonSl = LeftButtonSl,
                     ButtonSr = LeftButtonSr,
                     ButtonZl = ButtonZl,
@@ -283,6 +294,7 @@ namespace Ryujinx.Ava.UI.Models.Input
                     ButtonX = ButtonX,
                     ButtonY = ButtonY,
                     ButtonPlus = ButtonPlus,
+                    ButtonHome = ButtonHome,
                     ButtonSl = RightButtonSl,
                     ButtonSr = RightButtonSr,
                     ButtonR = ButtonR,

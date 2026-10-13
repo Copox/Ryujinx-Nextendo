@@ -60,6 +60,13 @@ namespace Ryujinx.Ava.UI.Models.Input
         [ObservableProperty]
         public partial PhysicalKey ButtonPlus { get; set; }
 
+        // [Nextendo, HOME Menu work] The console's HOME and Capture buttons.
+        [ObservableProperty]
+        public partial PhysicalKey ButtonHome { get; set; }
+
+        [ObservableProperty]
+        public partial PhysicalKey ButtonCapture { get; set; }
+
         [ObservableProperty]
         public partial PhysicalKey ButtonA { get; set; }
 
@@ -128,6 +135,8 @@ namespace Ryujinx.Ava.UI.Models.Input
                 DpadRight = keyboardConfig.LeftJoycon.DpadRight;
                 ButtonL = keyboardConfig.LeftJoycon.ButtonL;
                 ButtonMinus = keyboardConfig.LeftJoycon.ButtonMinus;
+                ButtonCapture = keyboardConfig.LeftJoycon.ButtonCapture;
+                ButtonHome = keyboardConfig.RightJoycon.ButtonHome;
                 LeftButtonSl = keyboardConfig.LeftJoycon.ButtonSl;
                 LeftButtonSr = keyboardConfig.LeftJoycon.ButtonSr;
                 ButtonZl = keyboardConfig.LeftJoycon.ButtonZl;
@@ -161,6 +170,7 @@ namespace Ryujinx.Ava.UI.Models.Input
                     DpadRight = DpadRight,
                     ButtonL = ButtonL,
                     ButtonMinus = ButtonMinus,
+                    ButtonCapture = ButtonCapture,
                     ButtonZl = ButtonZl,
                     ButtonSl = LeftButtonSl,
                     ButtonSr = LeftButtonSr,
@@ -172,6 +182,7 @@ namespace Ryujinx.Ava.UI.Models.Input
                     ButtonX = ButtonX,
                     ButtonY = ButtonY,
                     ButtonPlus = ButtonPlus,
+                    ButtonHome = ButtonHome,
                     ButtonSl = RightButtonSl,
                     ButtonSr = RightButtonSr,
                     ButtonR = ButtonR,
@@ -217,6 +228,8 @@ namespace Ryujinx.Ava.UI.Models.Input
                 nameof(DpadRight),
                 nameof(ButtonMinus),
                 nameof(ButtonPlus),
+                nameof(ButtonHome),
+                nameof(ButtonCapture),
                 nameof(ButtonA),
                 nameof(ButtonB),
                 nameof(ButtonX),
