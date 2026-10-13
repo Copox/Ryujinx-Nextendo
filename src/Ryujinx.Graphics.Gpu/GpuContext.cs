@@ -451,13 +451,13 @@ namespace Ryujinx.Graphics.Gpu
         /// program only sends it to the graphics processor when it draws a character itself).
         /// Done on the thread of the graphics processor.
         /// </summary>
-        public void NextendoUploadTexture(ulong pid, int width, int height, byte[] pixels)
+        public void NextendoUploadTexture(ulong pid, int width, int height, byte[] pixels, int bytesPerPixel = 1)
         {
             DeferredActions.Enqueue(() =>
             {
                 if (PhysicalMemoryRegistry.TryGetValue(pid, out PhysicalMemory memory))
                 {
-                    memory.TextureCache.NextendoUpload(width, height, pixels);
+                    memory.TextureCache.NextendoUpload(width, height, pixels, bytesPerPixel);
                 }
             });
         }

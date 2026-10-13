@@ -45,6 +45,11 @@ namespace Ryujinx.Common.Configuration
             // HOME Menu's "last online" of a friend who is offline.
             public long LastSeen { get; init; }
             public string FriendCode { get; init; }
+            // [Nextendo, HOME Menu work] What the friend's page shows of a Nextendo profile: the
+            // badges (as the account server names them: "donor", "booster_3", "team"...) and the
+            // colour chosen for the profile ("#rrggbb", empty when none).
+            public string[] Badges { get; init; }
+            public string Color { get; init; }
             public long RequestedAt { get; init; }
             public bool HasPicture { get; init; }
 
@@ -432,6 +437,14 @@ namespace Ryujinx.Common.Configuration
             }
         }
 
+        /// <summary>
+        /// [Nextendo, HOME Menu work] The page of a friend opens in the HOME Menu (the friend's id):
+        /// the emulator paints the banner and the badges of the page.
+        /// </summary>
+        public static event Action<ulong> FriendPageShown;
+
+        public static void TellFriendPageShown(ulong pid) => FriendPageShown?.Invoke(pid);
+
         private static List<Played> _own = new();
         private static long _ownAt;
         private static int _ownAsking;
@@ -591,6 +604,10 @@ namespace Ryujinx.Common.Configuration
                                 Platform = platform,
                                 Favorite = favorite,
                                 Since = since,
+                                Badges = f.TryGetProperty("badges", out JsonElement badgesEl) && badgesEl.ValueKind == JsonValueKind.Array
+                                    ? [.. System.Linq.Enumerable.Where(System.Linq.Enumerable.Select(badgesEl.EnumerateArray(), b => b.GetString() ?? ""), b => b.Length > 0)]
+                                    : [],
+                                Color = f.TryGetProperty("color", out JsonElement colorEl) && colorEl.ValueKind == JsonValueKind.String ? colorEl.GetString() ?? "" : "",
                             });
                         }
                     }

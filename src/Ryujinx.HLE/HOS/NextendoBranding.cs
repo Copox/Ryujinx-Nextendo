@@ -291,6 +291,26 @@ namespace Ryujinx.HLE.HOS
                 changed[SettingsLayout] = Yaz0Encode(withValues);
             }
 
+            // [Nextendo, HOME Menu work] The page of a friend: a banner and the friend's badges.
+            if (programId == 0x0100000000001013 && !Vanilla && Exists(baseRom, NextendoFriendPage.Archive))
+            {
+                try
+                {
+                    byte[] page = NextendoFriendPage.Patch(Yaz0Decode(changed.TryGetValue(NextendoFriendPage.Archive, out byte[] themedPage) ? themedPage : Read(baseRom, NextendoFriendPage.Archive)));
+
+                    if (page != null)
+                    {
+                        changed[NextendoFriendPage.Archive] = Yaz0Encode(page);
+                    }
+
+                    Logger.Info?.Print(LogClass.ModLoader, $"[Nextendo] friend page: banner and badges {(page != null ? "added" : "not added")}");
+                }
+                catch (Exception e)
+                {
+                    Logger.Warning?.Print(LogClass.ModLoader, $"[Nextendo] friend page left as it is: {e.Message}");
+                }
+            }
+
             const string ControllerLayout = "/lyt/Controller.szs";
 
             if (programId == 0x0100000000001003 && !Vanilla && ControllerPagePictures() is { } pictures && Exists(baseRom, ControllerLayout))

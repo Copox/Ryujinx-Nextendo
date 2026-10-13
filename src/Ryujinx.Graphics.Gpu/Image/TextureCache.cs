@@ -19,12 +19,13 @@ namespace Ryujinx.Graphics.Gpu.Image
     class TextureCache : IDisposable
     {
         /// <summary>[Nextendo] See GpuContext.NextendoUploadTexture.</summary>
-        public void NextendoUpload(int width, int height, byte[] pixels)
+        public void NextendoUpload(int width, int height, byte[] pixels, int bytesPerPixel)
         {
             foreach (Texture texture in _textures)
             {
-                if (texture.Info.Width == width && texture.Info.Height == height && texture.Info.FormatInfo.BytesPerPixel == 1 &&
-                    texture.Info.Levels == 1 && texture.Info.GetLayers() == 1 && pixels.Length == width * height)
+                if (texture.Info.Width == width && texture.Info.Height == height && texture.Info.FormatInfo.BytesPerPixel == bytesPerPixel &&
+                    !texture.Info.FormatInfo.IsCompressed &&
+                    texture.Info.Levels == 1 && texture.Info.GetLayers() == 1 && pixels.Length == width * height * bytesPerPixel)
                 {
                     texture.SetData(Ryujinx.Common.Memory.MemoryOwner<byte>.RentCopy(pixels));
                 }

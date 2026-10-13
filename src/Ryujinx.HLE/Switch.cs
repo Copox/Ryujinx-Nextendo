@@ -93,6 +93,7 @@ namespace Ryujinx.HLE
             TamperMachine     = new TamperMachine();
 
             System.InitializeServices();
+            HOS.NextendoFriendProfile.Attach(this);
             System.State.SetLanguage(Configuration.SystemLanguage);
             System.State.SetRegion(Configuration.Region);
 

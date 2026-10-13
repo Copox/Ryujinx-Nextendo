@@ -981,6 +981,12 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
 
             Logger.Info?.Print(LogClass.ServiceFriend, $"[Nextendo] GetFriendPresenceV2 friend 0x{friendId.Id:X}");
 
+            // asked for the friend whose page is shown
+            if (friendId.Id != 0)
+            {
+                NextendoFriends.TellFriendPageShown(friendId.Id);
+            }
+
             return Result.Success;
         }
 
