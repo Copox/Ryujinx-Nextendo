@@ -56,6 +56,10 @@ namespace Ryujinx.Ava.UI.Windows
             VanillaCheck.IsChecked = Ryujinx.Common.Configuration.NextendoHomeMenuVanilla.Enabled;
             VanillaCheck.IsCheckedChanged += (_, _) => Ryujinx.Common.Configuration.NextendoHomeMenuVanilla.Enabled = VanillaCheck.IsChecked == true;
 
+            // [Nextendo] the game cards (.xci) as virtual game cards, or as games of the HOME Menu
+            XciCardsCheck.IsChecked = Ryujinx.HLE.HOS.NextendoVirtualCards.Option;
+            XciCardsCheck.IsCheckedChanged += (_, _) => Ryujinx.HLE.HOS.NextendoVirtualCards.Enabled = XciCardsCheck.IsChecked == true;
+
             AutoStartCheck.IsCheckedChanged += (_, _) =>
             {
                 NextendoHomeMenuSettings.AutoStart = AutoStartCheck.IsChecked == true;

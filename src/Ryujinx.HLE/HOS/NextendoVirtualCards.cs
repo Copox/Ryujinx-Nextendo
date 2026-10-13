@@ -128,6 +128,18 @@ namespace Ryujinx.HLE.HOS
             HomeMenuLibrary.NotifyChanged();
         }
 
+        /// <summary>The game card loaded to this console taken out (ns 4038): none inserted.</summary>
+        public static void Eject()
+        {
+            if (Inserted != 0)
+            {
+                Logger.Notice.Print(LogClass.ServiceNs, $"[vgc] game card ejected: {Inserted:X16}");
+
+                Inserted = 0;
+                HomeMenuLibrary.NotifyChanged();
+            }
+        }
+
         // The date the card was obtained: the file's (the page sorts by it).
         private static long Obtained(string path)
         {

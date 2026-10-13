@@ -205,6 +205,7 @@ namespace Ryujinx.HLE.HOS.Services.Ns
         [CommandCmif(4029)]
         [CommandCmif(4030)]
         [CommandCmif(4033)]
+        [CommandCmif(4038)]
         [CommandCmif(4060)]
         [CommandCmif(4069)]
         [CommandCmif(4071)]
@@ -266,6 +267,12 @@ namespace Ryujinx.HLE.HOS.Services.Ns
                 Ipc.IpcBuffDesc entries = context.Request.SendBuff[0];
 
                 Ryujinx.HLE.HOS.NextendoVirtualCards.Load(context.Memory.GetSpan(entries.Position, (int)entries.Size), count);
+            }
+
+            // the virtual game card ejected from this console (4038)
+            if (vgcCommand == 4038 && Ryujinx.HLE.HOS.NextendoVirtualCards.Enabled)
+            {
+                Ryujinx.HLE.HOS.NextendoVirtualCards.Eject();
             }
 
             if (vgcCommand == 4008 && System.Environment.GetEnvironmentVariable("NEXTENDO_VGC_TEST") is { Length: > 0 } test)

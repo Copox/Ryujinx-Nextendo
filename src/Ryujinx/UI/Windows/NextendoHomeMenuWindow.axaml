@@ -26,6 +26,7 @@
                           Content="{ext:Locale Dialog_Nextendo_QLaunchBackground}" />
                 <CheckBox Name="FullscreenCheck" Content="{ext:Locale Dialog_Nextendo_QLaunchFullscreen}" />
                 <CheckBox Name="VanillaCheck" Content="{ext:Locale Dialog_Nextendo_QLaunchVanilla}" />
+                <CheckBox Name="XciCardsCheck" Content="{ext:Locale Dialog_Nextendo_QLaunchXciCards}" />
             </StackPanel>
 
             <StackPanel Spacing="6">

@@ -10501,6 +10501,31 @@
       }
     },
 {
+  "ID": "QLaunchXciCards",
+  "Translations": {
+    "ar_SA": "بطاقات الألعاب (.xci) كبطاقات ألعاب افتراضية",
+    "de_DE": "Spielkarten (.xci) als virtuelle Spielkarten",
+    "el_GR": "Κάρτες παιχνιδιών (.xci) ως εικονικές κάρτες",
+    "en_US": "Game cards (.xci) as virtual game cards",
+    "es_ES": "Tarjetas de juego (.xci) como tarjetas virtuales",
+    "fr_FR": "Cartes de jeu (.xci) en cartes de jeu virtuelles",
+    "he_IL": "כרטיסי משחק (.xci) ככרטיסי משחק וירטואליים",
+    "it_IT": "Schede di gioco (.xci) come schede virtuali",
+    "ja_JP": "ゲームカード（.xci）をバーチャルゲームカードとして",
+    "ko_KR": "게임 카드(.xci)를 가상 게임 카드로",
+    "no_NO": "Spillkort (.xci) som virtuelle spillkort",
+    "pl_PL": "Karty gier (.xci) jako wirtualne karty gier",
+    "pt_BR": "Cartões de jogo (.xci) como cartões virtuais",
+    "ru_RU": "Игровые карты (.xci) как виртуальные игровые карты",
+    "sv_SE": "Spelkort (.xci) som virtuella spelkort",
+    "th_TH": "การ์ดเกม (.xci) เป็นการ์ดเกมเสมือน",
+    "tr_TR": "Oyun kartları (.xci) sanal oyun kartı olarak",
+    "uk_UA": "Ігрові картки (.xci) як віртуальні ігрові картки",
+    "zh_CN": "将游戏卡（.xci）作为虚拟游戏卡",
+    "zh_TW": "將遊戲卡（.xci）作為虛擬遊戲卡"
+  }
+},
+{
       "ID": "QLaunchFullscreen",
       "Translations": {
         "ar_SA": "فتح قائمة HOME بملء الشاشة",
