@@ -81,6 +81,10 @@ namespace Ryujinx.Horizon.Ovln.Ipc
         [CmifCommand(4)]
         public Result ReceiveWithTick(out RawMessage message, out long tick)
         {
+            // The overlay applet keeps asking once it got a message: the server is never idle
+            // again, so what the emulator has to send goes out here too.
+            OvlnQueue.SendPending();
+
             message = new RawMessage();
             tick = 0;
 

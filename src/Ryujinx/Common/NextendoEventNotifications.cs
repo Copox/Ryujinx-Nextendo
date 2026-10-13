@@ -62,6 +62,55 @@ namespace Ryujinx.Ava.Common
             });
         }
 
+        // A controller plugged in: the console's "Joy-Con attached" effect on the sides of the
+        // screen, in the colour of the controller (green for an Xbox one, blue for a PlayStation
+        // one, their own for Joy-Con, grey for the others).
+        private const uint RailEffectTag = 0x178A;
+
+        private static void ControllerPlugged(string name)
+        {
+            Ryujinx.Input.SDL3.JoyConColors colors = Ryujinx.Input.SDL3.JoyConColors.Of(name);
+
+            ControllerPicture(name);
+
+            if (NextendoHomeMenuVanilla.Enabled || !Ryujinx.HLE.HOS.HomeMenuStatus.Running)
+            {
+                return;
+            }
+
+            string n = (name ?? "").ToLowerInvariant();
+            bool left = n.Contains("joy-con (l)");
+            bool right = n.Contains("joy-con (r)");
+
+            uint color = Ryujinx.HLE.HOS.Services.Sdb.Pl.ControllerButtonFont.StyleOf(name) switch
+            {
+                Ryujinx.HLE.HOS.Services.Sdb.Pl.ControllerStyle.Xbox => 0x107C10,
+                Ryujinx.HLE.HOS.Services.Sdb.Pl.ControllerStyle.PlayStation4 or Ryujinx.HLE.HOS.Services.Sdb.Pl.ControllerStyle.PlayStation5 => 0x0070D1,
+                _ => left ? colors?.Body ?? 0x0AB9E6 : right ? colors?.Body ?? 0xFF3C28 : 0x828282,
+            };
+
+            for (int side = 0; side < 2; side++)
+            {
+                if ((side == 0 && right) || (side == 1 && left))
+                {
+                    continue;
+                }
+
+                // the colour (red, green, blue, opaque), then the side and the event (0: attached)
+                byte[] data = new byte[0x48];
+
+                data[0] = (byte)(color >> 16);
+                data[1] = (byte)(color >> 8);
+                data[2] = (byte)color;
+                data[3] = 0xFF;
+                data[0x38] = (byte)side;
+
+                Ryujinx.Horizon.Ovln.OvlnNotifications.PostNow(RailEffectTag, data);
+            }
+
+            Logger.Info?.Print(LogClass.Application, $"[Nextendo] controller plugged in ({name}): effect in #{color:X6}");
+        }
+
         // The one gone was the one shown: the one of a controller still there, or the console's.
         private static void ControllerPictureGone(string name)
         {
@@ -77,8 +126,37 @@ namespace Ryujinx.Ava.Common
 
         public static void Initialize(Action requestScreenshot = null)
         {
-            Ryujinx.Input.SDL3.SDL3GamepadDriver.NextendoControllerConnected += ControllerPicture;
+            Ryujinx.Input.SDL3.SDL3GamepadDriver.NextendoControllerConnected += ControllerPlugged;
             Ryujinx.Input.SDL3.SDL3GamepadDriver.NextendoControllerDisconnected += ControllerPictureGone;
+
+            // Tests: messages to the overlay applet ("seconds:tag:data in hex;...").
+            if (Environment.GetEnvironmentVariable("NEXTENDO_OVLN_TEST") is { Length: > 0 } messages)
+            {
+                Task.Run(async () =>
+                {
+                    int waited = 0;
+
+                    foreach (string step in messages.Split(';'))
+                    {
+                        string[] parts = step.Split(':');
+                        int at = int.Parse(parts[0]);
+
+                        await Task.Delay(Math.Max(0, at - waited) * 1000);
+                        waited = at;
+                        // "seconds:peek:address:size[:offset from the pointer there]" reads the overlay applet's memory
+                        if (parts[1] == "peek")
+                        {
+                            byte[] read = Console?.Invoke()?.PeekGuest(0x010000000000100C, Convert.ToUInt64(parts[2], 16), Convert.ToInt32(parts[3], 16), parts.Length > 4 ? Convert.ToInt64(parts[4], 16) : -1, parts.Length > 5 ? Convert.FromHexString(parts[5]) : null);
+
+                            Logger.Notice.Print(LogClass.Application, $"[peek] {parts[2]}{(parts.Length > 4 ? "->+" + parts[4] : "")}: {(read == null ? "none" : Convert.ToHexString(read))}");
+
+                            continue;
+                        }
+
+                        Ryujinx.Horizon.Ovln.OvlnNotifications.Post(Convert.ToUInt32(parts[1], 16), Convert.FromHexString(parts[2]));
+                    }
+                });
+            }
 
             // Tests: controllers plugged in turn ("seconds:name;...").
             if (Environment.GetEnvironmentVariable("NEXTENDO_CONTROLLER_LIVE") is { Length: > 0 } live)
@@ -94,7 +172,7 @@ namespace Ryujinx.Ava.Common
 
                         await Task.Delay(Math.Max(0, at - waited) * 1000);
                         waited = at;
-                        ControllerPicture(parts[1]);
+                        ControllerPlugged(parts[1]);
                     }
                 });
             }

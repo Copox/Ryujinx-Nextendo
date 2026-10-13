@@ -202,10 +202,27 @@ namespace Ryujinx.HLE.HOS.Services.Hid
         // IsJoyConAttachedOnAllRail() -> bool: the Joy-Con are on the console in handheld mode.
         public ResultCode IsJoyConAttachedOnAllRail(ServiceCtx context)
         {
+            // NEXTENDO_RAIL_TRACE=1: where the overlay applet asks from (study), a few times.
+            if (_railTraces < 3 && System.Environment.GetEnvironmentVariable("NEXTENDO_RAIL_TRACE") == "1" && System.Threading.Interlocked.Increment(ref _railAsked) % 400 == 0)
+            {
+                _railTraces++;
+
+                foreach (Ryujinx.HLE.HOS.Kernel.Process.KProcess process in context.Device.System.KernelContext.Processes.Values)
+                {
+                    if (process.TitleId is 0x010000000000100C or 0x0100000000001000)
+                    {
+                        Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.ServiceHid, $"[rail] {process.TitleId:X16}\n{process.DescribeGuestThreads()}");
+                    }
+                }
+            }
+
             context.ResponseData.Write(NpadState(context, (uint)NpadIdType.Handheld).StyleSet != 0);
 
             return ResultCode.Success;
         }
+
+        private static int _railAsked;
+        private static int _railTraces;
 
         private Ryujinx.HLE.HOS.Services.StubEvent _connectionTriggerTimeoutEvent;
         private Ryujinx.HLE.HOS.Services.StubEvent _deviceRegisteredEvent;

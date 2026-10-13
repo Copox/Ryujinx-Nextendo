@@ -29,6 +29,12 @@ namespace Ryujinx.Horizon.Ovln
             _pending.Add((tag, data.ToArray()));
         }
 
+        /// <summary>A message to the overlay applet that is no notification: sent at once.</summary>
+        public static void PostNow(uint tag, ReadOnlySpan<byte> data)
+        {
+            OvlnQueue.Notify(tag, data);
+        }
+
         private static void Run()
         {
             foreach ((uint tag, byte[] data) in _pending.GetConsumingEnumerable())

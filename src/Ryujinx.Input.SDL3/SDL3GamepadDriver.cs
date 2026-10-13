@@ -222,7 +222,23 @@ namespace Ryujinx.Input.SDL3
 
                     if (DateTime.UtcNow - _nextendoSince > TimeSpan.FromSeconds(10) && !string.IsNullOrEmpty(_names[joystickInstanceId]))
                     {
-                        NextendoControllerConnected?.Invoke(_names[joystickInstanceId]);
+                        string plugged = _names[joystickInstanceId];
+
+                        if (SDL3JoyCon.IsJoyCon(joystickInstanceId))
+                        {
+                            // its colours first (read from it), away from the events of the controllers
+                            string path = SDL_GetGamepadPathForID(joystickInstanceId);
+
+                            System.Threading.Tasks.Task.Run(() =>
+                            {
+                                JoyConColors.Read(plugged, path);
+                                NextendoControllerConnected?.Invoke(plugged);
+                            });
+                        }
+                        else
+                        {
+                            NextendoControllerConnected?.Invoke(plugged);
+                        }
                     }
 
                     lock (_lock)

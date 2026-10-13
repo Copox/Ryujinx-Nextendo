@@ -91,6 +91,43 @@ namespace Ryujinx.HLE.HOS
             }
         }
 
+        /// <summary>
+        /// The overlay applet (22.5.0) draws the "Joy-Con attached" effect on the sides of the
+        /// screen only out of the dock: it holds it back while the console is docked. The check
+        /// is taken out (both sides), for the effect to play when a controller is plugged in.
+        /// </summary>
+        internal static void AllowRailEffect(KProcess process, ulong imageBase)
+        {
+            // cmp w8, #1 ; b.ne (not docked: go on) -> b (go on), right side then left side
+            (ulong At, uint Was, uint Becomes)[] checks =
+            [
+                (0x31E438, 0x54000181, 0x1400000C),
+                (0x31E458, 0x54000121, 0x14000009),
+            ];
+
+            try
+            {
+                foreach ((ulong at, uint was, _) in checks)
+                {
+                    if (process.CpuMemory.Read<uint>(imageBase + at - 4) != 0x7100051F || process.CpuMemory.Read<uint>(imageBase + at) != was)
+                    {
+                        return;
+                    }
+                }
+
+                foreach ((ulong at, _, uint becomes) in checks)
+                {
+                    process.CpuMemory.Write(imageBase + at, becomes);
+                }
+
+                Logger.Info?.Print(LogClass.Loader, "[Nextendo] overlay applet: \"Joy-Con attached\" effect allowed in the dock");
+            }
+            catch (Exception)
+            {
+                // another program, shorter than that: not the overlay applet
+            }
+        }
+
         private const int Window = 16;
 
         // Where the bytes of a picture vary the most.

@@ -482,6 +482,8 @@ namespace Ryujinx.HLE.Loaders.Processes
                     return ProcessResult.Failed;
                 }
 
+                HOS.NextendoControllerPictures.AllowRailEffect(process, nsoBase[index]);
+
                 if (themePageAt[index])
                 {
                     HOS.Themes.QlaunchThemePage.Apply(process, nsoBase[index]);

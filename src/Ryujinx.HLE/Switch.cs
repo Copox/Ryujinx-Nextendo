@@ -177,6 +177,44 @@ namespace Ryujinx.HLE
         /// [Nextendo, diagnostics] Writes to the log where every guest thread of every program is
         /// (Nextendo menu): to see what a frozen HOME Menu waits for.
         /// </summary>
+        /// <summary>
+        /// [Nextendo, HOME Menu work] Bytes of the memory of a running program (study): at an
+        /// address, or at an offset from the pointer found there.
+        /// </summary>
+        public byte[] PeekGuest(ulong titleId, ulong address, int size, long through = -1, byte[] write = null)
+        {
+            foreach (HOS.Kernel.Process.KProcess process in System.KernelContext.Processes.Values)
+            {
+                if (process.TitleId == titleId)
+                {
+                    try
+                    {
+                        if (through >= 0)
+                        {
+                            address = process.CpuMemory.Read<ulong>(address) + (ulong)through;
+                        }
+
+                        byte[] data = new byte[size];
+
+                        if (write != null)
+                        {
+                            process.CpuMemory.Write(address, write);
+                        }
+
+                        process.CpuMemory.Read(address, data);
+
+                        return data;
+                    }
+                    catch (global::System.Exception)
+                    {
+                        return null;
+                    }
+                }
+            }
+
+            return null;
+        }
+
         public void DumpGuestThreads()
         {
             Common.Logging.Logger.Notice.Print(Common.Logging.LogClass.Application, "[diag] last requests:\n" + HOS.Services.IpcRecent.Dump());

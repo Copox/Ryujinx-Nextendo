@@ -74,6 +74,7 @@ namespace Ryujinx.Horizon.Ovln
         /// <summary>The notifications made by the emulator, sent (from a thread of the system).</summary>
         public static void SendPending()
         {
+
             while (_pending.TryDequeue(out byte[] message))
             {
                 Send(message, false);
