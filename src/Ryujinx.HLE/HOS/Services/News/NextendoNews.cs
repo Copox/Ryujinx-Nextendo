@@ -252,14 +252,6 @@ namespace Ryujinx.HLE.HOS.Services.News
                     MessagePackObjectDictionary item = entry.AsDictionary();
                     string newsId = "NS" + item["news_id"].AsInt64().ToString("D20");
 
-                    lock (_lock)
-                    {
-                        if (_rows.Exists(r => r.Id == newsId) && File.Exists(ArticlePath(newsId)))
-                        {
-                            continue;
-                        }
-                    }
-
                     // The article in the console's language, else in the article's own.
                     string wanted = item.TryGetValue("default_language", out MessagePackObject fallback) ? fallback.AsString() : "en-US";
                     string url = null, any = null;
@@ -291,12 +283,25 @@ namespace Ryujinx.HLE.HOS.Services.News
                         continue;
                     }
 
+                    // An article already here is kept, unless the server published it again (its
+                    // address changes with its content: new dates, a longer time in Featured).
+                    string source = ArticlePath(newsId) + ".source";
+
+                    lock (_lock)
+                    {
+                        if (_rows.Exists(r => r.Id == newsId) && File.Exists(ArticlePath(newsId)) && File.Exists(source) && File.ReadAllText(source) == url)
+                        {
+                            continue;
+                        }
+                    }
+
                     try
                     {
                         byte[] article = Decrypt(http.GetByteArrayAsync(url).GetAwaiter().GetResult(), key);
                         Row row = MakeRow(newsId, article);
 
                         File.WriteAllBytes(ArticlePath(newsId), article);
+                        File.WriteAllText(source, url);
 
                         lock (_lock)
                         {
@@ -344,7 +349,10 @@ namespace Ryujinx.HLE.HOS.Services.News
             row["expire_at"] = Number(map, "expire_at");
             row["pickup_limit"] = Number(map, "pickup_limit");
             row["essential_pickup_limit"] = essential;
-            row["priority"] = Number(map, "priority", 100);
+            // An article put forward ("essential_pickup") is kept by the console with priority 1000
+            // (its own database: the two rows with such a limit have 1000, the others 100 or 50):
+            // the lock screen's Featured News asks for 1000 to 1999, still within the pickup limit.
+            row["priority"] = essential > 0 ? Math.Max(1000, Number(map, "priority", 100)) : Number(map, "priority", 100);
             row["deletion_priority"] = Number(map, "deletion_priority", 100);
             row["surprise"] = Number(map, "surprise");
             row["decoration_type"] = Number(map, "decoration_type");
@@ -408,6 +416,12 @@ namespace Ryujinx.HLE.HOS.Services.News
 
                     if (row.Columns.ContainsKey("news_id") && File.Exists(ArticlePath(row.Id)) && !_rows.Exists(r => r.Id == row.Id))
                     {
+                        // rows kept from before articles put forward had priority 1000 (see MakeRow)
+                        if (row["essential_pickup_limit"] > 0 && row["priority"] < 1000)
+                        {
+                            row["priority"] = 1000;
+                        }
+
                         _rows.Add(row);
                     }
                 }
