@@ -51,6 +51,32 @@ namespace Ryujinx.Ava
         {
             Version = ReleaseInformation.Version;
 
+            // [Nextendo] A build of development has no server address in it: it reads the settings a
+            // launch script would set (NEXTENDO_*=value, one a line) from "nextendo_env.txt" next to
+            // the program, so that starting the program itself works as the script does.
+            try
+            {
+                string settings = System.IO.Path.Combine(AppContext.BaseDirectory, "nextendo_env.txt");
+
+                if (System.IO.File.Exists(settings))
+                {
+                    foreach (string line in System.IO.File.ReadAllLines(settings))
+                    {
+                        int equals = line.IndexOf('=');
+
+                        if (equals > 0 && line.StartsWith("NEXTENDO_", StringComparison.Ordinal) &&
+                            string.IsNullOrEmpty(Environment.GetEnvironmentVariable(line[..equals].Trim())))
+                        {
+                            Environment.SetEnvironmentVariable(line[..equals].Trim(), line[(equals + 1)..].Trim());
+                        }
+                    }
+                }
+            }
+            catch (Exception)
+            {
+                // started without them, as before
+            }
+
             if (OperatingSystem.IsWindows())
             {
                 if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
