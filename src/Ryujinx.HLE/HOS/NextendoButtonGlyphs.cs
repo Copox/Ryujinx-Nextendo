@@ -14,16 +14,58 @@ namespace Ryujinx.HLE.HOS
     /// </summary>
     public static class NextendoButtonGlyphs
     {
-        private const ulong HomeMenu = 0x0100000000001000;
-        private const ulong CacheVtable = 0x1062750; // module offset of the class's function table
 
         /// <summary>The addresses of 8-byte values in the writable memory of a program.</summary>
-        internal static List<ulong> Find(KProcess process, ulong value, int most = 16)
+        internal static List<ulong> Find(KProcess process, ulong value, int most = 16, bool everywhere = false)
         {
-            return Find(process, BitConverter.GetBytes(value), 8, most);
+            return Find(process, BitConverter.GetBytes(value), 8, most, everywhere);
         }
 
-        internal static List<ulong> Find(KProcess process, byte[] pattern, int alignment, int most = 16)
+        private static readonly Dictionary<ulong, List<ulong>> _caches = [];
+
+        /// <summary>
+        /// The font texture caches of a program, whatever the program (HOME Menu, overlay applet,
+        /// applets): found from the name of their class in the program, then its type record,
+        /// then its function table, then the objects that start with it. Looked for once.
+        /// </summary>
+        internal static List<ulong> Caches(KProcess process)
+        {
+            lock (_caches)
+            {
+                if (_caches.TryGetValue(process.Pid, out List<ulong> known) && known.Count > 0)
+                {
+                    return known;
+                }
+            }
+
+            List<ulong> caches = [];
+
+            foreach (ulong name in Find(process, Encoding.ASCII.GetBytes("N2nn4font12TextureCacheE\0"), 1, 4, true))
+            {
+                foreach (ulong inType in Find(process, name, 4, true))
+                {
+                    foreach (ulong inTable in Find(process, inType - 8, 4, true))
+                    {
+                        foreach (ulong cache in Find(process, inTable + 8))
+                        {
+                            if (!caches.Contains(cache))
+                            {
+                                caches.Add(cache);
+                            }
+                        }
+                    }
+                }
+            }
+
+            lock (_caches)
+            {
+                _caches[process.Pid] = caches;
+            }
+
+            return caches;
+        }
+
+        internal static List<ulong> Find(KProcess process, byte[] pattern, int alignment, int most = 16, bool everywhere = false)
         {
             const int Chunk = 0x400000;
 
@@ -36,7 +78,8 @@ namespace Ryujinx.HLE.HOS
                 KMemoryInfo info = process.MemoryManager.QueryMemory(address);
                 ulong start = info.Address;
                 ulong size = info.Size;
-                bool data = info.State != MemoryState.Unmapped && info.State != MemoryState.Io && info.Permission == KMemoryPermission.ReadAndWrite;
+                bool data = info.State != MemoryState.Unmapped && info.State != MemoryState.Io &&
+                    (info.Permission == KMemoryPermission.ReadAndWrite || (everywhere && (info.Permission & KMemoryPermission.Read) != 0));
 
                 if (size == 0 || start + size <= address)
                 {
@@ -114,12 +157,12 @@ namespace Ryujinx.HLE.HOS
 
             foreach (KProcess process in device.System.KernelContext.Processes.Values)
             {
-                if (process.TitleId != HomeMenu)
+                if (!Services.Am.AppletAE.RealAppletManager.IsSystemAppletProgram(process.TitleId))
                 {
                     continue;
                 }
 
-                foreach (ulong cache in Find(process, 0x8500000 + CacheVtable))
+                foreach (ulong cache in Caches(process))
                 {
                     ulong bitmap = process.CpuMemory.Read<ulong>(cache + 0x20);
                     int width = process.CpuMemory.Read<int>(cache + 0x28);
@@ -255,14 +298,12 @@ namespace Ryujinx.HLE.HOS
         {
             foreach (KProcess process in device.System.KernelContext.Processes.Values)
             {
-                if (process.TitleId != HomeMenu)
+                if (!Services.Am.AppletAE.RealAppletManager.IsSystemAppletProgram(process.TitleId))
                 {
                     continue;
                 }
 
-                ulong imageBase = 0x8500000;
-
-                foreach (ulong cache in Find(process, imageBase + CacheVtable))
+                foreach (ulong cache in Caches(process))
                 {
                     try
                     {
@@ -270,7 +311,7 @@ namespace Ryujinx.HLE.HOS
                         process.CpuMemory.Read(cache, head);
 
                         int width = BitConverter.ToInt32(head, 0x28), height = BitConverter.ToInt32(head, 0x2C);
-                        StringBuilder text = new($"[glyphs] cache {cache:X} head {Convert.ToHexString(head, 0, 0x50)} {width}x{height}\n");
+                        StringBuilder text = new($"[glyphs] program {process.TitleId:X16} cache {cache:X} head {Convert.ToHexString(head, 0, 0x50)} {width}x{height}\n");
 
                         byte[] tail = new byte[0x60];
                         process.CpuMemory.Read(cache + 0x1BC0, tail);

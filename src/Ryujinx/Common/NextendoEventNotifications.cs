@@ -69,9 +69,21 @@ namespace Ryujinx.Ava.Common
 
         private static void ControllerPlugged(string name)
         {
-            Ryujinx.Input.SDL3.JoyConColors colors = Ryujinx.Input.SDL3.JoyConColors.Of(name);
-
             ControllerPicture(name);
+            RailEffect(name, 0);
+        }
+
+        // The same on the way out: the console's "Joy-Con detached" effect, then the picture and
+        // the symbols of a controller still there.
+        private static void ControllerUnplugged(string name)
+        {
+            RailEffect(name, 1);
+            ControllerPictureGone(name);
+        }
+
+        private static void RailEffect(string name, byte gone)
+        {
+            Ryujinx.Input.SDL3.JoyConColors colors = Ryujinx.Input.SDL3.JoyConColors.Of(name);
 
             if (NextendoHomeMenuVanilla.Enabled || !Ryujinx.HLE.HOS.HomeMenuStatus.Running)
             {
@@ -104,11 +116,12 @@ namespace Ryujinx.Ava.Common
                 data[2] = (byte)color;
                 data[3] = 0xFF;
                 data[0x38] = (byte)side;
+                data[0x40] = gone;
 
                 Ryujinx.Horizon.Ovln.OvlnNotifications.PostNow(RailEffectTag, data);
             }
 
-            Logger.Info?.Print(LogClass.Application, $"[Nextendo] controller plugged in ({name}): effect in #{color:X6}");
+            Logger.Info?.Print(LogClass.Application, $"[Nextendo] controller {(gone == 0 ? "plugged in" : "unplugged")} ({name}): effect in #{color:X6}");
         }
 
         // The one gone was the one shown: the one of a controller still there, or the console's.
@@ -127,7 +140,7 @@ namespace Ryujinx.Ava.Common
         public static void Initialize(Action requestScreenshot = null)
         {
             Ryujinx.Input.SDL3.SDL3GamepadDriver.NextendoControllerConnected += ControllerPlugged;
-            Ryujinx.Input.SDL3.SDL3GamepadDriver.NextendoControllerDisconnected += ControllerPictureGone;
+            Ryujinx.Input.SDL3.SDL3GamepadDriver.NextendoControllerDisconnected += ControllerUnplugged;
 
             // Tests: messages to the overlay applet ("seconds:tag:data in hex;...").
             if (Environment.GetEnvironmentVariable("NEXTENDO_OVLN_TEST") is { Length: > 0 } messages)
@@ -179,7 +192,17 @@ namespace Ryujinx.Ava.Common
 
                         await Task.Delay(Math.Max(0, at - waited) * 1000);
                         waited = at;
-                        ControllerPlugged(parts[1]);
+
+                        // "seconds:-name" unplugs
+                        if (parts[1].StartsWith('-'))
+                        {
+                            RailEffect(parts[1][1..], 1);
+                            ControllerPicture(parts.Length > 2 ? parts[2] : null);
+                        }
+                        else
+                        {
+                            ControllerPlugged(parts[1]);
+                        }
                     }
                 });
             }

@@ -81,6 +81,10 @@ namespace Ryujinx.HLE.HOS.Services.News
                 {
                     Logger.Warning?.Print(LogClass.Service, $"[news] Nextendo news unavailable: {e.Message}");
                 }
+                finally
+                {
+                    _ready.Set();
+                }
             });
         }
 
@@ -430,8 +434,22 @@ namespace Ryujinx.HLE.HOS.Services.News
 
         // ------------------------------------------------------------------ the menu's questions
 
+        // The first download, done or given up: the menu's first questions wait for it a little
+        // (the lock screen asks for the news as soon as it shows, and asks only once).
+        private static readonly ManualResetEventSlim _ready = new(false);
+
+        private static void WaitFirstDownload()
+        {
+            if (Volatile.Read(ref _started) != 0 && !_ready.IsSet)
+            {
+                _ready.Wait(5000);
+            }
+        }
+
         public static int Count(string where)
         {
+            WaitFirstDownload();
+
             lock (_lock)
             {
                 return Select(where).Count;
@@ -453,6 +471,8 @@ namespace Ryujinx.HLE.HOS.Services.News
 
         public static byte[] List(string where, string order, int offset, int capacity, out int count)
         {
+            WaitFirstDownload();
+
             lock (_lock)
             {
                 List<Row> rows = Select(where);
