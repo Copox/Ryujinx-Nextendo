@@ -39,13 +39,19 @@ namespace Ryujinx.HLE.HOS
             ["blyt/MypUserIcon.bflyt"] = "P_Image",
             ["blyt/MypBtnPresencePlate.bflyt"] = "P_Icon",
             ["blyt/MypBtnGamePlate.bflyt"] = "P_Icon",
-            ["blyt/MypBtnUserIcon.bflyt"] = "P_Image",
             ["blyt/MypBtnPresence.bflyt"] = "P_Icon",
             ["blyt/MypBtnGame.bflyt"] = "P_Icon",
         };
 
         // The square plate behind a profile picture: it would show at the corners.
-        private static readonly string[] _platePanes = ["P_CardBase", "P_BtnShdw"];
+        private static readonly string[] _platePanes = ["P_CardBase"];
+
+        // The user's own picture (a button of their page) is drawn by the system's own shapes
+        // (shadow, border): it has a setting of its own for round corners, the one the round
+        // pencil mark on it uses. The picture is 396 wide there, its cursor a little more.
+        private const string OwnPictureLayout = "blyt/MypBtnUserIcon.bflyt";
+        private const string RoundSetting = "S_RoundRadius";
+        private const float OwnPictureRadius = 50f;
 
         // A size no other texture of the applet has: the emulator finds the banner by it. Twice
         // the size it shows at, for the picture to stay sharp when the emulator draws larger.
@@ -83,6 +89,10 @@ namespace Ryujinx.HLE.HOS
                 else if (_pictures.TryGetValue(name, out string material) && PatchPicture(files[i].Data, material) is { } picture)
                 {
                     files[i] = (name, picture);
+                }
+                else if (name == OwnPictureLayout && PatchOwnPicture(files[i].Data) is { } rounded)
+                {
+                    files[i] = (name, rounded);
                 }
                 else if (name == OwnLayout && page != null && PatchOwnPage(files[i].Data, page) is { } own)
                 {
@@ -465,6 +475,120 @@ namespace Ryujinx.HLE.HOS
             sections.Insert(inside + 1, BannerPane(picture, _ownBanner, materials.Count - 1));
 
             return Layout_(layout, header, sections);
+        }
+
+        // The own picture of the user: round corners, by the setting of the system, on the
+        // picture and on the cursor around it.
+        private static byte[] PatchOwnPicture(byte[] layout)
+        {
+            List<byte[]> sections = Sections(layout, out int header);
+            bool done = false;
+
+            for (int i = 0; i + 1 < sections.Count; i++)
+            {
+                if (Kind(sections[i + 1]) != "usd1" || Kind(sections[i]) is not ("pic1" or "pan1"))
+                {
+                    continue;
+                }
+
+                string name = PaneName(sections[i]);
+
+                if (name is "P_Image" or "P_BtnShdw" or "N_BtnFocusKey" or "P_InnerCursor" && Round(sections[i + 1], OwnPictureRadius) is { } settings)
+                {
+                    sections[i + 1] = settings;
+                    done |= name == "P_Image";
+                }
+            }
+
+            return done ? Layout_(layout, header, sections) : null;
+        }
+
+        // The settings of a pane ("usd1"), with the radius of its corners set (added when it has none).
+        private static byte[] Round(byte[] settings, float radius)
+        {
+            int count = BinaryPrimitives.ReadUInt16LittleEndian(settings.AsSpan(8));
+            List<(string Name, byte Type, ushort Count, byte[] Data)> entries = [];
+
+            for (int i = 0; i < count; i++)
+            {
+                int at = 12 + i * 12;
+                int nameAt = at + BinaryPrimitives.ReadInt32LittleEndian(settings.AsSpan(at));
+                int dataAt = at + BinaryPrimitives.ReadInt32LittleEndian(settings.AsSpan(at + 4));
+                ushort number = BinaryPrimitives.ReadUInt16LittleEndian(settings.AsSpan(at + 8));
+                byte type = settings[at + 10];
+
+                // texts, whole numbers and numbers: the kinds these panes have
+                if (type > 2)
+                {
+                    return null;
+                }
+
+                string name = Encoding.ASCII.GetString(settings, nameAt, Array.IndexOf(settings, (byte)0, nameAt) - nameAt);
+
+                entries.Add((name, type, number, settings.AsSpan(dataAt, type == 0 ? number : number * 4).ToArray()));
+            }
+
+            byte[] value = BitConverter.GetBytes(radius);
+            int round = entries.FindIndex(e => e.Name == RoundSetting);
+
+            if (round >= 0)
+            {
+                entries[round] = (RoundSetting, 2, 1, value);
+            }
+            else
+            {
+                entries.Add((RoundSetting, 2, 1, value));
+            }
+
+            using MemoryStream table = new();
+            using MemoryStream data = new();
+            using MemoryStream names = new();
+
+            int dataStart = 12 + entries.Count * 12;
+            int dataSize = entries.Sum(e => (e.Data.Length + (e.Type == 0 ? 1 : 0) + 3) / 4 * 4);
+
+            for (int i = 0; i < entries.Count; i++)
+            {
+                int at = 12 + i * 12;
+
+                table.Write(BitConverter.GetBytes(dataStart + dataSize + (int)names.Length - at));
+                table.Write(BitConverter.GetBytes(dataStart + (int)data.Length - at));
+                table.Write(BitConverter.GetBytes(entries[i].Count));
+                table.WriteByte(entries[i].Type);
+                table.WriteByte(0);
+
+                data.Write(entries[i].Data);
+
+                if (entries[i].Type == 0)
+                {
+                    data.WriteByte(0);
+                }
+
+                while (data.Length % 4 != 0)
+                {
+                    data.WriteByte(0);
+                }
+
+                names.Write(Encoding.ASCII.GetBytes(entries[i].Name));
+                names.WriteByte(0);
+            }
+
+            while (names.Length % 4 != 0)
+            {
+                names.WriteByte(0);
+            }
+
+            using MemoryStream section = new();
+
+            section.Write(settings, 0, 4);
+            section.Write(BitConverter.GetBytes(dataStart + (int)data.Length + (int)names.Length));
+            section.Write(BitConverter.GetBytes((ushort)entries.Count));
+            section.Write(settings, 10, 2);
+            section.Write(table.ToArray());
+            section.Write(data.ToArray());
+            section.Write(names.ToArray());
+
+            return section.ToArray();
         }
 
         // A profile picture: a second texture on its material, that cuts the corners round.
