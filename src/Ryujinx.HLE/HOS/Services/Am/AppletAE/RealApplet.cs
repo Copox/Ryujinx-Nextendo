@@ -732,7 +732,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
                 StateFor(system, applet.CallerPid).SetFocus(false);
 
                 System.Diagnostics.Stopwatch running = System.Diagnostics.Stopwatch.StartNew();
-                long span = 0, requestsBefore = 0;
+                long span = 0, requestsBefore = 0, askedBefore = 0, busiest = 0;
                 int quiet = 0;
                 bool dumped = false;
 
@@ -756,9 +756,9 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
 
                     // An applet that shows nothing before it has the foreground (the user selection)
                     // never tells its first frame. It is given the foreground once it has set itself
-                    // up: its requests to the services, hundreds while it starts, fall to the few of
-                    // a main loop that waits (measured: 548 then 196 in its first two 300 ms, then
-                    // about 30). Two such quiet spans in a row, four seconds at most (a blank screen
+                    // up: its requests to the services, hundreds while it starts, fall to the steady
+                    // few of a main loop that waits (measured per 300 ms: user selection 548, 196,
+                    // 30, 33 ; controllers 617, 407, 138, 142). Four seconds at most (a blank screen
                     // until then: it was always four seconds).
                     if (!applet.FocusGiven && running.ElapsedMilliseconds / 300 != span)
                     {
@@ -766,7 +766,15 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
 
                         long requests = process.Requests;
 
-                        quiet = requests >= 200 && requests - requestsBefore <= 60 ? quiet + 1 : 0;
+                        // steady: this span asked about as much as the one before (within 15%, or
+                        // a handful), and far less than the busiest span of the start
+                        long asked = requests - requestsBefore;
+                        bool steady = requests >= 200 && asked * 5 <= busiest * 2 &&
+                                      Math.Abs(asked - askedBefore) <= Math.Max(8, asked * 15 / 100);
+
+                        quiet = steady ? quiet + 1 : 0;
+                        busiest = Math.Max(busiest, asked);
+                        askedBefore = asked;
                         requestsBefore = requests;
 
                         if (Environment.GetEnvironmentVariable("NEXTENDO_FOCUS_TRACE") == "1")
@@ -774,7 +782,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
                             Logger.Notice.Print(LogClass.ServiceAm, $"[focus] {applet.AppletId} at {running.ElapsedMilliseconds} ms: {requests} requests, quiet spans {quiet}");
                         }
 
-                        if (quiet >= 2)
+                        if (quiet >= 1)
                         {
                             GiveFocus(applet, "set up, quiet");
                         }
