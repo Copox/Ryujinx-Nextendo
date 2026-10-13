@@ -109,6 +109,10 @@ namespace Ryujinx.HLE.HOS.Kernel.Process
         public bool AllowCodeMemoryForJit { get; private set; }
 
         public ulong TitleId { get; private set; }
+
+        /// <summary>[Nextendo] The last request of the program to a service (Stopwatch ticks), and their number.</summary>
+        public long LastRequestAt { get; set; }
+        public long Requests { get; set; }
         public bool IsApplication { get; private set; }
         public ulong Pid { get; private set; }
 

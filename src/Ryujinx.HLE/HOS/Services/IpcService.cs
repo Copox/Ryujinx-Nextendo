@@ -187,7 +187,16 @@ namespace Ryujinx.HLE.HOS.Services
 
                     _parameters[0] = context;
                     
+                    // [Nextendo] A request of a program waits for its answer: one that takes long is a
+                    // freeze on screen. Noted, to find them.
+                    long asked = Stopwatch.GetTimestamp();
+
                     result = (ResultCode)processRequest.Invoke(service, _parameters);
+
+                    if (Stopwatch.GetElapsedTime(asked).TotalMilliseconds >= 120)
+                    {
+                        Logger.Notice.Print(LogClass.KernelIpc, $"[slow] {service.GetType().Name} {commandId} {processRequest.Name}: {Stopwatch.GetElapsedTime(asked).TotalMilliseconds:F0} ms");
+                    }
 
                     IpcRecent.Record(service.GetType().Name, commandId, (int)result);
 

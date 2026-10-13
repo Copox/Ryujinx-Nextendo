@@ -71,7 +71,15 @@ namespace Ryujinx.Horizon.Sdk.Sf.Cmif
                 Logger.Notice.Print(LogClass.KernelIpc, $"[hipc] {objectName} {commandId} {commandHandler.MethodName}");
             }
 
+            long asked = System.Diagnostics.Stopwatch.GetTimestamp();
+
             Result commandResult = commandHandler.Invoke(ref outHeader, ref context, inMessageRawData);
+
+            // [Nextendo] See IpcService: a slow answer is a freeze on screen.
+            if (System.Diagnostics.Stopwatch.GetElapsedTime(asked).TotalMilliseconds >= 120)
+            {
+                Logger.Notice.Print(LogClass.KernelIpc, $"[slow] {objectName} {commandId}: {System.Diagnostics.Stopwatch.GetElapsedTime(asked).TotalMilliseconds:F0} ms");
+            }
 
             if (commandResult.Module is SfResult.ModuleId or
                 HipcResult.ModuleId)

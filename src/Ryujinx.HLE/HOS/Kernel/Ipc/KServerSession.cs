@@ -240,6 +240,11 @@ namespace Ryujinx.HLE.HOS.Kernel.Ipc
             KThread clientThread = request.ClientThread;
             KProcess clientProcess = clientThread.Owner;
 
+            // [Nextendo, HOME Menu work] When the program last asked a service something, and how
+            // many times: an applet that stopped asking has finished setting itself up.
+            clientProcess.LastRequestAt = System.Diagnostics.Stopwatch.GetTimestamp();
+            clientProcess.Requests++;
+
             KernelContext.CriticalSection.Leave();
 
             _activeRequest = request;

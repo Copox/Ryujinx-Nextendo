@@ -421,8 +421,31 @@ namespace Ryujinx.HLE.HOS.Services.Nv.NvDrvServices.NvHostChannel
             return NvInternalResult.Success;
         }
 
+        private long _lastSubmit;
+        private int _steady;
+        private bool _steadyTold;
+
         protected NvInternalResult SubmitGpfifo(ref SubmitGpfifoArguments header, Span<ulong> entries)
         {
+            // [Nextendo, HOME Menu work] An applet that draws frame after frame without showing
+            // any (the user selection waits for the foreground before it shows its first one) has
+            // its main loop running: it can be given the foreground. Twenty submissions at the
+            // pace of frames, not the bursts of a program still loading.
+            if (!_steadyTold)
+            {
+                long now = System.Diagnostics.Stopwatch.GetTimestamp();
+                double sinceLast = System.Diagnostics.Stopwatch.GetElapsedTime(_lastSubmit, now).TotalMilliseconds;
+
+                _steady = sinceLast is >= 8 and <= 40 ? _steady + 1 : 0;
+                _lastSubmit = now;
+
+                if (_steady >= 20)
+                {
+                    _steadyTold = true;
+                    Am.AppletAE.RealAppletManager.OnFirstFrame(Owner);
+                }
+            }
+
             if (header.Flags.HasFlag(SubmitGpfifoFlags.FenceWait) && header.Flags.HasFlag(SubmitGpfifoFlags.IncrementWithValue))
             {
                 return NvInternalResult.InvalidInput;

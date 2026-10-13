@@ -432,10 +432,55 @@ namespace Ryujinx.Common.Configuration
             }
         }
 
+        private static List<Played> _own = new();
+        private static long _ownAt;
+        private static int _ownAsking;
+
+        /// <summary>
+        /// The user's own play history, as last known: the profile page waits for the answer that
+        /// carries it, so it is never asked to the server while the page waits. Asked behind when
+        /// it is older than two minutes (and ahead, with the friend list).
+        /// </summary>
+        public static IReadOnlyList<Played> OwnHistory()
+        {
+            if ((_ownAt == 0 || Environment.TickCount64 - _ownAt > 120_000) && !string.IsNullOrEmpty(NextendoAccount.NexToken) &&
+                System.Threading.Interlocked.Exchange(ref _ownAsking, 1) == 0)
+            {
+                System.Threading.Tasks.Task.Run(() =>
+                {
+                    try
+                    {
+                        List<Played> list = new(History(NextendoAccount.Pid, 8000, direct: true));
+
+                        if (list.Count > 0 || _own.Count == 0)
+                        {
+                            _own = list;
+                        }
+
+                        _ownAt = Environment.TickCount64;
+                    }
+                    catch
+                    {
+                        // kept as it was
+                    }
+                    finally
+                    {
+                        System.Threading.Interlocked.Exchange(ref _ownAsking, 0);
+                    }
+                });
+            }
+
+            return _own;
+        }
+
         private static void Refresh()
         {
             try
             {
+                // what the pages of the user will ask, ahead of them
+                OwnHistory();
+                NextendoAccountLink.Prepare();
+
                 if (string.IsNullOrEmpty(NextendoAccount.NexToken) && string.IsNullOrEmpty(_fixture))
                 {
                     return;

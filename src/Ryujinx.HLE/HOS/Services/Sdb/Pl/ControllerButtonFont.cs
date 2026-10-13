@@ -59,32 +59,40 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
             // The font of every kind of controller, all of the same size and layout (only the
             // glyphs and their index differ): the one shown can then be changed while the
             // console runs, when another controller is plugged in.
+            // The four are built at the same time (each takes a moment: the HOME Menu waits for
+            // its font meanwhile).
             try
             {
-                Dictionary<ControllerStyle, byte[]> variants = [];
-                int longest = 0;
+                ControllerStyle[] styles = Enum.GetValues<ControllerStyle>();
+                byte[][] built = new byte[styles.Length][];
 
-                foreach (ControllerStyle style in Enum.GetValues<ControllerStyle>())
+                System.Threading.Tasks.Parallel.For(0, styles.Length, i =>
                 {
                     Dictionary<uint, byte[]> glyphs = [];
 
-                    foreach (string set in Sets(style))
+                    foreach (string set in Sets(styles[i]))
                     {
                         ReadGlyphs(set, glyphs);
                     }
 
-                    if (Patch(ttf, glyphs) is not { } variant)
+                    built[i] = Patch(ttf, glyphs);
+                });
+
+                int longest = 0;
+
+                foreach (byte[] variant in built)
+                {
+                    if (variant == null)
                     {
                         return ttf;
                     }
 
-                    variants[style] = variant;
                     longest = Math.Max(longest, variant.Length);
                 }
 
-                foreach (ControllerStyle style in Enum.GetValues<ControllerStyle>())
+                for (int i = 0; i < styles.Length; i++)
                 {
-                    _variants[style] = Pad(variants[style], longest);
+                    _variants[styles[i]] = Pad(built[i], longest);
                 }
 
                 return _variants[Style];

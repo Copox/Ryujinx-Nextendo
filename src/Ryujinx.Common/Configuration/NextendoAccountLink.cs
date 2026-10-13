@@ -38,6 +38,44 @@ namespace Ryujinx.Common.Configuration
                 return _email;
             }
 
+            // The page that shows it waits for this answer: a known e-mail is given at once and
+            // asked again behind (it does not change), the first one is asked ahead (Prepare).
+            if (_email != null)
+            {
+                Prepare();
+
+                return _email;
+            }
+
+            return Ask();
+        }
+
+        private static int _asking;
+
+        /// <summary>Asks the e-mail ahead, without anybody waiting for it.</summary>
+        public static void Prepare()
+        {
+            if (!NextendoAccount.IsLinked || (_email != null && Environment.TickCount64 - _emailAt < 10 * 60 * 1000) ||
+                System.Threading.Interlocked.Exchange(ref _asking, 1) != 0)
+            {
+                return;
+            }
+
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    Ask();
+                }
+                finally
+                {
+                    System.Threading.Interlocked.Exchange(ref _asking, 0);
+                }
+            });
+        }
+
+        private static string Ask()
+        {
             try
             {
                 using System.Net.Http.HttpClient http = new() { Timeout = TimeSpan.FromSeconds(5) };

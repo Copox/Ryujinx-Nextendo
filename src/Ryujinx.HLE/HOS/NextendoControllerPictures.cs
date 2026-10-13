@@ -121,6 +121,12 @@ namespace Ryujinx.HLE.HOS
                 (0x31E458, 0x54000121, 0x14000009),
             ];
 
+            // not in the HOME Menu as the console has it
+            if (Ryujinx.Common.Configuration.NextendoHomeMenuVanilla.Enabled)
+            {
+                return;
+            }
+
             try
             {
                 foreach ((ulong at, uint was, _) in checks)

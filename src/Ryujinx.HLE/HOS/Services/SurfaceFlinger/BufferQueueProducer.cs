@@ -392,6 +392,14 @@ namespace Ryujinx.HLE.HOS.Services.SurfaceFlinger
 
                 Core.Slots[slot].Fence = input.Fence;
                 Core.Slots[slot].BufferState = BufferState.Queued;
+                // [Nextendo, HOME Menu work] The first frame of an applet that draws on a layer of
+                // its own (the user selection does): it can take the foreground. Without this it
+                // was only told after the four seconds of the fallback, a blank screen meanwhile.
+                if (Core.FrameCounter == 0)
+                {
+                    Am.AppletAE.RealAppletManager.OnFirstFrame(Core.Owner);
+                }
+
                 Core.FrameCounter++;
                 Core.Slots[slot].FrameNumber = Core.FrameCounter;
                 Core.Slots[slot].QueueTime = TimeSpanType.FromTimeSpan(_tickSource.ElapsedTime);

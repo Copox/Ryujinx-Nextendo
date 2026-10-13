@@ -1,4 +1,4 @@
-﻿using Ryujinx.Common.Configuration;
+using Ryujinx.Common.Configuration;
 using Ryujinx.Common.Logging;
 using Ryujinx.Common.Memory;
 using Ryujinx.Horizon.Common;
@@ -1687,7 +1687,7 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                     byte[] picture = Encoding.ASCII.GetBytes($"{NextendoEndpoint.Canonical.TrimEnd('/')}/api/avatar?pid={NextendoAccount.Pid}");
                     picture.AsSpan(0, Math.Min(picture.Length, 0x9F)).CopyTo(extra.Slice(0x30, 0xA0));
 
-                    List<NextendoFriends.Played> played = new(NextendoFriends.History(NextendoAccount.Pid, 2500, direct: true));
+                    List<NextendoFriends.Played> played = new(NextendoFriends.OwnHistory());
 
                     played.RemoveAll(g => string.IsNullOrEmpty(g.Name));
 

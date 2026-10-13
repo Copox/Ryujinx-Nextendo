@@ -634,13 +634,14 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
 
         public static bool TryGet(ulong pid, out RealApplet applet) => _applets.TryGetValue(pid, out applet);
 
-        private static void GiveFocus(RealApplet applet)
+        private static void GiveFocus(RealApplet applet, string reason = "first frame")
         {
             lock (applet)
             {
                 if (!applet.FocusGiven && !applet.Exited)
                 {
                     applet.FocusGiven = true;
+                    Logger.Notice.Print(LogClass.ServiceAm, $"[focus] applet {applet.AppletId} given the foreground ({reason})");
                     applet.State.TakeForeground();
                 }
             }
@@ -731,6 +732,8 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
                 StateFor(system, applet.CallerPid).SetFocus(false);
 
                 System.Diagnostics.Stopwatch running = System.Diagnostics.Stopwatch.StartNew();
+                long span = 0, requestsBefore = 0;
+                int quiet = 0;
                 bool dumped = false;
 
                 while (system.KernelContext.Processes.TryGetValue(pid, out KProcess process) &&
@@ -751,9 +754,35 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
                         }
                     }
 
+                    // An applet that shows nothing before it has the foreground (the user selection)
+                    // never tells its first frame. It is given the foreground once it has set itself
+                    // up: its requests to the services, hundreds while it starts, fall to the few of
+                    // a main loop that waits (measured: 548 then 196 in its first two 300 ms, then
+                    // about 30). Two such quiet spans in a row, four seconds at most (a blank screen
+                    // until then: it was always four seconds).
+                    if (!applet.FocusGiven && running.ElapsedMilliseconds / 300 != span)
+                    {
+                        span = running.ElapsedMilliseconds / 300;
+
+                        long requests = process.Requests;
+
+                        quiet = requests >= 200 && requests - requestsBefore <= 60 ? quiet + 1 : 0;
+                        requestsBefore = requests;
+
+                        if (Environment.GetEnvironmentVariable("NEXTENDO_FOCUS_TRACE") == "1")
+                        {
+                            Logger.Notice.Print(LogClass.ServiceAm, $"[focus] {applet.AppletId} at {running.ElapsedMilliseconds} ms: {requests} requests, quiet spans {quiet}");
+                        }
+
+                        if (quiet >= 2)
+                        {
+                            GiveFocus(applet, "set up, quiet");
+                        }
+                    }
+
                     if (!applet.FocusGiven && running.ElapsedMilliseconds > 4000)
                     {
-                        GiveFocus(applet); // an applet without a screen of its own
+                        GiveFocus(applet, "four seconds"); // an applet without a screen of its own
                     }
 
                     Thread.Sleep(30);
