@@ -185,6 +185,10 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
         // SetUsers(bool allUsers, buffer<nn::account::Uid, 5>)
         public ResultCode SetUsers(ServiceCtx context)
         {
+            // [Nextendo] who the HOME Menu starts the application for (study)
+            string users = string.Join(",", System.Linq.Enumerable.Select(context.Request.SendBuff, d => System.Convert.ToHexString(context.Memory.GetSpan(d.Position, (int)System.Math.Min(d.Size, 0x80)))));
+            Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.ServiceAm, $"[home] SetUsers {System.Convert.ToHexString(((System.IO.MemoryStream)context.RequestData.BaseStream).ToArray())} [{users}]");
+
             return ResultCode.Success;
         }
 

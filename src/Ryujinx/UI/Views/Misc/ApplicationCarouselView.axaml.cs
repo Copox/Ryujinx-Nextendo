@@ -62,6 +62,7 @@ namespace Ryujinx.Ava.UI.Views.Misc
         // [Nextendo] Edge tracking for the physical controller Home button. This poll remains
         // active while the renderer replaces the launcher content.
         private bool _profileHomePressed;
+        private bool _consoleCapturePressed;
 
         private const int NavProfile = -1;
         private const int NavCarousel = 0;
@@ -623,15 +624,37 @@ namespace Ryujinx.Ava.UI.Views.Misc
             GamepadStateSnapshot snapshot = gamepad.GetStateSnapshot();
             bool home = snapshot.IsPressed(GamepadButtonInputId.Guide);
 
+            // [Nextendo, HOME Menu work] In a HOME Menu session the controller is the console's:
+            // its Home button is the console's HOME button (the dashboard stays in the Nextendo
+            // menu), its Share/Capture button takes a capture.
+            bool console = Ryujinx.HLE.HOS.HomeMenuStatus.Running;
+
             if (home && !_profileHomePressed)
             {
                 _profileHomePressed = true;
-                OpenNextendoProfile();
+
+                if (console)
+                {
+                    ViewModel?.AppHost?.Device?.System.PressHomeButton();
+                }
+                else
+                {
+                    OpenNextendoProfile();
+                }
             }
             else if (!home)
             {
                 _profileHomePressed = false;
             }
+
+            bool capture = console && snapshot.IsPressed(GamepadButtonInputId.Misc1);
+
+            if (capture && !_consoleCapturePressed && ViewModel?.AppHost is { } host)
+            {
+                host.ScreenshotRequested = true;
+            }
+
+            _consoleCapturePressed = capture;
         }
 
         private void PollGamepad()

@@ -41,6 +41,9 @@ namespace Ryujinx.Common.Configuration
             public string Platform { get; init; }
             public bool Favorite { get; init; }
             public long Since { get; init; }
+            // When the friend was last seen (Unix seconds, 0 when the server does not say): the
+            // HOME Menu's "last online" of a friend who is offline.
+            public long LastSeen { get; init; }
             public string FriendCode { get; init; }
             public long RequestedAt { get; init; }
             public bool HasPicture { get; init; }
@@ -529,10 +532,15 @@ namespace Ryujinx.Common.Configuration
                         // it: "created_at" is the day the friend's account was opened.
                         long since = f.TryGetProperty("since", out JsonElement sinceEl) && sinceEl.ValueKind == JsonValueKind.Number ? sinceEl.GetInt64() : 0;
 
+                        long lastSeen = f.TryGetProperty("vu", out JsonElement seenEl) && seenEl.ValueKind == JsonValueKind.String &&
+                            DateTimeOffset.TryParse(seenEl.GetString(), System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out DateTimeOffset seen)
+                                ? seen.ToUnixTimeSeconds() : 0;
+
                         if (pid != 0)
                         {
                             list.Add(new Entry(pid, name, appField, nsa, status)
                             {
+                                LastSeen = lastSeen,
                                 AppId = appId,
                                 Game = game,
                                 Platform = platform,

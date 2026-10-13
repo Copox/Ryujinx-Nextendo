@@ -9,8 +9,18 @@ namespace Ryujinx.HLE.HOS.Services.Olsc
         public ResultCode GetDataTransferPolicy(ServiceCtx context)
         {
             context.RequestData.ReadUInt64();
-            context.ResponseData.Write((byte)0);
-            context.ResponseData.Write((byte)0);
+
+            if (System.Environment.GetEnvironmentVariable("NEXTENDO_VGC_TRACE") == "1")
+            {
+                Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.Service, "[vgc] olsc 200 " +
+                    string.Concat(System.Linq.Enumerable.Select(System.Linq.Enumerable.Where(context.Device.System.KernelContext.Processes.Values, p => p.TitleId == 0x0100000000001000), p => p.DescribeGuestThreads())));
+            }
+
+            // NEXTENDO_OLSC_POLICY=a,b (study)
+            string[] policy = (System.Environment.GetEnvironmentVariable("NEXTENDO_OLSC_POLICY") ?? "0,0").Split(',');
+
+            context.ResponseData.Write(byte.Parse(policy[0]));
+            context.ResponseData.Write(byte.Parse(policy.Length > 1 ? policy[1] : "0"));
 
             return ResultCode.Success;
         }

@@ -118,6 +118,16 @@ namespace Ryujinx.HLE.HOS.Services.Ns
                 System.Array.Copy(title.Nacp, nacp, System.Math.Min(title.Nacp.Length, NacpSize));
             }
 
+            // NEXTENDO_NACP_PATCH=<hex offset>=<hex bytes>;... (study)
+            if (System.Environment.GetEnvironmentVariable("NEXTENDO_NACP_PATCH") is { Length: > 0 } nacpPatch)
+            {
+                foreach (string item in nacpPatch.Split(';'))
+                {
+                    string[] kv = item.Split('=');
+                    System.Convert.FromHexString(kv[1]).CopyTo(nacp, System.Convert.ToInt32(kv[0], 16));
+                }
+            }
+
             context.Memory.Write(position, nacp);
 
             // The icon follows the control property, as the title carries it (a JPEG).
@@ -184,7 +194,7 @@ namespace Ryujinx.HLE.HOS.Services.Ns
             context.ResponseData.Write(variant is "a" or "c" ? 1u : 0u);
             context.ResponseData.Write((uint)(NacpSize + iconSize));
 
-            Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.Service, $"[home] control data of {applicationId:X16}: icon {iconSize} bytes, layout {layout}");
+            Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.Service, $"[home] control data of {applicationId:X16}: icon {iconSize} bytes, layout {layout}, startup user account {nacp[0x3025]} option {nacp[0x3026]} NACP3000 {System.Convert.ToHexString(nacp, 0x3000, 0x400)}");
 
             return ResultCode.Success;
         }

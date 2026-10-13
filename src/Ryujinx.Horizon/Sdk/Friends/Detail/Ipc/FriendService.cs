@@ -65,7 +65,13 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
 
             oldBytes[..0x40].CopyTo(record);                 // ids and name
             oldBytes.Slice(0x40, 0xE0).CopyTo(record[0xE8..]); // presence
-            record.Slice(0xE8 + 0x10, 8).Clear();            // no "last online" date is known
+            record.Slice(0xE8 + 0x10, 8).Clear();
+
+            // "last online" of a friend who is offline: when the server last saw them
+            if (status == PresenceStatus.Offline && entry.LastSeen > 0)
+            {
+                BitConverter.TryWriteBytes(record.Slice(0xE8 + 0x10, 8), entry.LastSeen);
+            }
             record[0x21F] = 1;
 
             if (Environment.GetEnvironmentVariable("NEXTENDO_FRIEND_DETAIL_PROBE") is "7" or "8")
