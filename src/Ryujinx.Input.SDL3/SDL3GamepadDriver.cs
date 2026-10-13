@@ -127,7 +127,10 @@ namespace Ryujinx.Input.SDL3
         private static readonly DateTime _nextendoSince = DateTime.UtcNow;
         public static event Action<string, int> NextendoControllerBatteryLow;
 
-        private readonly System.Collections.Concurrent.ConcurrentDictionary<SDL_JoystickID, string> _names = new();
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<SDL_JoystickID, string> _names = new();
+
+        /// <summary>The names of the controllers of the computer, as the system gives them.</summary>
+        public static System.Collections.Generic.ICollection<string> NextendoControllerNames => _names.Values;
         private readonly System.Collections.Concurrent.ConcurrentDictionary<SDL_JoystickID, bool> _toldLow = new();
 
         private void HandleJoyStickDisconnected(SDL_JoystickID joystickInstanceId)

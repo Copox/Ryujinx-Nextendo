@@ -613,6 +613,7 @@ namespace Ryujinx.Ava.UI.Windows
             // [Nextendo] The notifications of the emulator drawn like the console's, over the
             // picture of the running emulation; "update available" while the HOME Menu runs.
             NextendoConsoleToasts.Target = () => ViewModel?.AppHost?.Device?.Gpu?.Window;
+            NextendoEventNotifications.Console = () => ViewModel?.AppHost?.Device;
             Ryujinx.Ava.Systems.NextendoUpdateNotifier.Start();
             NextendoEventNotifications.Initialize(() =>
             {

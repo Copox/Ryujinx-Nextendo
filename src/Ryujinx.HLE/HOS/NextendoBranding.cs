@@ -491,7 +491,7 @@ namespace Ryujinx.HLE.HOS
 
         // Puts new texture data (GPU layout of the original, same size) in place of a texture of a
         // BNTX archive. True when done.
-        private static bool ReplaceBntxTexture(Span<byte> bntx, string name, byte[] data)
+        private static bool ReplaceBntxTexture(Span<byte> bntx, string name, byte[] data, Action<byte[]> before = null)
         {
             int nx = bntx.IndexOf("NX  "u8);
 
@@ -518,6 +518,13 @@ namespace Ryujinx.HLE.HOS
                 int size = BitConverter.ToInt32(bntx[(brti + 0x50)..]);
                 int mips = (int)BitConverter.ToInt64(bntx[(brti + 0x70)..]);
                 int mip0 = (int)BitConverter.ToInt64(bntx[mips..]);
+
+                before?.Invoke(bntx.Slice(mip0, size).ToArray());
+
+                if (data == null)
+                {
+                    return false;
+                }
 
                 if (size != data.Length)
                 {
@@ -580,14 +587,16 @@ namespace Ryujinx.HLE.HOS
 
             string style = ControllerStyleName();
 
-            if (style == null)
+            // The Pro Controller's own picture is kept: a controller plugged in later changes
+            // the picture shown (NextendoControllerPictures).
+            if (style == null && NextendoControllerPictures.Original != null)
             {
                 return storage;
             }
 
             try
             {
-                byte[] picture = Ryujinx.Common.EmbeddedResources.Read($"Ryujinx.HLE/HOS/NextendoAssets/ControllerIcon_{style}.bc4");
+                byte[] picture = style == null ? null : Ryujinx.Common.EmbeddedResources.Read($"Ryujinx.HLE/HOS/NextendoAssets/ControllerIcon_{style}.bc4");
                 RomFsFileSystem rom = new(storage);
                 RomFsBuilder builder = new();
                 int replaced = 0;
@@ -598,7 +607,7 @@ namespace Ryujinx.HLE.HOS
                     {
                         byte[] bntx = Read(rom, entry.FullPath);
 
-                        if (ReplaceBntxTexture(bntx, "0C-00", picture))
+                        if (ReplaceBntxTexture(bntx, "0C-00", picture, NextendoControllerPictures.Keep))
                         {
                             replaced++;
                         }
@@ -611,6 +620,11 @@ namespace Ryujinx.HLE.HOS
                         rom.OpenFile(ref file.Ref, entry.FullPath.ToU8Span(), OpenMode.Read).ThrowIfFailure();
                         builder.AddFile(entry.FullPath, file.Release());
                     }
+                }
+
+                if (style == null)
+                {
+                    return storage;
                 }
 
                 Logger.Info?.Print(LogClass.ModLoader, $"[Nextendo] controller pictures: {style} in {replaced} archive(s)");

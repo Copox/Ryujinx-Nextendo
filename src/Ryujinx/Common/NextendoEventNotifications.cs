@@ -41,8 +41,64 @@ namespace Ryujinx.Ava.Common
             return "controller_pro";
         }
 
+        /// <summary>The console running, if one is (set by the window).</summary>
+        public static Func<Ryujinx.HLE.Switch> Console { get; set; }
+
+        // The controller in use is another one: its picture in the HOME Menu, at once.
+        private static void ControllerPicture(string name)
+        {
+            Ryujinx.HLE.HOS.Services.Sdb.Pl.ControllerStyle style = Ryujinx.HLE.HOS.Services.Sdb.Pl.ControllerButtonFont.StyleOf(name);
+
+            Task.Run(() =>
+            {
+                try
+                {
+                    Ryujinx.HLE.HOS.NextendoControllerPictures.Show(Console?.Invoke(), style);
+                }
+                catch (Exception e)
+                {
+                    Logger.Warning?.Print(LogClass.Application, $"[Nextendo] controller picture left as it is: {e.Message}");
+                }
+            });
+        }
+
+        // The one gone was the one shown: the one of a controller still there, or the console's.
+        private static void ControllerPictureGone(string name)
+        {
+            string left = null;
+
+            foreach (string other in Ryujinx.Input.SDL3.SDL3GamepadDriver.NextendoControllerNames)
+            {
+                left ??= other;
+            }
+
+            ControllerPicture(left);
+        }
+
         public static void Initialize(Action requestScreenshot = null)
         {
+            Ryujinx.Input.SDL3.SDL3GamepadDriver.NextendoControllerConnected += ControllerPicture;
+            Ryujinx.Input.SDL3.SDL3GamepadDriver.NextendoControllerDisconnected += ControllerPictureGone;
+
+            // Tests: controllers plugged in turn ("seconds:name;...").
+            if (Environment.GetEnvironmentVariable("NEXTENDO_CONTROLLER_LIVE") is { Length: > 0 } live)
+            {
+                Task.Run(async () =>
+                {
+                    int waited = 0;
+
+                    foreach (string step in live.Split(';'))
+                    {
+                        string[] parts = step.Split(':');
+                        int at = int.Parse(parts[0]);
+
+                        await Task.Delay(Math.Max(0, at - waited) * 1000);
+                        waited = at;
+                        ControllerPicture(parts[1]);
+                    }
+                });
+            }
+
             Ryujinx.Input.SDL3.SDL3GamepadDriver.NextendoControllerDisconnected += ControllerDisconnected;
             Ryujinx.Input.SDL3.SDL3GamepadDriver.NextendoControllerBatteryLow += ControllerBatteryLow;
             Ryujinx.Input.SDL3.SDL3GamepadDriver.NextendoControllerConnected += ControllerConnected;
