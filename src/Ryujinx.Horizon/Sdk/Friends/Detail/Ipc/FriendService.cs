@@ -1670,6 +1670,42 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                 {
                     Encoding.ASCII.GetBytes(code).AsSpan(0, Math.Min(code.Length, 0x1F)).CopyTo(setting.Slice(codeAt, 0x20));
                 }
+
+                // The user's own profile, with the games played (the profile page shows them):
+                // a ProfileExtra as the friends' ones, at 0x48 (NEXTENDO_OWN_EXTRA_AT moves it, study).
+                int extraAt = int.TryParse(Environment.GetEnvironmentVariable("NEXTENDO_OWN_EXTRA_AT"), System.Globalization.NumberStyles.HexNumber, null, out int moved) ? moved : 0x48;
+
+                if (extraAt + 0x4A8 <= setting.Length)
+                {
+                    Span<byte> extra = setting.Slice(extraAt, 0x4A8);
+
+                    BitConverter.TryWriteBytes(extra.Slice(0x00, 8), NextendoAccount.Pid);
+
+                    byte[] nickname = Encoding.UTF8.GetBytes(NextendoAccount.Username ?? "");
+                    nickname.AsSpan(0, Math.Min(nickname.Length, 0x20)).CopyTo(extra.Slice(0x08, 0x21));
+
+                    byte[] picture = Encoding.ASCII.GetBytes($"{NextendoEndpoint.Canonical.TrimEnd('/')}/api/avatar?pid={NextendoAccount.Pid}");
+                    picture.AsSpan(0, Math.Min(picture.Length, 0x9F)).CopyTo(extra.Slice(0x30, 0xA0));
+
+                    List<NextendoFriends.Played> played = new(NextendoFriends.History(NextendoAccount.Pid, 2500, direct: true));
+
+                    played.RemoveAll(g => string.IsNullOrEmpty(g.Name));
+
+                    for (int g = 0; g < played.Count && g < 20; g++)
+                    {
+                        Span<byte> slot = extra.Slice(0xD0 + g * 0x30, 0x30);
+
+                        BitConverter.TryWriteBytes(slot.Slice(0x00, 8), played[g].TitleId);
+                        BitConverter.TryWriteBytes(slot.Slice(0x08, 8), played[g].TitleId);
+                        BitConverter.TryWriteBytes(slot.Slice(0x18, 4), 1);
+                        BitConverter.TryWriteBytes(slot.Slice(0x1C, 4), (int)Math.Min(int.MaxValue, played[g].Seconds / 60));
+                        BitConverter.TryWriteBytes(slot.Slice(0x28, 8), played[g].LastPlayed);
+                    }
+
+                    extra[0x490] = 1;
+
+                    Logger.Info?.Print(LogClass.ServiceFriend, $"[Nextendo] LoadUserSettingV2: own profile with {Math.Min(played.Count, 20)} game(s) played");
+                }
             }
 
             Logger.Stub?.PrintStub(LogClass.ServiceFriend, new { userId });

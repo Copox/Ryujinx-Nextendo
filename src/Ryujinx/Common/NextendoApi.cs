@@ -82,6 +82,9 @@ namespace Ryujinx.Ava.Common
             try
             {
                 List<object> items = [];
+                // the HOME Menu and the applets of the system are no games played
+                local = local.FindAll(h => !Ryujinx.Common.Configuration.NextendoGames.IsSystemProgram(h.TitleId));
+
                 foreach (HistoryItem h in local)
                 {
                     items.Add(new

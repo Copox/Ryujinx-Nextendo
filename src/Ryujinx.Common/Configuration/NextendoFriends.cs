@@ -725,7 +725,8 @@ namespace Ryujinx.Common.Configuration
                 string baseUrl = NextendoEndpoint.BaseUrl().TrimEnd('/');
 
                 using System.Threading.CancellationTokenSource limit = new(timeoutMs);
-                using HttpRequestMessage req = new(HttpMethod.Get, baseUrl + "/api/friends/history?pid=" + pid);
+                // The user's own history has its own address (the friends' one refuses it).
+                using HttpRequestMessage req = new(HttpMethod.Get, baseUrl + (pid == NextendoAccount.Pid ? "/api/history" : "/api/friends/history?pid=" + pid));
                 req.Headers.Add("Authorization", "Bearer " + NextendoAccount.NexToken);
                 using HttpResponseMessage resp = _http.SendAsync(req, limit.Token).GetAwaiter().GetResult();
 
@@ -864,6 +865,14 @@ namespace Ryujinx.Common.Configuration
             string appId = CurrentTitleId ?? "";
             string appDetail = CurrentAppDetail ?? "";
             int status = _curStatus;
+
+            // The HOME Menu (or an applet of the system) is no game: online, playing nothing.
+            if (NextendoGames.IsSystemProgram(appId))
+            {
+                appId = "";
+                appDetail = "";
+                status = 1;
+            }
             string appFieldB64 = Convert.ToBase64String(appField);
 
             // appDetail belongs in the dedup key: switching from "Single Player" to "Racing" keeps

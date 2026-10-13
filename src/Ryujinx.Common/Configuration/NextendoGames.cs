@@ -15,6 +15,16 @@ namespace Ryujinx.Common.Configuration
         public const ulong HomeMenuId = 0x0100000000001000;
 
         /// <summary>
+        /// A program of the system (HOME Menu, applets: 0100000000001000 to 0100000000001FFF),
+        /// by its id in hexadecimal: never a game played, neither in the presence nor in the history.
+        /// </summary>
+        public static bool IsSystemProgram(string titleId)
+        {
+            return ulong.TryParse(titleId, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out ulong id)
+                && id >= 0x0100000000001000 && id <= 0x0100000000001FFF;
+        }
+
+        /// <summary>
         /// What the user of this console is in right now, when the HOME Menu runs: the game
         /// started from it, or the menu itself.
         /// </summary>
