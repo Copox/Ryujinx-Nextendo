@@ -813,6 +813,9 @@ namespace Ryujinx.HLE.HOS.Themes
                 process.CpuMemory.Write(baseAddress + Cave + CodeSize + 0x6030 + (ulong)(8 * i), dialog[i]);
             }
 
+            // [Nextendo, HOME Menu work] The virtual game cards page's welcome, seen already.
+            process.CpuMemory.Write(baseAddress + Cave + CodeSize + VgcWelcomeSeenAt, (byte)(NextendoVirtualCards.WelcomeSeen ? 1 : 0));
+
             // The page's own code, changed to know the added entries (Qlaunch/build.py).
             byte[] patches = Ryujinx.Common.EmbeddedResources.Read("Ryujinx.HLE/HOS/Themes/Qlaunch/theme_page.patches");
             int count = BinaryPrimitives.ReadInt32LittleEndian(patches);
@@ -940,6 +943,24 @@ namespace Ryujinx.HLE.HOS.Themes
             }
 
             return true;
+        }
+
+        // The virtual game cards page's welcome seen (read by the added code: data page).
+        private const ulong VgcWelcomeSeenAt = 0x6300;
+
+        /// <summary>[Nextendo, HOME Menu work] The virtual game cards page's welcome was seen.</summary>
+        internal static void SetVgcWelcomeSeen()
+        {
+            KProcess process = _process;
+
+            try
+            {
+                process?.CpuMemory.Write(_base + Cave + CodeSize + VgcWelcomeSeenAt, (byte)1);
+            }
+            catch (Exception)
+            {
+                // the HOME Menu is gone
+            }
         }
 
         /// <summary>[Nextendo, HOME Menu work] The restart dialog of the settings answered.</summary>

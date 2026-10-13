@@ -269,6 +269,12 @@ namespace Ryujinx.HLE.HOS.Services.Ns
                 Ryujinx.HLE.HOS.NextendoVirtualCards.Load(context.Memory.GetSpan(entries.Position, (int)entries.Size), count);
             }
 
+            // the welcome of the page seen (4073, after its last dialog): only once from now on
+            if (vgcCommand == 4073 && !Ryujinx.HLE.HOS.NextendoVirtualCards.WelcomeSeen)
+            {
+                Ryujinx.HLE.HOS.NextendoVirtualCards.WelcomeSeen = true;
+            }
+
             // the virtual game card ejected from this console (4038)
             if (vgcCommand == 4038 && Ryujinx.HLE.HOS.NextendoVirtualCards.Enabled)
             {
@@ -450,6 +456,12 @@ namespace Ryujinx.HLE.HOS.Services.Ns
         public ResultCode IsOnlineLicenseEnabled(ServiceCtx context)
         {
             string userId = context.RequestData.ReadStruct<Account.Acc.UserId>().ToString();
+
+            if (System.Environment.GetEnvironmentVariable("NEXTENDO_VGC_TRACE") == "1")
+            {
+                Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.ServiceNs, "[vgc] 4032 " +
+                    string.Concat(System.Linq.Enumerable.Select(System.Linq.Enumerable.Where(context.Device.System.KernelContext.Processes.Values, p => p.TitleId == 0x0100000000001000), p => p.DescribeGuestThreads())));
+            }
 
             context.ResponseData.Write(OnlineLicenseUsers().Contains(userId));
 

@@ -128,6 +128,23 @@ namespace Ryujinx.HLE.HOS
             HomeMenuLibrary.NotifyChanged();
         }
 
+        private static string WelcomePath => Path.Combine(AppDataManager.BaseDirPath, "nextendo_vgc_welcome.txt");
+
+        /// <summary>The welcome of the virtual game cards page was seen (it shows only once).</summary>
+        public static bool WelcomeSeen
+        {
+            get => Read(WelcomePath) == "1";
+            set
+            {
+                Write(WelcomePath, value ? "1" : "0");
+
+                if (value)
+                {
+                    Themes.QlaunchThemePage.SetVgcWelcomeSeen();
+                }
+            }
+        }
+
         /// <summary>The game card loaded to this console taken out (ns 4038): none inserted.</summary>
         public static void Eject()
         {

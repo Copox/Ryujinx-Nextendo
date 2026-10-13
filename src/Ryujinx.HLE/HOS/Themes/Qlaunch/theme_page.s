@@ -65,6 +65,7 @@
     b restart_callback_copy       ; +0x3C (the restart dialog's callbacks: their vtables)
     b restart_callback_buttons    ; +0x40
     b restart_callback_dialog     ; +0x44
+    b vgc_welcome                 ; +0x48 (the virtual game cards page's welcome)
 
 ; ---------------------------------------------------------------------------------------------
 ; [Nextendo, HOME Menu work] The settings menu builds the page of a section (a switch on its
@@ -2420,6 +2421,23 @@ restart_callback_dialog:
     add x8, x8, #0x6000
     str x1, [x8, #0x100]
     ret
+
+; ---------------------------------------------------------------------------------------------
+; [Nextendo, HOME Menu work] The welcome of the virtual game cards page (two dialogs) only the
+; first time: the page's welcome step (0xA5F450) shows its dialog when none is open (w8 = 0);
+; once the emulator says it was seen (data page +0x6300, set when the page says so, ns 4073),
+; the step goes on at once to the next one (as when its dialog is over).
+vgc_welcome:
+    cbnz w8, vgc_welcome_open
+    adrp x9, @DATA
+    add x9, x9, #0x6000
+    ldrb w9, [x9, #0x300]
+    cbnz w9, vgc_welcome_skip
+    b #0xa5f47c
+vgc_welcome_open:
+    b #0xa5f68c
+vgc_welcome_skip:
+    b #0xa5f734
 
 name_value:
     .byte 84, 95, 86, 97, 108, 117, 101, 0
