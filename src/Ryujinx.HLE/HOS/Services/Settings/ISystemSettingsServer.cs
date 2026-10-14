@@ -206,7 +206,14 @@ namespace Ryujinx.HLE.HOS.Services.Settings
                     string baseDir = Ryujinx.Common.Configuration.AppDataManager.BaseDirPath;
                     string saved = System.IO.Path.Combine(baseDir, "nextendo_color_set.txt");
 
-                    if (System.IO.File.Exists(saved) && int.TryParse(System.IO.File.ReadAllText(saved).Trim(), out int id))
+                    // a theme chosen in the themes page is made for Basic Black (the page offers
+                    // Basic White and Basic Black only as "no theme"): an older choice of Basic
+                    // White would leave its text dark on a dark background
+                    if (Ryujinx.HLE.HOS.Themes.NextendoThemes.Chosen != null && !Ryujinx.HLE.HOS.Themes.NextendoThemes.InstalledWins)
+                    {
+                        context.Device.System.State.ThemeColor = ColorSet.BasicBlack;
+                    }
+                    else if (System.IO.File.Exists(saved) && int.TryParse(System.IO.File.ReadAllText(saved).Trim(), out int id))
                     {
                         context.Device.System.State.ThemeColor = (ColorSet)id;
                     }
@@ -244,8 +251,13 @@ namespace Ryujinx.HLE.HOS.Services.Settings
 
             context.Device.System.State.ThemeColor = (ColorSet)colorSetId;
 
-            // [Nextendo, HOME Menu themes] An installed theme picked on the themes page.
-            Ryujinx.HLE.HOS.Themes.QlaunchThemePage.TakePick();
+            // [Nextendo, HOME Menu themes] An installed theme picked on the themes page: made for
+            // Basic Black.
+            if (Ryujinx.HLE.HOS.Themes.QlaunchThemePage.TakePick() && Ryujinx.HLE.HOS.Themes.NextendoThemes.Chosen != null)
+            {
+                colorSetId = (int)ColorSet.BasicBlack;
+                context.Device.System.State.ThemeColor = ColorSet.BasicBlack;
+            }
 
             // [Nextendo, HOME Menu work] The theme chosen in the HOME Menu settings is kept.
             try
