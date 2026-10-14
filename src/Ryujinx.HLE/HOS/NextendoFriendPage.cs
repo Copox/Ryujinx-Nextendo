@@ -60,6 +60,18 @@ namespace Ryujinx.HLE.HOS
         // The banner of the own page: another width, for the one of a friend never to be painted over it.
         public const int OwnBannerWidth = 1152;
 
+        /// <summary>
+        /// The first 64 bytes of the banner texture of a friend's page (16 pixels, all of them
+        /// transparent: they sit outside its round corner). On a console, the module that paints
+        /// the banner inside the applet finds the texture in memory by them, and leaves them there.
+        /// </summary>
+        public static ReadOnlySpan<byte> BannerMark =>
+        [
+            (byte)'N', (byte)'X', (byte)'T', 0, (byte)'B', (byte)'A', (byte)'N', 0, (byte)'N', (byte)'E', (byte)'R', 0, (byte)'F', (byte)'R', (byte)'D', 0,
+            (byte)'v', (byte)'0', (byte)'1', 0, (byte)'m', (byte)'y', (byte)'P', 0, (byte)'a', (byte)'g', (byte)'e', 0, (byte)'2', (byte)'2', (byte)'5', 0,
+            0x4E, 0x58, 0x54, 0, 0x13, 0x10, 0x00, 0, 0xA5, 0x5A, 0xC3, 0, 0x3C, 0x96, 0x69, 0, 0x0F, 0xF0, 0x55, 0, 0xAA, 0x11, 0xEE, 0, 0x77, 0x88, 0x24, 0, 0xDB, 0x42, 0xBD, 0,
+        ];
+
         private const int MaskSize = 256;
         private const float MaskRadius = 52f;
 
@@ -734,6 +746,8 @@ namespace Ryujinx.HLE.HOS
             // the banner of a friend's page: only where something paints it (a megabyte of the applet's memory)
             if (friendBanner)
             {
+                BannerMark.CopyTo(bannerData);
+
                 added.Add((BannerTexture, BannerWidth, BannerHeight, 0x0B01u, 0x05040302u, BlockHeightLog2, bannerData));
             }
 
