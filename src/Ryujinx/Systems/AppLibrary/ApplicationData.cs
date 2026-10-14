@@ -415,7 +415,7 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             // La table exigeait donc une version impossible et bloquait tout joueur ayant mis a
             // jour l emulateur en 1.8.2 — signale par ffsaga le 2026-09-08.
             "0100277011f1a000" => "1.0.2",  // Super Mario Bros. 35
-            "0100ad9012510000" => "1.0.0",  // Pac-Man 99
+            "0100ad9012510000" => "1.1.1.0", // Pac-Man 99 (the version the Nextendo servers serve)
             "01009b90006dc000" => "3.0.3",  // Super Mario Maker 2
             "0100000000010000" => "1.4.1",  // Super Mario Odyssey
             _ => "",
