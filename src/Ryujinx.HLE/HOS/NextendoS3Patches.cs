@@ -37,6 +37,17 @@ namespace Ryujinx.HLE.HOS
             0x45, 0x45, 0x4F, 0x46,                   // "EEOF"
         ];
 
+        // Super Mario Party Jamboree 2.3.0, build D70CE1726C979E45ED4200E9C2B23B2A258FDC18.
+        // Selects the gRPC certificate verification callback used by the tested client.
+        // Flat 0xAD38BC: LDRB W10,[X21,#0x38] -> MOV W10,#1; IPS includes the NSO header.
+        private static readonly byte[] _mpjCertificate230 =
+        [
+            0x49, 0x50, 0x53, 0x33, 0x32,
+            0x00, 0xAD, 0x39, 0xBC, 0x00, 0x04,
+            0x2A, 0x00, 0x80, 0x52,
+            0x45, 0x45, 0x4F, 0x46,
+        ];
+
         // Super Mario Bros. Wonder 1.2.1
         // Build FF773E90972D544EB79406EAA65396D53C43EFB9.
         // Flat 0xB03528: LDRB W10,[X21,#0x38] -> MOV W10,#1.
@@ -210,6 +221,7 @@ namespace Ryujinx.HLE.HOS
             ["BCA1A793E41A4836EF3C03286B18E816EEC62338"] = [_certificatPeaceWalker, _nomDePairPeaceWalker],
             ["1C689518406930512C13DDF4217E7676"] = [_ctrConfianceServeur, _ctrRechercheAmis],
             ["616640F27B9362502D1CE10BF01EB9A6"] = [_overcooked2],
+            ["D70CE1726C979E45ED4200E9C2B23B2A258FDC18"] = [_mpjCertificate230],
         };
 
         /// <summary>
