@@ -107,7 +107,8 @@ namespace Ryujinx.HLE.HOS
             int width = (int)BinaryPrimitives.ReadUInt32BigEndian(header.AsSpan(0));
             int height = (int)BinaryPrimitives.ReadUInt32BigEndian(header.AsSpan(4));
 
-            if (width <= 0 || height <= 0 || width > 1024 || height > 1024)
+            // a file from the network: small pictures only (Discord's are 256 x 256)
+            if (width <= 0 || height <= 0 || width > 512 || height > 512)
             {
                 return null;
             }
@@ -122,7 +123,9 @@ namespace Ryujinx.HLE.HOS
 
             foreach (Part part in parts)
             {
-                if (part.Data.Length == 0)
+                // each part inside the picture, and not more data than a picture that size can hold
+                if (part.Data.Length == 0 || part.Width <= 0 || part.Height <= 0 || part.X < 0 || part.Y < 0 ||
+                    part.X + part.Width > width || part.Y + part.Height > height || part.Data.Length > 8 * 1024 * 1024)
                 {
                     continue;
                 }

@@ -551,13 +551,11 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
 
         // [Nextendo] The homebrew the emulator puts on the SD card when it is not there, as on a
         // console set up with Atmosphere: the homebrew menus (Sphaira, chosen by default, and
-        // switchbrew's hbmenu) and the theme tools (NXThemes Installer, Themezer-NX).
+        // switchbrew's hbmenu). Nothing else is bundled.
         private static readonly (string Resource, string[] Path)[] _bundledHomebrew =
         [
             ("sphaira.nro", ["switch", "sphaira", "sphaira.nro"]),
             ("hbmenu.nro", ["hbmenu.nro"]),
-            ("NXThemesInstaller.nro", ["switch", "NXThemesInstaller.nro"]),
-            ("themezer-nx.nro", ["switch", "themezer-nx.nro"]),
         ];
 
         private static bool _homebrewProvided;
