@@ -111,6 +111,46 @@ namespace Ryujinx.HLE.HOS
             return layoutDone && texturesDone ? WriteArchive(files, multiplier) : null;
         }
 
+        // ------------------------------------------------------------------ the friend notification
+
+        public const string NotificationArchive = "/lyt/OverlayNotification.szs";
+
+        private const string NotificationLayout = "blyt/OvnFriend.bflyt";
+
+        // "A friend is online" (overlay applet, 22.5.0): the friend's picture is a small one next
+        // to the name, with nothing under it. It is made to take both lines, name and game.
+        private static readonly (float X, float Y, float Scale) _notificationPicture = (-131f, 0f, 1.35f);
+
+        /// <summary>The notification archive of the overlay applet (not compressed) with a larger friend picture, or null.</summary>
+        public static byte[] PatchNotification(byte[] archive)
+        {
+            List<(string Name, byte[] Data)> files = ReadArchive(archive, out uint multiplier);
+            int at = files.FindIndex(f => f.Name == NotificationLayout);
+
+            if (at < 0)
+            {
+                return null;
+            }
+
+            List<byte[]> sections = Sections(files[at].Data, out int header);
+            int shown = sections.FindIndex(s => Kind(s) == "pan1" && PaneName(s) == "N_OpenFriend");
+            byte[] picture = shown < 0 ? null : sections.Skip(shown).FirstOrDefault(s => Kind(s) == "pan1" && PaneName(s) == "N_AvatarS");
+
+            if (picture == null)
+            {
+                return null;
+            }
+
+            BinaryPrimitives.WriteSingleLittleEndian(picture.AsSpan(0x2C), _notificationPicture.X);
+            BinaryPrimitives.WriteSingleLittleEndian(picture.AsSpan(0x30), _notificationPicture.Y);
+            BinaryPrimitives.WriteSingleLittleEndian(picture.AsSpan(0x44), _notificationPicture.Scale);
+            BinaryPrimitives.WriteSingleLittleEndian(picture.AsSpan(0x48), _notificationPicture.Scale);
+
+            files[at] = (NotificationLayout, Layout_(files[at].Data, header, sections));
+
+            return WriteArchive(files, multiplier);
+        }
+
         // ------------------------------------------------------------------ the archive (SARC)
 
         private static List<(string Name, byte[] Data)> ReadArchive(byte[] b, out uint multiplier)

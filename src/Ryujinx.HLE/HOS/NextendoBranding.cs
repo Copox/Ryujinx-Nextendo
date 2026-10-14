@@ -291,6 +291,26 @@ namespace Ryujinx.HLE.HOS
                 changed[SettingsLayout] = Yaz0Encode(withValues);
             }
 
+            // [Nextendo, HOME Menu work] "A friend is online": the friend's picture over both lines.
+            if (programId == 0x010000000000100C && !Vanilla && Exists(baseRom, NextendoFriendPage.NotificationArchive))
+            {
+                try
+                {
+                    byte[] notification = NextendoFriendPage.PatchNotification(Yaz0Decode(changed.TryGetValue(NextendoFriendPage.NotificationArchive, out byte[] themedNotification) ? themedNotification : Read(baseRom, NextendoFriendPage.NotificationArchive)));
+
+                    if (notification != null)
+                    {
+                        changed[NextendoFriendPage.NotificationArchive] = Yaz0Encode(notification);
+                    }
+
+                    Logger.Info?.Print(LogClass.ModLoader, $"[Nextendo] friend notification: picture {(notification != null ? "enlarged" : "left as it is")}");
+                }
+                catch (Exception e)
+                {
+                    Logger.Warning?.Print(LogClass.ModLoader, $"[Nextendo] friend notification left as it is: {e.Message}");
+                }
+            }
+
             // [Nextendo, HOME Menu work] The page of a friend: a banner and the friend's badges.
             if (programId == 0x0100000000001013 && !Vanilla && Exists(baseRom, NextendoFriendPage.Archive))
             {

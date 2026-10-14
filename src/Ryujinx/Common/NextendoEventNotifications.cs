@@ -164,6 +164,22 @@ namespace Ryujinx.Ava.Common
                             continue;
                         }
 
+                        // "seconds:friend": the "friend online" notification, for a friend who plays now
+                        if (parts[1] == "friend")
+                        {
+                            foreach (Ryujinx.Common.Configuration.NextendoFriends.Entry friend in Ryujinx.Common.Configuration.NextendoFriends.Get())
+                            {
+                                if (!string.IsNullOrEmpty(friend.Game))
+                                {
+                                    NextendoSystemNotifications.FriendOnline(friend.Pid);
+
+                                    break;
+                                }
+                            }
+
+                            continue;
+                        }
+
                         if (parts[1] == "peek")
                         {
                             byte[] read = Console?.Invoke()?.PeekGuest(0x010000000000100C, Convert.ToUInt64(parts[2], 16), Convert.ToInt32(parts[3], 16), parts.Length > 4 ? Convert.ToInt64(parts[4], 16) : -1, parts.Length > 5 ? Convert.FromHexString(parts[5]) : null);
