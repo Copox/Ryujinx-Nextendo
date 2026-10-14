@@ -25,7 +25,8 @@
                 <CheckBox Name="BackgroundCheck" Margin="24,0,0,0"
                           Content="{ext:Locale Dialog_Nextendo_QLaunchBackground}" />
                 <CheckBox Name="FullscreenCheck" Content="{ext:Locale Dialog_Nextendo_QLaunchFullscreen}" />
-                <CheckBox Name="VanillaCheck" Content="{ext:Locale Dialog_Nextendo_QLaunchVanilla}" />
+                <CheckBox Name="VanillaCheck" Content="{ext:Locale Dialog_Nextendo_QLaunchVanilla}"
+                          ToolTip.Tip="{ext:Locale Dialog_Nextendo_QLaunchVanillaHint}" />
                 <CheckBox Name="XciCardsCheck" Content="{ext:Locale Dialog_Nextendo_QLaunchXciCards}" />
             </StackPanel>
 

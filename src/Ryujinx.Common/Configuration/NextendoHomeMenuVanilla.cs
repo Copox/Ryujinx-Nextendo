@@ -6,7 +6,9 @@ namespace Ryujinx.Common.Configuration
     /// <summary>
     /// [Nextendo, HOME Menu work] The HOME Menu as the console has it: none of the emulator's own
     /// changes (the Nextendo logo and texts, the themes page and the "Ryujinx | Nextendo" section,
-    /// the controller pictures and buttons, the emulator's notifications). The online service
+    /// the controller pictures and buttons, the profile banners and badges, the rounded pictures of
+    /// the profile pages, the larger friend picture of the notifications, the emulator's
+    /// notifications). The online service
     /// (friends, presence) stays. Off unless the player turns it on; read when the HOME Menu starts.
     /// </summary>
     public static class NextendoHomeMenuVanilla
