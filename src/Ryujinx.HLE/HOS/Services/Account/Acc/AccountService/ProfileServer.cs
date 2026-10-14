@@ -68,9 +68,32 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
             return ResultCode.Success;
         }
 
+        // [Nextendo, HOME Menu work] The picture this session hands out, fixed at its first use: the
+        // size and the picture asked next must match, even when the decorated one becomes ready
+        // in between (NextendoOwnDecoration).
+        private byte[] _shown;
+
+        private byte[] Shown()
+        {
+            if (_shown != null)
+            {
+                return _shown;
+            }
+
+            byte[] image = _profile.Image;
+
+            if (!Ryujinx.Common.Configuration.NextendoHomeMenuVanilla.Enabled && Ryujinx.Common.Configuration.NextendoAccount.IsLinked &&
+                string.Equals(Ryujinx.Common.Configuration.NextendoAccount.ProfileUserId, _profile.UserId.ToString(), System.StringComparison.OrdinalIgnoreCase))
+            {
+                image = NextendoOwnDecoration.Apply(image);
+            }
+
+            return _shown = image;
+        }
+
         public ResultCode GetImageSize(ServiceCtx context)
         {
-            context.ResponseData.Write(_profile.Image.Length);
+            context.ResponseData.Write(Shown().Length);
 
             return ResultCode.Success;
         }
@@ -80,14 +103,16 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
             ulong bufferPosition = context.Request.ReceiveBuff[0].Position;
             ulong bufferLen = context.Request.ReceiveBuff[0].Size;
 
-            if ((ulong)_profile.Image.Length > bufferLen)
+            byte[] image = Shown();
+
+            if ((ulong)image.Length > bufferLen)
             {
                 return ResultCode.InvalidBufferSize;
             }
 
-            context.Memory.Write(bufferPosition, _profile.Image);
+            context.Memory.Write(bufferPosition, image);
 
-            context.ResponseData.Write(_profile.Image.Length);
+            context.ResponseData.Write(image.Length);
 
             return ResultCode.Success;
         }
