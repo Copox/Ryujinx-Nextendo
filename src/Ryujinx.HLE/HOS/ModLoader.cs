@@ -867,10 +867,10 @@ namespace Ryujinx.HLE.HOS
             // percer — et le joueur n'a aucun fichier a installer.
             if (ModsInterdits(applicationId))
             {
-                return AppliquerCorrectifsIntegres(programs);
+                return AppliquerCorrectifsIntegres(applicationId, programs);
             }
 
-            bool correctifsIntegresAppliques = AppliquerCorrectifsIntegres(programs);
+            bool correctifsIntegresAppliques = AppliquerCorrectifsIntegres(applicationId, programs);
 
             IEnumerable<Mod<DirectoryInfo>> nsoMods = _patches.NsoPatches;
 
@@ -954,7 +954,7 @@ namespace Ryujinx.HLE.HOS
         /// build, puis on ecrit avec le decalage 0x100 propre aux NSO (l'en-tete n'est pas dans
         /// Program).
         /// </summary>
-        private static bool AppliquerCorrectifsIntegres(params ReadOnlySpan<IExecutable> programs)
+        private static bool AppliquerCorrectifsIntegres(ulong applicationId, params ReadOnlySpan<IExecutable> programs)
         {
             int count = 0;
 
@@ -963,6 +963,18 @@ namespace Ryujinx.HLE.HOS
                 if (programs[i] is not NsoExecutable nso)
                 {
                     continue;
+                }
+
+                // US and Japanese releases share the main build ID. Only the US
+                // release lacks the Japanese audio selected without launcher arguments.
+                if (applicationId == 0x010099801C4FA000 &&
+                    Convert.ToHexString(nso.BuildId).TrimEnd('0') == "BCA1A793E41A4836EF3C03286B18E816EEC62338" &&
+                    nso.Program.Length >= 0x5F89C &&
+                    nso.Program[0x5F898] == 0xD4 && nso.Program[0x5F899] == 0x00 &&
+                    nso.Program[0x5F89A] == 0x80 && nso.Program[0x5F89B] == 0x52)
+                {
+                    nso.Program[0x5F898] = 0x14; // mov w20, #0 (English fallback)
+                    count++;
                 }
 
                 MemPatch patch = new();

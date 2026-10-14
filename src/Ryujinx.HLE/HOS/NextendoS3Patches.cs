@@ -209,6 +209,8 @@ namespace Ryujinx.HLE.HOS
             0x09, 0x04, 0xA0, 0x52,
             0x45, 0x45, 0x4F, 0x46,
         ];
+        // Monster Hunter Rise 16.0.2: the same NPLN patches shipped by Prelude.
+        private static readonly byte[] _rise1602 = [0x49, 0x50, 0x53, 0x33, 0x32, 0x02, 0x03, 0x3C, 0x04, 0x00, 0x04, 0x2A, 0x00, 0x80, 0x52, 0x02, 0x03, 0x2F, 0x28, 0x00, 0x04, 0x1F, 0x20, 0x03, 0xD5, 0x02, 0x03, 0x2F, 0xE8, 0x00, 0x04, 0x1F, 0x20, 0x03, 0xD5, 0x45, 0x45, 0x4F, 0x46];
 
         private static readonly Dictionary<string, byte[][]> _parIdentifiantDeBuild = new()
         {
@@ -233,6 +235,7 @@ namespace Ryujinx.HLE.HOS
             ["421C5411B487EB4D049DD065FEC9547773E8E598"] = [_violetTls301],
             ["B1F12FD919EAE86AB8A978317677E64BCE443D1F"] = [_legendsZaTls202],
             ["44EFA84EE9C32B466EA27215D3D91DFD0EBAE625"] = [_certificatN64v420, _nomDePairN64v420],
+            ["C9A3DD7702075ECD90101F45553895822804D38F"] = [_rise1602],
             ["BCA1A793E41A4836EF3C03286B18E816EEC62338"] = [_certificatPeaceWalker, _nomDePairPeaceWalker],
             ["1C689518406930512C13DDF4217E7676"] = [_ctrConfianceServeur, _ctrRechercheAmis],
             ["616640F27B9362502D1CE10BF01EB9A6"] = [_overcooked2],
