@@ -69,7 +69,7 @@ namespace Ryujinx.HLE.HOS
                     NextendoFriends.Entry friend = NextendoFriends.Get().FirstOrDefault(f => f.Pid == pid);
                     // NEXTENDO_FRIEND_BADGES="admin,donor,...": those on every page, to see them drawn
                     string forced = Environment.GetEnvironmentVariable("NEXTENDO_FRIEND_BADGES");
-                    List<(byte[] Pixels, int Milliseconds)> banner = Banner(pid, friend.Color, string.IsNullOrEmpty(forced) ? friend.Badges ?? [] : forced.Split(','), NextendoFriendPage.BannerWidth);
+                    List<(byte[] Pixels, int Milliseconds)> banner = Banner(pid, friend.Color, string.IsNullOrEmpty(forced) ? friend.Badges ?? [] : forced.Split(','), NextendoFriendPage.BannerWidth, friend.BannerUrl, friend.BannerCrop);
 
                     Logger.Info?.Print(LogClass.Application, $"[Nextendo] friend page: banner of 0x{pid:X} ({friend.Badges?.Length ?? 0} badge(s), colour \"{friend.Color}\", {banner.Count} picture(s))");
 
@@ -190,7 +190,8 @@ namespace Ryujinx.HLE.HOS
                     : [];
                 string colour = account.TryGetProperty("color", out System.Text.Json.JsonElement chosen) && chosen.ValueKind == System.Text.Json.JsonValueKind.String ? chosen.GetString() : "";
 
-                List<(byte[] Pixels, int Milliseconds)> banner = Banner(NextendoAccount.Pid, colour, badges, NextendoFriendPage.OwnBannerWidth);
+                string address = NextendoFriends.BannerOf(account, out float[] frame);
+                List<(byte[] Pixels, int Milliseconds)> banner = Banner(NextendoAccount.Pid, colour, badges, NextendoFriendPage.OwnBannerWidth, address, frame);
 
                 AnimateOwn(banner);
 
@@ -249,20 +250,94 @@ namespace Ryujinx.HLE.HOS
             return SKColor.FromHsv((pid * 2654435761u >> 8) % 360, 62, 86);
         }
 
+        // Where a GIF picked at KLIPY comes from: KLIPY asks for its media to be loaded from
+        // there by the program that shows it, never copied elsewhere.
+        private static readonly string[] _klipyHosts = ["static.klipy.com", "static1.klipy.com", "static2.klipy.com"];
+
+        private const int LargestPicture = 12 << 20;
+
+        // The pictures read lately, by address (an address changes when the banner does).
+        private static readonly ConcurrentDictionary<string, byte[]> _pictures = new();
+
         // The picture a profile has for its banner (a still one or an animated one, as a file), or
-        // null: Nextendo Network has none yet. NEXTENDO_BANNER_TEST=<file>: that one on every
-        // profile, to see a picture or an animation drawn.
-        private static byte[] Picture(ulong pid)
+        // null when it has none. NEXTENDO_BANNER_TEST=<file>: that one on every profile, to see a
+        // picture or an animation drawn.
+        private static byte[] Picture(string address)
         {
             string test = Environment.GetEnvironmentVariable("NEXTENDO_BANNER_TEST");
 
-            return !string.IsNullOrEmpty(test) && System.IO.File.Exists(test) ? System.IO.File.ReadAllBytes(test) : null;
+            if (!string.IsNullOrEmpty(test) && System.IO.File.Exists(test))
+            {
+                return System.IO.File.ReadAllBytes(test);
+            }
+
+            if (string.IsNullOrEmpty(address))
+            {
+                return null;
+            }
+
+            string full;
+
+            if (address.StartsWith("/api/banner?", StringComparison.Ordinal))
+            {
+                full = NextendoEndpoint.BaseUrl().TrimEnd('/') + address;
+            }
+            else if (Uri.TryCreate(address, UriKind.Absolute, out Uri uri) && uri.Scheme == Uri.UriSchemeHttps && _klipyHosts.Contains(uri.Host))
+            {
+                full = uri.AbsoluteUri;
+            }
+            else
+            {
+                return null; // an address of another kind: not followed
+            }
+
+            if (_pictures.TryGetValue(full, out byte[] known))
+            {
+                return known;
+            }
+
+            try
+            {
+                using HttpResponseMessage response = _http.Send(new HttpRequestMessage(HttpMethod.Get, full), HttpCompletionOption.ResponseHeadersRead);
+
+                if (!response.IsSuccessStatusCode || response.Content.Headers.ContentLength > LargestPicture)
+                {
+                    return null;
+                }
+
+                using System.IO.Stream body = response.Content.ReadAsStream();
+                using System.IO.MemoryStream file = new();
+                byte[] part = new byte[81920];
+
+                for (int read; (read = body.Read(part, 0, part.Length)) > 0;)
+                {
+                    if (file.Length + read > LargestPicture)
+                    {
+                        return null;
+                    }
+
+                    file.Write(part, 0, read);
+                }
+
+                if (_pictures.Count >= 24)
+                {
+                    _pictures.Clear();
+                }
+
+                return _pictures[full] = file.ToArray();
+            }
+            catch (Exception e)
+            {
+                Logger.Warning?.Print(LogClass.Application, $"[Nextendo] banner picture not fetched: {e.Message}");
+
+                return null;
+            }
         }
 
         /// <summary>The banner of a profile, one picture or the pictures of an animation with how long each shows.</summary>
-        public static List<(byte[] Pixels, int Milliseconds)> Banner(ulong pid, string colour, IReadOnlyList<string> badges, int width)
+        public static List<(byte[] Pixels, int Milliseconds)> Banner(ulong pid, string colour, IReadOnlyList<string> badges, int width, string address = null, float[] crop = null)
         {
-            byte[] file = Picture(pid);
+            byte[] file = Picture(address);
 
             if (file != null)
             {
@@ -295,7 +370,7 @@ namespace Ryujinx.HLE.HOS
 
                             if (i % step == step - 1 || i == count - 1)
                             {
-                                pictures.Add((Paint(pid, colour, badges, width, frame), waited));
+                                pictures.Add((Paint(pid, colour, badges, width, frame, crop), waited));
                                 waited = 0;
                             }
                         }
@@ -312,14 +387,15 @@ namespace Ryujinx.HLE.HOS
                 }
             }
 
-            return [(Paint(pid, colour, badges, width, null), 0)];
+            return [(Paint(pid, colour, badges, width, null, null), 0)];
         }
 
         /// <summary>
         /// A banner: red, green, blue and opacity of each pixel, the top row first. Made of the
-        /// picture given (it fills the banner, cut at its centre), or made up when there is none.
+        /// picture given (the frame chosen in it fills the banner; without one, its centre does), or
+        /// made up when there is none.
         /// </summary>
-        public static byte[] Paint(ulong pid, string colour, IReadOnlyList<string> badges, int width, SKBitmap background)
+        public static byte[] Paint(ulong pid, string colour, IReadOnlyList<string> badges, int width, SKBitmap background, float[] crop)
         {
             int Width = width;
             const int Height = NextendoFriendPage.BannerHeight;
@@ -341,12 +417,23 @@ namespace Ryujinx.HLE.HOS
 
             if (background != null)
             {
-                float scale = Math.Max((float)Width / background.Width, (float)Height / background.Height);
+                // the frame chosen on the website (the whole picture when there is none, or a wrong one)
+                float fx = 0, fy = 0, fw = 1, fh = 1;
+
+                if (crop is { Length: 4 } && crop[2] > 0.01f && crop[3] > 0.01f && crop[0] >= 0 && crop[1] >= 0 && crop[0] + crop[2] <= 1.001f && crop[1] + crop[3] <= 1.001f)
+                {
+                    (fx, fy, fw, fh) = (crop[0], crop[1], crop[2], crop[3]);
+                }
+
+                // it covers the banner, centred on its own centre, the picture never leaving a gap
+                float scale = Math.Max(Width / (fw * background.Width), Height / (fh * background.Height));
                 float w = background.Width * scale, h = background.Height * scale;
+                float left = Math.Min(0, Math.Max(Width - w, Width / 2f - (fx + fw / 2) * w));
+                float top = Math.Min(0, Math.Max(Height - h, Height / 2f - (fy + fh / 2) * h));
 
                 using SKPaint filling = new() { IsAntialias = true, FilterQuality = SKFilterQuality.High };
 
-                canvas.DrawBitmap(background, SKRect.Create((Width - w) / 2, (Height - h) / 2, w, h), filling);
+                canvas.DrawBitmap(background, SKRect.Create(left, top, w, h), filling);
             }
             else
             {

@@ -50,6 +50,11 @@ namespace Ryujinx.Common.Configuration
             // colour chosen for the profile ("#rrggbb", empty when none).
             public string[] Badges { get; init; }
             public string Color { get; init; }
+            // The banner of the profile: where its picture is (a path of the account server, or
+            // an address at KLIPY for a GIF picked there) and the frame chosen in it (x, y,
+            // width, height, as fractions of the picture). Empty when the profile has none.
+            public string BannerUrl { get; init; }
+            public float[] BannerCrop { get; init; }
             public long RequestedAt { get; init; }
             public bool HasPicture { get; init; }
 
@@ -438,6 +443,39 @@ namespace Ryujinx.Common.Configuration
         }
 
         /// <summary>
+        /// [Nextendo, HOME Menu work] The banner in an account as the server describes it
+        /// ("banner": {"url", "crop": [x, y, width, height]}): its address, or "" when there is none.
+        /// </summary>
+        public static string BannerOf(JsonElement account, out float[] crop)
+        {
+            crop = null;
+
+            if (!account.TryGetProperty("banner", out JsonElement banner) || banner.ValueKind != JsonValueKind.Object ||
+                !banner.TryGetProperty("url", out JsonElement url) || url.ValueKind != JsonValueKind.String ||
+                !banner.TryGetProperty("crop", out JsonElement frame) || frame.ValueKind != JsonValueKind.Array || frame.GetArrayLength() != 4)
+            {
+                return "";
+            }
+
+            float[] values = new float[4];
+            int i = 0;
+
+            foreach (JsonElement value in frame.EnumerateArray())
+            {
+                if (value.ValueKind != JsonValueKind.Number)
+                {
+                    return "";
+                }
+
+                values[i++] = (float)value.GetDouble();
+            }
+
+            crop = values;
+
+            return url.GetString() ?? "";
+        }
+
+        /// <summary>
         /// [Nextendo, HOME Menu work] The page of a friend opens in the HOME Menu (the friend's id):
         /// the emulator paints the banner and the badges of the page.
         /// </summary>
@@ -608,6 +646,8 @@ namespace Ryujinx.Common.Configuration
                                     ? [.. System.Linq.Enumerable.Where(System.Linq.Enumerable.Select(badgesEl.EnumerateArray(), b => b.GetString() ?? ""), b => b.Length > 0)]
                                     : [],
                                 Color = f.TryGetProperty("color", out JsonElement colorEl) && colorEl.ValueKind == JsonValueKind.String ? colorEl.GetString() ?? "" : "",
+                                BannerUrl = BannerOf(f, out float[] bannerCrop),
+                                BannerCrop = bannerCrop,
                             });
                         }
                     }
