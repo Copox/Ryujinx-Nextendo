@@ -197,11 +197,21 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
             return !_commandBufferQueue.IsEmpty || (_event.WaitOne(8) && !_commandBufferQueue.IsEmpty);
         }
 
+        private volatile bool _dispatching;
+
+        /// <summary>
+        /// [Nextendo, HOME Menu work] No command waiting nor being processed: the memory of a
+        /// program that ended can go (its last commands are done).
+        /// </summary>
+        public bool IsIdle => _commandBufferQueue.IsEmpty && !_dispatching;
+
         /// <summary>
         /// Processes commands pushed to the FIFO.
         /// </summary>
         public void DispatchCalls()
         {
+            _dispatching = true;
+
             // Use this opportunity to also dispose any pending channels that were closed.
             _context.RunDeferredActions();
 
@@ -229,6 +239,7 @@ namespace Ryujinx.Graphics.Gpu.Engine.GPFifo
                 entry.Processor.Process(entry.EntryAddress, words);
             }
 
+            _dispatching = false;
             _interrupt = false;
         }
 

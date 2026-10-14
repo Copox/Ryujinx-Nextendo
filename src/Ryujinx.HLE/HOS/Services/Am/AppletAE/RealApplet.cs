@@ -258,6 +258,8 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
 
                     if (application.TerminateRequested)
                     {
+                        // ended as it is, suspended or not (run again, it would start requests
+                        // to services that its end then leaves without memory to read)
                         Terminate(system, process);
 
                         break;
@@ -302,9 +304,16 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
 
             if (application.Pid != 0)
             {
-                // The memory of the game goes back to the pool: the next game needs it.
+                // The memory of the game goes back to the pool: the next game needs it. Once the
+                // graphics processor is done with the commands the game left (a game closed right
+                // after it ran again leaves some, which read its memory).
                 if (system.KernelContext.Processes.TryGetValue(application.Pid, out KProcess ended) && ended.State == ProcessState.Exited)
                 {
+                    for (int waited = 0; waited < 2000 && !device.Gpu.GPFifo.IsIdle; waited += 10)
+                    {
+                        Thread.Sleep(10);
+                    }
+
                     ReleaseMemory(system, ended);
                 }
 
@@ -345,6 +354,8 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
             }
 
             device.System.SurfaceFlinger.SetRenderLayer(application.LayerId);
+
+            Pause(device, application, false);
 
             StateFor(device.System, application.CallerPid).SetFocus(false);
             device.System.AppletState.SetFocus(true);
@@ -413,7 +424,27 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
             device.System.AppletState.SetFocus(false);
             StateFor(device.System, pid).SetFocus(true);
 
+            // As on a console, the game is suspended while the HOME Menu is in front: it no
+            // longer runs, and so no longer reads the controllers (all programs read the same
+            // ones here).
+            Pause(device, application, true);
+
             HomeMenuStatus.Set("");
+        }
+
+        // The game suspended (pause) or running again.
+        private static void Pause(Switch device, RunningApplication application, bool pause)
+        {
+            if (application == null || application.Pid == 0 || !device.System.KernelContext.Processes.TryGetValue(application.Pid, out KProcess process) ||
+                process.State is ProcessState.Exiting or ProcessState.Exited || process.IsPaused == pause)
+            {
+                return;
+            }
+
+            if (process.SetActivity(pause) == Ryujinx.Horizon.Common.Result.Success)
+            {
+                Logger.Info?.Print(LogClass.ServiceAm, $"HOME Menu: {application.Title.Name} {(pause ? "suspended" : "running again")}");
+            }
         }
 
         public static bool IsSystemAppletProgram(ulong programId)
