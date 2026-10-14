@@ -311,12 +311,39 @@ namespace Ryujinx.HLE.HOS
                 }
             }
 
+            // NEXTENDO_CONSOLE_IMPORT=<folder>: the files made for a console (see NEXTENDO_CONSOLE_EXPORT)
+            // are loaded as they are, in place of the system's: what a console would show with them.
+            string consoleFile = Environment.GetEnvironmentVariable("NEXTENDO_CONSOLE_IMPORT") is { Length: > 0 } import
+                ? System.IO.Path.Combine(import, "atmosphere", "contents", programId.ToString("X16"), "romfs", NextendoFriendPage.Archive.TrimStart('/'))
+                : null;
+
+            if (consoleFile != null && File.Exists(consoleFile))
+            {
+                changed[NextendoFriendPage.Archive] = File.ReadAllBytes(consoleFile);
+                Logger.Notice.Print(LogClass.ModLoader, $"[Nextendo] console file loaded as it is: {consoleFile}");
+            }
+            else
             // [Nextendo, HOME Menu work] The page of a friend: a banner and the friend's badges.
             if (programId == 0x0100000000001013 && !Vanilla && Exists(baseRom, NextendoFriendPage.Archive))
             {
                 try
                 {
-                    byte[] page = NextendoFriendPage.Patch(NextendoFriendProfile.PaintOwn(), Yaz0Decode(changed.TryGetValue(NextendoFriendPage.Archive, out byte[] themedPage) ? themedPage : Read(baseRom, NextendoFriendPage.Archive)));
+                    byte[] ownBanner = NextendoFriendProfile.PaintOwn();
+                    byte[] original = Yaz0Decode(changed.TryGetValue(NextendoFriendPage.Archive, out byte[] themedPage) ? themedPage : Read(baseRom, NextendoFriendPage.Archive));
+                    byte[] page = NextendoFriendPage.Patch(ownBanner, original);
+
+                    // NEXTENDO_CONSOLE_EXPORT=<folder>: the files a console takes in place of its own
+                    // (atmosphere/contents/<program>/romfs/...), written there. Without the banner
+                    // of a friend's page: nothing paints it on a console yet.
+                    if (Environment.GetEnvironmentVariable("NEXTENDO_CONSOLE_EXPORT") is { Length: > 0 } export &&
+                        NextendoFriendPage.Patch(ownBanner, original, friendBanner: false) is { } forConsole)
+                    {
+                        string target = System.IO.Path.Combine(export, "atmosphere", "contents", programId.ToString("X16"), "romfs", NextendoFriendPage.Archive.TrimStart('/'));
+
+                        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(target));
+                        File.WriteAllBytes(target, Yaz0Encode(forConsole));
+                        Logger.Notice.Print(LogClass.ModLoader, $"[Nextendo] console export: {target}");
+                    }
 
                     if (page != null)
                     {

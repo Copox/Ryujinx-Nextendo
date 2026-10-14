@@ -74,7 +74,11 @@ namespace Ryujinx.HLE.HOS
 
         /// <summary>The layout archive of the applet (not compressed) with the banner and the round corners, or null.</summary>
         /// <param name="ownBanner">The banner of the own profile of the user (OwnBannerWidth x BannerHeight, four bytes a pixel), or null.</param>
-        public static byte[] Patch(byte[] ownBanner, byte[] archive)
+        /// <param name="friendBanner">
+        /// False leaves the page of a friend without its banner (and the room made for it): on a
+        /// console nothing paints that banner yet, the room would stay empty.
+        /// </param>
+        public static byte[] Patch(byte[] ownBanner, byte[] archive, bool friendBanner = true)
         {
             List<(string Name, byte[] Data)> files = ReadArchive(archive, out uint multiplier);
             byte[] page = files.Find(f => f.Name == Layout).Data;
@@ -84,7 +88,11 @@ namespace Ryujinx.HLE.HOS
             {
                 string name = files[i].Name;
 
-                if (name == Layout && PatchPage(files[i].Data) is { } layout)
+                if (name == Layout && !friendBanner)
+                {
+                    layoutDone = true;
+                }
+                else if (name == Layout && PatchPage(files[i].Data) is { } layout)
                 {
                     files[i] = (name, layout);
                     layoutDone = true;
@@ -101,7 +109,7 @@ namespace Ryujinx.HLE.HOS
                 {
                     files[i] = (name, own);
                 }
-                else if (name == Textures && PatchTextures(files[i].Data, ownBanner) is { } textures)
+                else if (name == Textures && PatchTextures(files[i].Data, ownBanner, friendBanner) is { } textures)
                 {
                     files[i] = (name, textures);
                     texturesDone = true;
@@ -683,7 +691,7 @@ namespace Ryujinx.HLE.HOS
 
         // ------------------------------------------------------------------ the textures (BNTX)
 
-        private static byte[] PatchTextures(byte[] bntx, byte[] ownBanner)
+        private static byte[] PatchTextures(byte[] bntx, byte[] ownBanner, bool friendBanner)
         {
             // the corners of the profile pictures: white, opaque inside a rounded square
             byte[] mask = new byte[MaskSize * MaskSize];
@@ -717,11 +725,19 @@ namespace Ryujinx.HLE.HOS
             }
 
             // red in the opacity of a white texture, as the applet's own masks; the banner's colours as they are
-            return AddData(bntx, [
+            List<(string, int, int, uint, uint, int, byte[])> added =
+            [
                 (MaskTexture, MaskSize, MaskSize, 0x0201u, 0x02010101u, BlockHeightLog2, maskData),
-                (BannerTexture, BannerWidth, BannerHeight, 0x0B01u, 0x05040302u, BlockHeightLog2, bannerData),
                 (OwnBannerTexture, OwnBannerWidth, BannerHeight, 0x0B01u, 0x05040302u, BlockHeightLog2, ownData),
-            ]);
+            ];
+
+            // the banner of a friend's page: only where something paints it (a megabyte of the applet's memory)
+            if (friendBanner)
+            {
+                added.Add((BannerTexture, BannerWidth, BannerHeight, 0x0B01u, 0x05040302u, BlockHeightLog2, bannerData));
+            }
+
+            return AddData(bntx, [.. added]);
         }
 
         // Textures of the archive become others, their pixels in room added at the end of the archive.
