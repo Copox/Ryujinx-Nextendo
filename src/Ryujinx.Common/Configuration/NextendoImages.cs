@@ -13,6 +13,12 @@ namespace Ryujinx.Common.Configuration
         public static Func<byte[], int, byte[]> SquareJpeg { get; set; }
 
         /// <summary>
+        /// [Nextendo] A profile picture (JPEG) with a Discord avatar decoration (PNG) over it, as a
+        /// JPEG of the same size, or null. Set by the layer that draws pictures (HLE).
+        /// </summary>
+        public static Func<byte[], byte[], byte[]> Decorate { get; set; }
+
+        /// <summary>
         /// The picture of a player who never chose one: the default avatar of the account
         /// server (head and shoulders on a diagonal gradient), tinted from the PID exactly as
         /// the Nextendo apps and the site do. Takes (pid, side), returns a JPEG.

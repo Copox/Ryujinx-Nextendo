@@ -43,6 +43,7 @@ namespace Ryujinx.HLE.HOS
         public static void Attach(Switch device)
         {
             _device = device;
+            NextendoImages.Decorate ??= Decorate;
 
             if (!_listening)
             {
@@ -203,6 +204,58 @@ namespace Ryujinx.HLE.HOS
 
                 return null;
             }
+        }
+
+        /// <summary>
+        /// A profile picture with a Discord avatar decoration, as Discord draws it: the picture in a
+        /// circle, the decoration 20 % larger around it. The corners, outside the circle, take the
+        /// picture itself, blurred and darker (the HOME Menu shows square pictures).
+        /// </summary>
+        public static byte[] Decorate(byte[] jpeg, byte[] decoration)
+        {
+            using SKBitmap photo = SKBitmap.Decode(jpeg);
+            using SKBitmap ring = SKBitmap.Decode(decoration);
+
+            if (photo == null || ring == null)
+            {
+                return null;
+            }
+
+            int side = Math.Max(photo.Width, photo.Height);
+            float inner = side / 1.2f;
+            SKRect circle = SKRect.Create((side - inner) / 2, (side - inner) / 2, inner, inner);
+
+            using SKBitmap picture = new(new SKImageInfo(side, side, SKColorType.Rgba8888, SKAlphaType.Premul));
+            using SKCanvas canvas = new(picture);
+            using SKPaint smooth = new() { IsAntialias = true, FilterQuality = SKFilterQuality.High };
+
+            using (SKPaint backdrop = new()
+            {
+                ImageFilter = SKImageFilter.CreateBlur(side / 18f, side / 18f),
+                ColorFilter = SKColorFilter.CreateBlendMode(new SKColor(0, 0, 0, 110), SKBlendMode.SrcOver),
+                FilterQuality = SKFilterQuality.Medium,
+            })
+            {
+                canvas.DrawBitmap(photo, SKRect.Create(-side / 10f, -side / 10f, side * 1.2f, side * 1.2f), backdrop);
+            }
+
+            canvas.Save();
+
+            using (SKPath round = new())
+            {
+                round.AddOval(circle);
+                canvas.ClipPath(round, antialias: true);
+            }
+
+            canvas.DrawBitmap(photo, circle, smooth);
+            canvas.Restore();
+            canvas.DrawBitmap(ring, SKRect.Create(0, 0, side, side), smooth);
+            canvas.Flush();
+
+            using SKImage image = SKImage.FromBitmap(picture);
+            using SKData data = image.Encode(SKEncodedImageFormat.Jpeg, 92);
+
+            return data?.ToArray();
         }
 
         // The icon of a badge on the website.

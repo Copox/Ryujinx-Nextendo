@@ -54,6 +54,9 @@ namespace Ryujinx.Common.Configuration
             // an address at KLIPY for a GIF picked there) and the frame chosen in it (x, y,
             // width, height, as fractions of the picture). Empty when the profile has none.
             public string BannerUrl { get; init; }
+            // The Discord avatar decoration of a staff member or a donor (address of its picture
+            // at Discord), or "": drawn over the friend's picture in the HOME Menu.
+            public string Decoration { get; init; }
             public float[] BannerCrop { get; init; }
             public long RequestedAt { get; init; }
             public bool HasPicture { get; init; }
@@ -320,6 +323,8 @@ namespace Ryujinx.Common.Configuration
                         // No picture chosen: the default avatar, in this player's tint.
                         data = NextendoImages.Default(pid, 256) ?? data;
                     }
+
+                    data = Decorated(pid, data);
                 }
                 catch
                 {
@@ -334,6 +339,53 @@ namespace Ryujinx.Common.Configuration
             });
 
             return null;
+        }
+
+        // [Nextendo] The friend's Discord avatar decoration over their picture, when they have one
+        // (staff and donors: the server only gives it to them). The still picture of the decoration.
+        private static byte[] Decorated(ulong pid, byte[] picture)
+        {
+            if (picture == null || picture.Length == 0 || NextendoImages.Decorate == null)
+            {
+                return picture;
+            }
+
+            string address = "";
+
+            foreach (Entry friend in Get())
+            {
+                if (friend.Pid == pid)
+                {
+                    address = friend.Decoration ?? "";
+                    break;
+                }
+            }
+
+            if (!Uri.TryCreate(address, UriKind.Absolute, out Uri uri) || uri.Scheme != Uri.UriSchemeHttps || uri.Host != "cdn.discordapp.com" ||
+                !uri.AbsolutePath.StartsWith("/avatar-decoration-presets/", StringComparison.Ordinal))
+            {
+                return picture;
+            }
+
+            try
+            {
+                string still = uri.AbsoluteUri.Replace("passthrough=true", "passthrough=false");
+                using HttpRequestMessage req = new(HttpMethod.Get, still);
+                using HttpResponseMessage resp = _http.SendAsync(req).GetAwaiter().GetResult();
+
+                if (!resp.IsSuccessStatusCode)
+                {
+                    return picture;
+                }
+
+                byte[] decoration = resp.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult();
+
+                return NextendoImages.Decorate(picture, decoration) ?? picture;
+            }
+            catch (Exception)
+            {
+                return picture; // the picture without its decoration
+            }
         }
 
         /// <summary>Photo de profil avec attente BORNEE — meme raison que GetWarm.</summary>
@@ -647,6 +699,7 @@ namespace Ryujinx.Common.Configuration
                                     : [],
                                 Color = f.TryGetProperty("color", out JsonElement colorEl) && colorEl.ValueKind == JsonValueKind.String ? colorEl.GetString() ?? "" : "",
                                 BannerUrl = BannerOf(f, out float[] bannerCrop),
+                                Decoration = f.TryGetProperty("avatar_decoration", out JsonElement decorationEl) && decorationEl.ValueKind == JsonValueKind.String ? decorationEl.GetString() ?? "" : "",
                                 BannerCrop = bannerCrop,
                             });
                         }
