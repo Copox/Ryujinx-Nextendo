@@ -483,7 +483,11 @@ namespace Ryujinx.HLE.HOS.Services
                     request,
                     response,
                     _requestDataReader,
-                    _responseDataWriter);
+                    _responseDataWriter)
+                {
+                    OutputPointerBufferAddress = recvListAddr,
+                    OutputPointerBufferSize = PointerBufferSize,
+                };
 
                 GetSessionObj(serverSessionHandle).CallCmifMethod(context);
 

@@ -37,10 +37,49 @@ namespace Ryujinx.Ava.UI.ViewModels
 
         private Func<CompatibilityEntry, object> _sortKeySelector = x => x.GameName; // Default sort by GameName
 
-        public IEnumerable<CompatibilityEntry> CurrentEntries => OnlyShowOwnedGames
-            ? _currentEntries.Where(x =>
-                x.TitleId.Check(tid => _ownedGameTitleIds.ContainsIgnoreCase(tid)))
-            : _currentEntries;
+        public IEnumerable<CompatibilityEntry> CurrentEntries
+        {
+            get
+            {
+                IEnumerable<CompatibilityEntry> entries = _currentEntries;
+                if (OnlyShowNextendoGames)
+                    entries = entries.Where(x => x.IsNextendo);
+                if (OnlyShowOwnedGames)
+                    entries = entries.Where(x => x.TitleId.Check(tid => _ownedGameTitleIds.ContainsIgnoreCase(tid)));
+                return entries;
+            }
+        }
+
+        private bool _onlyShowNextendoGames;
+
+        // [Nextendo] Only the games playable online on Nextendo Network. Turning it on shows the
+        // whole list of them, owned or not: that is what the button is for.
+        public bool OnlyShowNextendoGames
+        {
+            get => _onlyShowNextendoGames;
+            set
+            {
+                _onlyShowNextendoGames = value;
+                if (value && _onlyShowOwnedGames)
+                {
+                    _onlyShowOwnedGames = false;
+                    OnPropertyChanged(nameof(OnlyShowOwnedGames));
+                }
+                OnPropertyChanged();
+                OnPropertyChanged(nameof(CurrentEntries));
+            }
+        }
+
+        private static void LoadNextendoCatalogTitles()
+        {
+            Dictionary<string, string> versions = new(StringComparer.OrdinalIgnoreCase);
+            foreach (KeyValuePair<string, Ryujinx.Ava.Common.ServiceListing> listing in Ryujinx.Ava.Common.NextendoServiceCatalog.SnapshotListings())
+            {
+                if (listing.Value?.Enabled == true)
+                    versions[listing.Key] = listing.Value.Version ?? string.Empty;
+            }
+            CompatibilityEntry.NextendoCatalogVersions = versions;
+        }
 
         public CompatibilityViewModel() {}
 
@@ -50,6 +89,7 @@ namespace Ryujinx.Ava.UI.ViewModels
         public CompatibilityViewModel(ApplicationLibrary appLibrary)
         {
             _appLibrary = appLibrary;
+            LoadNextendoCatalogTitles();
             AppCountUpdated(null, null);
             CountByStatus();
             _appLibrary.ApplicationCountUpdated += AppCountUpdated;

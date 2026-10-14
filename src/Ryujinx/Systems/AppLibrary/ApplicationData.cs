@@ -363,7 +363,10 @@ namespace Ryujinx.Ava.Systems.AppLibrary
         // The single game version Nextendo Network currently supports for this title.
         // A different version can't reach the Nextendo servers (different NEX access key).
         [JsonIgnore]
-        public string NextendoCompatibleVersion => IdBaseString switch
+        public string NextendoCompatibleVersion => NextendoVersionFor(IdBaseString);
+
+        // Same table, reachable without an ApplicationData (the compatibility list uses it).
+        public static string NextendoVersionFor(string idBase) => idBase switch
         {
             // [Nextendo 2026-09-07] 4.0.0, publiee le 1er septembre avec le support Switch 2.
             // Version MAJEURE, donc on ne l'a pas montee a l'aveugle : verifiee par une COURSE
@@ -502,13 +505,15 @@ namespace Ryujinx.Ava.Systems.AppLibrary
                 || !Ryujinx.Common.ReleaseInformation.IsValid);
 
         // Splatoon 2 uses schedule byaml; Scarlet and Violet use event BCAT and Legends: Z-A
-        // uses it for Nextendo's Mystery Gifts.
+        // uses it for Nextendo's Mystery Gifts. Switch Sports refuses online without its
+        // Root00 data tables.
         // Only these titles should show the BCAT download action.
         [JsonIgnore]
         public bool RequiresNextendoByaml => IdBaseString switch
         {
             "0100f8f0000a2000" or "01003bc0000a0000" or "01003c700009c800" or
-            "0100c2500fc20000" or "01008f6008c5e000" or "0100a3d008c5c000" or "0100f43008c44000" => true,
+            "0100c2500fc20000" or "01008f6008c5e000" or "0100a3d008c5c000" or "0100f43008c44000" or
+            "0100d2f00d5c0000" => true,
             _ => false,
         };
 

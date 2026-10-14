@@ -16,6 +16,10 @@ namespace Ryujinx.HLE.HOS
         public IpcMessage Response { get; }
         public BinaryReader RequestData { get; }
         public BinaryWriter ResponseData { get; }
+        // Server-owned scratch space for fixed-size output pointer buffers.
+        public ulong OutputPointerBufferAddress { get; init; }
+        public ulong OutputPointerBufferSize { get; init; }
+
         public ulong ClientProcessId => Request.HandleDesc is { HasPId: true } ? Request.HandleDesc.PId : Process.Pid;
 
         // [Nextendo] deferred Bsd Poll (single-thread eventfd deadlock fix)

@@ -37,6 +37,17 @@ namespace Ryujinx.Ava.Common
             _releases = new(Path.Combine(dir, "releases.cache.json"), "client_releases", _baseUrl + "/client-releases", p => ServiceCatalogParser.ParseReleases(p), now);
             _timer = new Timer(_ => _ = RefreshAsync(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5));
         }
+        // Titles of the verified catalog right now (empty when there is no valid copy).
+        public static Dictionary<string, ServiceListing> SnapshotListings()
+        {
+            try
+            {
+                if (_catalog != null && _catalog.IsValid(DateTimeOffset.UtcNow))
+                    return ServiceCatalogParser.ParseCatalog(_catalog.Document.Payload);
+            }
+            catch { /* An unreadable catalog lists nothing. */ }
+            return new(StringComparer.OrdinalIgnoreCase);
+        }
         // A manual action may call this; repeated clicks are coalesced and limited.
         public static Task RefreshNowAsync() => RefreshAsync(true);
         // Launch consumes a verified snapshot. Normal launches do not bypass next_check.

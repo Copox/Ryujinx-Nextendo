@@ -38,9 +38,11 @@ namespace Ryujinx.Ava.Common
         private const string VioletTitleId = "01008f6008c5e000";
         private const string ScarletTitleId = "0100a3d008c5c000";
         private const string LegendsZaTitleId = "0100f43008c44000";
+        private const string SwitchSportsTitleId = "0100d2f00d5c0000";
         private static string SeedRoot => Path.Combine(AppDataManager.BaseDirPath, "bcat-seed");
+        // Titles whose BCAT is a plain package installed into its own seed folder.
         private static bool IsPokemon(ApplicationData app) => app?.IdBaseString is
-            VioletTitleId or ScarletTitleId or LegendsZaTitleId;
+            VioletTitleId or ScarletTitleId or LegendsZaTitleId or SwitchSportsTitleId;
         private static string PokemonSeedRoot(ApplicationData app) => Path.Combine(SeedRoot, app.IdBaseString);
 
         // [Nextendo] Legacy next-to-exe seed location REMOVED: it let a stale copy shadow the live
