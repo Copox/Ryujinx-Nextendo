@@ -309,12 +309,34 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
                 // after it ran again leaves some, which read its memory).
                 if (system.KernelContext.Processes.TryGetValue(application.Pid, out KProcess ended) && ended.State == ProcessState.Exited)
                 {
+                    int renderers = Ryujinx.Audio.Renderer.Server.AudioRendererManager.DisposeAllFor(ended.CpuMemory);
+
+                    if (renderers > 0)
+                    {
+                        Logger.Info?.Print(LogClass.ServiceAm, $"HOME Menu: {renderers} audio renderer(s) of {application.Title.Name} ended");
+                    }
+
                     for (int waited = 0; waited < 2000 && !device.Gpu.GPFifo.IsIdle; waited += 10)
                     {
                         Thread.Sleep(10);
                     }
 
                     ReleaseMemory(system, ended);
+                }
+
+                // Its place in arp (the properties of the running applications: two places, the
+                // HOME Menu takes one) is free again. Kept, the next game found no place, was
+                // not known there, and what asks arp for it failed (Splatoon 3's BCAT data).
+                try
+                {
+                    if (system.ServiceTable.ArpReader.GetApplicationInstanceId(out ulong instance, application.Pid).IsSuccess)
+                    {
+                        system.ServiceTable.ArpWriter.UnregisterApplicationInstance(instance);
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.Warning?.Print(LogClass.ServiceAm, $"HOME Menu: arp place of {application.Title.Name} not freed ({e.Message})");
                 }
 
                 device.Processes.ClearProcess(application.Pid);

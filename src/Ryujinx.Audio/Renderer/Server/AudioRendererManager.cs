@@ -80,8 +80,57 @@ namespace Ryujinx.Audio.Renderer.Server
         /// Create a new <see cref="AudioRendererManager"/>.
         /// </summary>
         /// <param name="tickSource">Tick source used to measure elapsed time.</param>
+        // [Nextendo, HOME Menu work] Every manager, to end the renderers of a program that ended.
+        private static readonly System.Collections.Generic.List<AudioRendererManager> _managers = [];
+
+        /// <summary>
+        /// [Nextendo, HOME Menu work] Ends the renderers of a program that ended (by its memory):
+        /// a game closed from the HOME Menu left its renderer running, which kept reading the
+        /// buffers it had borrowed from the game, so that memory never went back to the pool.
+        /// </summary>
+        public static int DisposeAllFor(IVirtualMemoryManager memoryManager)
+        {
+            System.Collections.Generic.List<AudioRenderSystem> ended = [];
+
+            lock (_managers)
+            {
+                foreach (AudioRendererManager manager in _managers)
+                {
+                    lock (manager._sessionLock)
+                    {
+                        foreach (AudioRenderSystem session in manager._sessions)
+                        {
+                            if (session != null && session.MemoryManager == memoryManager)
+                            {
+                                ended.Add(session);
+                            }
+                        }
+                    }
+                }
+            }
+
+            foreach (AudioRenderSystem session in ended)
+            {
+                try
+                {
+                    session.Dispose();
+                }
+                catch (Exception e)
+                {
+                    Logger.Warning?.Print(LogClass.AudioRenderer, $"[Nextendo] renderer of an ended program not disposed: {e.Message}");
+                }
+            }
+
+            return ended.Count;
+        }
+
         public AudioRendererManager(ITickSource tickSource)
         {
+            lock (_managers)
+            {
+                _managers.Add(this);
+            }
+
             Processor = new AudioProcessor();
             TickSource = tickSource;
             _sessionIds = new int[Constants.AudioRendererSessionCountMax];

@@ -1008,8 +1008,14 @@ namespace Ryujinx.HLE.HOS.Kernel.Memory
                     ulong blockAddress = info.Address;
                     ulong blockSize = info.Size;
 
+                    // Also what the graphics processor still had mapped (a game's heap always has
+                    // some): the process is over and its commands are done. Kept, a game started
+                    // again found its heap short of that much (SetHeapSize OutOfMemory, then a crash).
+                    // What services borrowed too (transfer memory: closed later, they give nothing back
+                    // from a program that ended, see KTransferMemory). Not what an IPC request in
+                    // flight holds.
                     if (info.State is MemoryState.Heap or MemoryState.CodeStatic or MemoryState.CodeMutable or MemoryState.Stack &&
-                        info.IpcRefCount == 0 && info.DeviceRefCount == 0 && info.Attribute == MemoryAttribute.None)
+                        info.IpcRefCount == 0 && (info.Attribute & MemoryAttribute.IpcMapped) == 0)
                     {
                         owned.Add((blockAddress, blockSize));
                     }

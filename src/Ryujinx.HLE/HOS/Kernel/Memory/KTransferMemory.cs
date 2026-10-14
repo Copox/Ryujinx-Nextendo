@@ -117,7 +117,11 @@ namespace Ryujinx.HLE.HOS.Kernel.Memory
         {
             if (_hasBeenInitialized)
             {
-                if (!_isMapped && _creator.MemoryManager.UnborrowTransferMemory(Address, Size, _pageList) != Result.Success)
+                // [Nextendo, HOME Menu work] A program that ended (a game closed from the HOME Menu)
+                // gets its memory back whole, borrowed parts included: a service that closes its
+                // handle later has nothing to give back.
+                if (!_isMapped && _creator.State is not (Process.ProcessState.Exiting or Process.ProcessState.Exited) &&
+                    _creator.MemoryManager.UnborrowTransferMemory(Address, Size, _pageList) != Result.Success)
                 {
                     throw new InvalidOperationException("Unexpected failure restoring transfer memory attributes.");
                 }
