@@ -195,6 +195,21 @@ namespace Ryujinx.HLE.HOS
         // Overcooked! 2 v1.0.19, certificate and peer hostname patches.
         private static readonly byte[] _overcooked2 = [0x49, 0x50, 0x53, 0x33, 0x32, 0x00, 0x62, 0xF9, 0x70, 0x00, 0x04, 0x2A, 0x00, 0x80, 0x52, 0x00, 0x71, 0xA7, 0x10, 0x00, 0x04, 0x1F, 0x20, 0x03, 0xD5, 0x00, 0x71, 0xA2, 0xE0, 0x00, 0x04, 0xF4, 0x03, 0x1F, 0x2A, 0x45, 0x45, 0x4F, 0x46];
 
+        // [Nextendo, HOME Menu themes] The HOME Menu 22.5.0 (qlaunch, build 26CC3BC5...): room for
+        // the layouts of a custom theme, as NXThemes Installer gives it (the same four bytes it
+        // writes to atmosphere/exefs_patches). Without it, a theme that brings its own home layout
+        // ends the HOME Menu as it starts (a null pointer, found on players who never ran NXThemes
+        // Installer). Flat 0x4F90F4 -> MOV W9,#0x200000; IPS includes the NSO header.
+        private const string HomeMenu2250 = "26CC3BC5AC534AE990B410769736EE81B919C999";
+
+        private static readonly byte[] _homeMenuThemeLayouts =
+        [
+            0x49, 0x50, 0x53, 0x33, 0x32,
+            0x00, 0x4F, 0x91, 0xF4, 0x00, 0x04,
+            0x09, 0x04, 0xA0, 0x52,
+            0x45, 0x45, 0x4F, 0x46,
+        ];
+
         private static readonly Dictionary<string, byte[][]> _parIdentifiantDeBuild = new()
         {
             ["6830B3A12406CB4716FEC5ADDC35D3E2DC92D212"] = [_contournementCertificat, _nomDePair],
@@ -230,6 +245,23 @@ namespace Ryujinx.HLE.HOS
         /// </summary>
         public static int Verser(string identifiantDeBuild, MemPatch cible)
         {
+            if (identifiantDeBuild == HomeMenu2250)
+            {
+                if (Themes.NextendoThemes.Chosen == null)
+                {
+                    return 0;
+                }
+
+                using MemoryStream themeFlux = new(_homeMenuThemeLayouts);
+                using BinaryReader themeLecteur = new(themeFlux);
+
+                new IpsPatcher(themeLecteur).AddPatches(cible);
+
+                Logger.Info?.Print(LogClass.ModLoader, "[theme] HOME Menu: room for the layouts of the theme chosen");
+
+                return 1;
+            }
+
             if (string.IsNullOrEmpty(identifiantDeBuild) ||
                 !_parIdentifiantDeBuild.TryGetValue(identifiantDeBuild, out byte[][] correctifs))
             {
