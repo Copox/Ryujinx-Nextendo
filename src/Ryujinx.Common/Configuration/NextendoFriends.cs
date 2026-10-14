@@ -198,10 +198,6 @@ namespace Ryujinx.Common.Configuration
         private static long _lastFetchMs;
         private static int _refreshing;
 
-        // Development aid: a file shaped like the answer of /api/friends, read in place of the
-        // server. Lets a screen that lists friends be checked without an account.
-        private static readonly string _fixture = Environment.GetEnvironmentVariable("NEXTENDO_FRIENDS_FIXTURE");
-
         /// <summary>
         /// [Nextendo] Liste d'amis GARANTIE chaude, avec attente BORNEE.
         ///
@@ -242,7 +238,7 @@ namespace Ryujinx.Common.Configuration
             // communication" (connection killed). Return the cached list IMMEDIATELY and refresh
             // in the BACKGROUND when stale. The list populates within ~1s and the game polls
             // repeatedly, so it fills in without ever blocking.
-            if ((NextendoAccount.IsLinked || !string.IsNullOrEmpty(_fixture))
+            if (NextendoAccount.IsLinked
                 && (_lastFetchMs == 0 || Environment.TickCount64 - _lastFetchMs > 10_000)
                 && System.Threading.Interlocked.Exchange(ref _refreshing, 1) == 0)
             {
@@ -584,7 +580,7 @@ namespace Ryujinx.Common.Configuration
                 OwnHistory();
                 NextendoAccountLink.Prepare();
 
-                if (string.IsNullOrEmpty(NextendoAccount.NexToken) && string.IsNullOrEmpty(_fixture))
+                if (string.IsNullOrEmpty(NextendoAccount.NexToken))
                 {
                     return;
                 }
@@ -593,19 +589,10 @@ namespace Ryujinx.Common.Configuration
                 // jeton du compte pose juste en dessous.
                 string baseUrl = NextendoEndpoint.BaseUrl();
 
-                string json;
-
-                if (!string.IsNullOrEmpty(_fixture))
-                {
-                    json = System.IO.File.ReadAllText(_fixture);
-                }
-                else
-                {
-                    using HttpRequestMessage req = new(HttpMethod.Get, baseUrl.TrimEnd('/') + "/api/friends");
-                    req.Headers.Add("Authorization", "Bearer " + NextendoAccount.NexToken);
-                    using HttpResponseMessage resp = _http.SendAsync(req).GetAwaiter().GetResult();
-                    json = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
-                }
+                using HttpRequestMessage req = new(HttpMethod.Get, baseUrl.TrimEnd('/') + "/api/friends");
+                req.Headers.Add("Authorization", "Bearer " + NextendoAccount.NexToken);
+                using HttpResponseMessage resp = _http.SendAsync(req).GetAwaiter().GetResult();
+                string json = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
 
                 List<Entry> list = new();
                 using JsonDocument doc = JsonDocument.Parse(json);

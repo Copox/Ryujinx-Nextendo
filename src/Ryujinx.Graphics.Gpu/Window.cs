@@ -14,8 +14,6 @@ namespace Ryujinx.Graphics.Gpu
     /// </summary>
     public class Window
     {
-        private int _presentLogged;
-
         private readonly GpuContext _context;
 
         /// <summary>
@@ -351,11 +349,6 @@ namespace Ryujinx.Graphics.Gpu
                 pt.Cache.Tick();
 
                 texture.SynchronizeMemory();
-
-                if (System.Environment.GetEnvironmentVariable("NEXTENDO_PRESENT_SCALE") == "1" && _presentLogged++ % 300 == 0)
-                {
-                    Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.Gpu, $"[present] {pt.Info.Width}x{pt.Info.Height} scale={texture.ScaleFactor} mode={texture.ScaleMode}");
-                }
 
                 ImageCrop crop = new(
                     (int)(pt.Crop.Left * texture.ScaleFactor),

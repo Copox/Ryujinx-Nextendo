@@ -66,7 +66,7 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
             // [Nextendo, HOME Menu work] The Nintendo Account the user page shows in its header
             // ("Nintendo Account (e-mail)").
             Ryujinx.Common.Logging.Logger.Info?.Print(Ryujinx.Common.Logging.LogClass.ServiceAcc,
-                $"[acc] 136 raw={(context.Request.RawMessage == null ? "" : System.Convert.ToHexString(context.Request.RawMessage))} recv {context.Request.ReceiveBuff.Count} ({(context.Request.ReceiveBuff.Count > 0 ? context.Request.ReceiveBuff[0].Size : 0):X}), recvlist {context.Request.RecvListBuff.Count} ({(context.Request.RecvListBuff.Count > 0 ? context.Request.RecvListBuff[0].Size : 0):X}), in {context.RequestData.BaseStream.Length} bytes");
+                $"[acc] 136 recv {context.Request.ReceiveBuff.Count} ({(context.Request.ReceiveBuff.Count > 0 ? context.Request.ReceiveBuff[0].Size : 0):X}), recvlist {context.Request.RecvListBuff.Count} ({(context.Request.RecvListBuff.Count > 0 ? context.Request.RecvListBuff[0].Size : 0):X}), in {context.RequestData.BaseStream.Length} bytes");
 
             if (context.Request.ReceiveBuff.Count == 0)
             {
@@ -75,14 +75,6 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
 
             ulong position = context.Request.ReceiveBuff[0].Position;
             byte[] cache = new byte[System.Math.Min(0x800UL, context.Request.ReceiveBuff[0].Size)];
-
-            if (System.Environment.GetEnvironmentVariable("NEXTENDO_NA_PROBE") == "1")
-            {
-                for (int at = 0; at + 0x10 <= cache.Length; at += 0x10)
-                {
-                    System.Text.Encoding.ASCII.GetBytes($"o{at:X3}@x.fr").CopyTo(cache, at);
-                }
-            }
 
             context.Memory.Write(position, cache);
 
@@ -171,12 +163,6 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
 
         private bool IsNextendoUser()
         {
-            // NEXTENDO_TEST_LINKED=<user id>: that user is taken as linked (tests without a session).
-            if (System.Environment.GetEnvironmentVariable("NEXTENDO_TEST_LINKED") is { Length: > 0 } test &&
-                string.Equals(_userId.ToString(), test, System.StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
 
             return Ryujinx.Common.Configuration.NextendoAccount.IsLinked &&
                 string.Equals(_userId.ToString(), Ryujinx.Common.Configuration.NextendoAccount.ProfileUserId, System.StringComparison.OrdinalIgnoreCase);

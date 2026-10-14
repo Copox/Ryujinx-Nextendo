@@ -495,12 +495,6 @@ namespace Ryujinx.HLE.HOS.Themes
                 }
             }
 
-            // NEXTENDO_THEME_PARTS=home,lock: only those parts (tests).
-            if (Environment.GetEnvironmentVariable("NEXTENDO_THEME_PARTS") is { Length: > 0 } only)
-            {
-                parts = parts.Where(p => only.Split(',').Contains(p.Target)).ToList();
-            }
-
             // The pages left out in the themes page.
             parts = parts.Where(p => !excluded.Contains(p.Target)).ToList();
 
@@ -544,9 +538,8 @@ namespace Ryujinx.HLE.HOS.Themes
             {
                 try
                 {
-                    string skip = Environment.GetEnvironmentVariable("NEXTENDO_THEME_SKIP") ?? "";
 
-                    if (theme.Wallpaper != null && !skip.Contains("wallpaper"))
+                    if (theme.Wallpaper != null)
                     {
                         ApplyWallpaper(archive, part, theme.Wallpaper);
                     }
@@ -562,13 +555,13 @@ namespace Ryujinx.HLE.HOS.Themes
                     }
 
                     // A HOME Menu layout made before 20.0 places the applet buttons of its time.
-                    if (theme.Target == "home" && theme.Layout != null && (theme.Layout.TargetFirmware ?? 1100) < 2000 && !skip.Contains("fix"))
+                    if (theme.Target == "home" && theme.Layout != null && (theme.Layout.TargetFirmware ?? 1100) < 2000)
                     {
                         ApplyLayout(archive, new LayoutPatch { Files = [LegacyAppletRow()] });
                     }
 
                     // A theme drawn without the online button (the default of older themes) hides it.
-                    if (theme.Target == "home" && theme.Layout != null && (theme.Layout.HideOnlineBtn ?? true) && !skip.Contains("fix"))
+                    if (theme.Target == "home" && theme.Layout != null && (theme.Layout.HideOnlineBtn ?? true))
                     {
                         ApplyLayout(archive, new LayoutPatch
                         {
@@ -576,14 +569,14 @@ namespace Ryujinx.HLE.HOS.Themes
                         });
                     }
 
-                    if (theme.Layout != null && !skip.Contains("layout"))
+                    if (theme.Layout != null)
                     {
-                        ApplyLayout(archive, theme.Layout, !skip.Contains("anims"));
+                        ApplyLayout(archive, theme.Layout, true);
                     }
 
                     // The "Clear Lock" lock screen layout, made before 9.0, moved the Continue button
                     // and the status bar where they are not seen since: back in place.
-                    if (theme.Target == "lock" && theme.Layout?.ID == "builtin_ClearLock" && !skip.Contains("fix"))
+                    if (theme.Target == "lock" && theme.Layout?.ID == "builtin_ClearLock")
                     {
                         ApplyLayout(archive, new LayoutPatch
                         {
@@ -605,7 +598,7 @@ namespace Ryujinx.HLE.HOS.Themes
                     // The online button (the Nextendo button here) is placed by the system where the
                     // theme put something else (made for a firmware where it was not there, or not
                     // there): what the theme put there is seen, the button hidden.
-                    if (theme.Target == "home" && !skip.Contains("fix"))
+                    if (theme.Target == "home")
                     {
                         HideCoveringOnlineButton(archive);
                     }

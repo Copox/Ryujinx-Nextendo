@@ -472,10 +472,6 @@ namespace Ryujinx.HLE.HOS.Services.Hid
                 AnalogStickState stick = StickOf(context, id, position);
                 CalibrationStage before = calibration.Stage;
 
-                if (Environment.GetEnvironmentVariable("NEXTENDO_CALIB_TRACE") is not null)
-                {
-                    Logger.Info?.Print(LogClass.ServiceHid, $"[home] calibration poll pad {id} ({position}) stage {calibration.Stage}: {stick.X}, {stick.Y}");
-                }
                 double x = (double)stick.X / StickMax, y = (double)stick.Y / StickMax;
                 double length = Math.Sqrt(x * x + y * y);
                 bool released = length < 0.2;

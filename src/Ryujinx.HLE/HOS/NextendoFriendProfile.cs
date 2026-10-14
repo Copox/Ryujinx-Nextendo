@@ -69,9 +69,7 @@ namespace Ryujinx.HLE.HOS
                 try
                 {
                     NextendoFriends.Entry friend = NextendoFriends.Get().FirstOrDefault(f => f.Pid == pid);
-                    // NEXTENDO_FRIEND_BADGES="admin,donor,...": those on every page, to see them drawn
-                    string forced = Environment.GetEnvironmentVariable("NEXTENDO_FRIEND_BADGES");
-                    List<(byte[] Pixels, int Milliseconds)> banner = Banner(pid, friend.Color, string.IsNullOrEmpty(forced) ? friend.Badges ?? [] : forced.Split(','), NextendoFriendPage.BannerWidth, friend.BannerUrl, friend.BannerCrop);
+                    List<(byte[] Pixels, int Milliseconds)> banner = Banner(pid, friend.Color, friend.Badges ?? [], NextendoFriendPage.BannerWidth, friend.BannerUrl, friend.BannerCrop);
 
                     Logger.Info?.Print(LogClass.Application, $"[Nextendo] friend page: banner of 0x{pid:X} ({friend.Badges?.Length ?? 0} badge(s), colour \"{friend.Color}\", {banner.Count} picture(s))");
 
@@ -406,16 +404,9 @@ namespace Ryujinx.HLE.HOS
         private static readonly ConcurrentDictionary<string, byte[]> _pictures = new();
 
         // The picture a profile has for its banner (a still one or an animated one, as a file), or
-        // null when it has none. NEXTENDO_BANNER_TEST=<file>: that one on every profile, to see a
-        // picture or an animation drawn.
+        // null when it has none.
         private static byte[] Picture(string address)
         {
-            string test = Environment.GetEnvironmentVariable("NEXTENDO_BANNER_TEST");
-
-            if (!string.IsNullOrEmpty(test) && System.IO.File.Exists(test))
-            {
-                return System.IO.File.ReadAllBytes(test);
-            }
 
             if (string.IsNullOrEmpty(address))
             {

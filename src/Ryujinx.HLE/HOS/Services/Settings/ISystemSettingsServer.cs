@@ -30,16 +30,10 @@ namespace Ryujinx.HLE.HOS.Services.Settings
         public ISystemSettingsServer(ServiceCtx context) { }
 
         [CommandCmif(174)] // 20.0.0+
-        // Asked by the virtual game cards page (study: NEXTENDO_SET174=<u32>).
+        // Asked by the virtual game cards page.
         public ResultCode Unknown174(ServiceCtx context)
         {
-            uint value = uint.TryParse(System.Environment.GetEnvironmentVariable("NEXTENDO_SET174"), out uint v) ? v : 0;
-
-            if (System.Environment.GetEnvironmentVariable("NEXTENDO_VGC_TRACE") == "1")
-            {
-                Logger.Notice.Print(LogClass.ServiceSet, "[vgc] set 174 " +
-                    string.Concat(System.Linq.Enumerable.Select(System.Linq.Enumerable.Where(context.Device.System.KernelContext.Processes.Values, p => p.TitleId == 0x0100000000001000), p => p.DescribeGuestThreads())));
-            }
+            uint value = 0;
 
             context.ResponseData.Write(value);
 
@@ -513,11 +507,13 @@ namespace Ryujinx.HLE.HOS.Services.Settings
         // [Nextendo, HOME Menu work] The initial setup of the console (the firmware's starter)
         // runs once, on data never used before: an update of the emulator (from the HOME Menu or
         // the emulator) changes the program, never the data, so it does not bring it back. Data
-        // is "used" when it holds the mark of a finished setup, or when the emulator's own files
-        // (its configuration, its users) were there before this run started. Decided once per run:
-        // the setup itself writes those files halfway.
-        // StarterReady turns it off for a build that must not have it; NEXTENDO_FIRST_SETUP=1 runs it on any data never set up (tests).
-        private const bool StarterReady = true;
+        // is "used" when it holds the mark of a finished setup, or signs of play from before this
+        // run: a game save, a user other than the default RyuPlayer, a theme chosen in the HOME
+        // Menu. Only opening the emulator (its configuration, the default user) does not count:
+        // the firmware is installed from there before the HOME Menu is ever started. Decided once
+        // per run: the setup itself writes some of those files halfway.
+        // StarterReady turns it off for a build that must not have it.
+        private static readonly bool StarterReady = true;
 
         private static bool? _initialSetupDone;
 
@@ -532,11 +528,6 @@ namespace Ryujinx.HLE.HOS.Services.Settings
                 return true;
             }
 
-            if (System.Environment.GetEnvironmentVariable("NEXTENDO_FIRST_SETUP") == "1")
-            {
-                return false;
-            }
-
             if (!StarterReady)
             {
                 return true;
@@ -545,17 +536,75 @@ namespace Ryujinx.HLE.HOS.Services.Settings
             string baseDir = Ryujinx.Common.Configuration.AppDataManager.BaseDirPath;
             System.DateTime started = System.Diagnostics.Process.GetCurrentProcess().StartTime.ToUniversalTime();
 
-            foreach (string file in new[] { "Config.json", System.IO.Path.Combine("system", "Profiles.json"), "nextendo_color_set.txt" })
+            if (UsedBefore(baseDir, started))
             {
-                string path = System.IO.Path.Combine(baseDir, file);
+                // Used before: kept as set up, without asking again.
+                MarkInitialSetupDone();
 
-                if (System.IO.File.Exists(path) && System.IO.File.GetCreationTimeUtc(path) < started)
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool UsedBefore(string baseDir, System.DateTime started)
+        {
+            bool Before(string path) => (System.IO.File.Exists(path) ? System.IO.File.GetCreationTimeUtc(path) : System.IO.Directory.GetCreationTimeUtc(path)) < started;
+
+            try
+            {
+                // a theme chosen in the HOME Menu
+                string colorSet = System.IO.Path.Combine(baseDir, "nextendo_color_set.txt");
+
+                if (System.IO.File.Exists(colorSet) && Before(colorSet))
                 {
-                    // Used before: kept as set up, without asking again.
-                    MarkInitialSetupDone();
-
                     return true;
                 }
+
+                // a game played (a setup run on its data could take the user who owns its save
+                // away): the time played the emulator keeps for each game, not for the system
+                // programs (the HOME Menu has its own)
+                string games = System.IO.Path.Combine(baseDir, "games");
+
+                if (System.IO.Directory.Exists(games))
+                {
+                    foreach (string game in System.IO.Directory.EnumerateDirectories(games))
+                    {
+                        string metadata = System.IO.Path.Combine(game, "gui", "metadata.json");
+
+                        if (!ulong.TryParse(System.IO.Path.GetFileName(game), System.Globalization.NumberStyles.HexNumber, null, out ulong titleId) ||
+                            titleId < 0x0100000000010000 || !System.IO.File.Exists(metadata) || !Before(metadata))
+                        {
+                            continue;
+                        }
+
+                        using System.Text.Json.JsonDocument played = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(metadata));
+
+                        if ((played.RootElement.TryGetProperty("last_played_utc", out System.Text.Json.JsonElement last) && last.ValueKind == System.Text.Json.JsonValueKind.String) ||
+                            (played.RootElement.TryGetProperty("last_played", out last) && last.ValueKind == System.Text.Json.JsonValueKind.String))
+                        {
+                            return true;
+                        }
+                    }
+                }
+
+                // a user made by the player
+                string profiles = System.IO.Path.Combine(baseDir, "system", "Profiles.json");
+
+                if (System.IO.File.Exists(profiles) && Before(profiles))
+                {
+                    using System.Text.Json.JsonDocument document = System.Text.Json.JsonDocument.Parse(System.IO.File.ReadAllText(profiles));
+
+                    if (document.RootElement.TryGetProperty("profiles", out System.Text.Json.JsonElement list) && list.ValueKind == System.Text.Json.JsonValueKind.Array &&
+                        System.Linq.Enumerable.Any(list.EnumerateArray(), p => !(p.TryGetProperty("name", out System.Text.Json.JsonElement name) && name.GetString() == "RyuPlayer")))
+                    {
+                        return true;
+                    }
+                }
+            }
+            catch (System.Exception)
+            {
+                return true; // not readable: taken as used, never a setup over a player's data
             }
 
             return false;

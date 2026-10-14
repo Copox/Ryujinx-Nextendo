@@ -11,7 +11,6 @@ namespace Ryujinx.Ava.Systems
     /// [Nextendo, HOME Menu work] "Delete Software" of the HOME Menu: the files of the game (the
     /// game, its update, its add-on content) leave the computer. On Windows they go to the
     /// recycle bin, so a wrong choice can still be undone.
-    /// NEXTENDO_DELETE_DRYRUN=1 only says what would be deleted (tests).
     /// </summary>
     internal static class NextendoSoftwareDeletion
     {
@@ -28,16 +27,15 @@ namespace Ryujinx.Ava.Systems
                 return false;
             }
 
-            bool dryRun = Environment.GetEnvironmentVariable("NEXTENDO_DELETE_DRYRUN") == "1";
             bool all = true;
 
             foreach (string file in files)
             {
-                bool done = dryRun || (OperatingSystem.IsWindows() ? ToRecycleBin(file) : TryDelete(file));
+                bool done = OperatingSystem.IsWindows() ? ToRecycleBin(file) : TryDelete(file);
 
                 all &= done;
 
-                Logger.Info?.Print(LogClass.Application, $"[home] {title.Name}: {file} {(dryRun ? "would be deleted (dry run)" : done ? (OperatingSystem.IsWindows() ? "sent to the recycle bin" : "deleted") : "NOT deleted")}");
+                Logger.Info?.Print(LogClass.Application, $"[home] {title.Name}: {file} {(done ? (OperatingSystem.IsWindows() ? "sent to the recycle bin" : "deleted") : "NOT deleted")}");
             }
 
             return all;

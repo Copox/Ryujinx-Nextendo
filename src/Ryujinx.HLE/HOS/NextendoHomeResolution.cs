@@ -17,7 +17,7 @@ namespace Ryujinx.HLE.HOS
 
         public static void HomeInFront(Horizon system)
         {
-            if (Environment.GetEnvironmentVariable("NEXTENDO_HOME_1080P") == "0" || !system.State.DockedMode)
+            if (!system.State.DockedMode)
             {
                 return;
             }

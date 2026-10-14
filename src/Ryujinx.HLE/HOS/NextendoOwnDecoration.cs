@@ -194,9 +194,6 @@ namespace Ryujinx.HLE.HOS
                     Logger.Info?.Print(LogClass.Application, $"[Nextendo] own picture: decoration animated ({frames.Count} pictures, {side}x{side})");
 
                     int found = 0;
-                    int tries = 0;
-                    bool report = Environment.GetEnvironmentVariable("NEXTENDO_DECORATION_REPORT") == "1";
-                    HashSet<ulong> reported = [];
 
                     // the pictures at the size each program keeps its own (made once a size)
                     Dictionary<(int, int, int), byte[]> sized = [];
@@ -229,14 +226,7 @@ namespace Ryujinx.HLE.HOS
                             {
                                 if (Array.IndexOf(_programs, process.TitleId) >= 0 && process.State != ProcessState.Exited)
                                 {
-                                    Action<string> lines = null;
-                                    ulong title = process.TitleId;
                                     int now = at;
-
-                                    if (report && ++tries > 300 && reported.Add(title))
-                                    {
-                                        lines = line => Logger.Info?.Print(LogClass.Application, $"[Nextendo] own picture: texture of 0x{title:x16}: {line}");
-                                    }
 
                                     device.Gpu.NextendoUploadMarked(process.Pid, (width, height) => PixelsFor(now, width, height), Marked, count =>
                                     {
@@ -244,7 +234,7 @@ namespace Ryujinx.HLE.HOS
                                         {
                                             Logger.Info?.Print(LogClass.Application, "[Nextendo] own picture: animated decoration shown");
                                         }
-                                    }, lines);
+                                    });
                                 }
                             }
                         }

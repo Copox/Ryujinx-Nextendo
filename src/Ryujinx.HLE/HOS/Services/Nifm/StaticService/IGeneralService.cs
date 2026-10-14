@@ -104,28 +104,10 @@ namespace Ryujinx.HLE.HOS.Services.Nifm.StaticService
             if (mac != null && context.Request.RecvListBuff.Count > 0 && context.Request.RecvListBuff[0].Size >= 8)
             {
                 byte[] info = new byte[8];
-                string layout = System.Environment.GetEnvironmentVariable("NEXTENDO_IF_LAYOUT") ?? "type0";
 
-                if (layout == "mac0")
-                {
-                    mac.CopyTo(info, 0);
-                    info[6] = 1;
-                    info[7] = 1;
-                }
-                else
-                {
-                    info[0] = 1; // IEEE 802.11
-                    mac.CopyTo(info, 1);
-                    info[7] = 1;
-                }
-
-                if (System.Environment.GetEnvironmentVariable("NEXTENDO_IF_SET") is string set)
-                {
-                    foreach (string part in set.Split(','))
-                    {
-                        info[System.Convert.ToInt32(part.Split('=')[0], 16)] = System.Convert.ToByte(part.Split('=')[1], 16);
-                    }
-                }
+                info[0] = 1; // IEEE 802.11
+                mac.CopyTo(info, 1);
+                info[7] = 1;
 
                 context.Memory.Write(context.Request.RecvListBuff[0].Position, info);
                 context.Response.PtrBuff[0] = context.Response.PtrBuff[0].WithSize(8u);
@@ -164,14 +146,6 @@ namespace Ryujinx.HLE.HOS.Services.Nifm.StaticService
                     raw.AsSpan(0, Math.Min(raw.Length, 0x20)).CopyTo(info.AsSpan(0x53));
                     info[0x73] = host.Authentication;
                     info[0x74] = host.Encryption;
-                }
-
-                if (System.Environment.GetEnvironmentVariable("NEXTENDO_PROF_SET") is string set)
-                {
-                    foreach (string part in set.Split(','))
-                    {
-                        info[System.Convert.ToInt32(part.Split('=')[0], 16)] = System.Convert.ToByte(part.Split('=')[1], 16);
-                    }
                 }
 
                 context.Memory.Write(context.Request.ReceiveBuff[0].Position, info);
@@ -477,18 +451,6 @@ namespace Ryujinx.HLE.HOS.Services.Nifm.StaticService
                 WriteAccessPoint(data.AsSpan(i * AccessPointSize, AccessPointSize), network.Name, network.Bars, network.Channel, network.Authentication, network.Encryption);
             }
 
-            // Probe (development): "at=value" pairs set in every entry.
-            if (System.Environment.GetEnvironmentVariable("NEXTENDO_SCAN_SET") is string set)
-            {
-                for (int i = 0; i < count; i++)
-                {
-                    foreach (string part in set.Split(','))
-                    {
-                        data[i * AccessPointSize + System.Convert.ToInt32(part.Split('=')[0], 16)] = System.Convert.ToByte(part.Split('=')[1], 16);
-                    }
-                }
-            }
-
             if (count > 0)
             {
                 context.Memory.Write(position, data);
@@ -514,7 +476,7 @@ namespace Ryujinx.HLE.HOS.Services.Nifm.StaticService
             }
 
             ulong position = context.Request.RecvListBuff[0].Position;
-            int size = int.TryParse(System.Environment.GetEnvironmentVariable("NEXTENDO_AP_SIZE"), System.Globalization.NumberStyles.HexNumber, null, out int given) ? given : 0x34;
+            int size = 0x34;
             byte[] accessPoint = new byte[size];
             byte[] name = System.Text.Encoding.UTF8.GetBytes(host.Name);
             int length = System.Math.Min(name.Length, 32);
@@ -528,25 +490,6 @@ namespace Ryujinx.HLE.HOS.Services.Nifm.StaticService
             System.BitConverter.TryWriteBytes(System.MemoryExtensions.AsSpan(accessPoint, 0x2E, 2), (ushort)host.Channel);
             accessPoint[0x30] = host.Authentication;
             accessPoint[0x31] = host.Encryption;
-
-            if (System.Environment.GetEnvironmentVariable("NEXTENDO_AP_PROBE") is string probe)
-            {
-                // "from-to" (hex): each of those bytes holds its own offset; "at=value" sets one.
-                foreach (string part in probe.Split(','))
-                {
-                    if (part.Contains('='))
-                    {
-                        accessPoint[System.Convert.ToInt32(part.Split('=')[0], 16)] = System.Convert.ToByte(part.Split('=')[1], 16);
-                    }
-                    else
-                    {
-                        for (int k = System.Convert.ToInt32(part.Split('-')[0], 16); k < System.Convert.ToInt32(part.Split('-')[1], 16); k++)
-                        {
-                            accessPoint[k] = (byte)k;
-                        }
-                    }
-                }
-            }
 
             context.Response.PtrBuff[0] = context.Response.PtrBuff[0].WithSize((uint)size);
             context.Memory.Write(position, accessPoint);

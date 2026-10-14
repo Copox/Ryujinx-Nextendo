@@ -21,8 +21,6 @@ namespace Ryujinx.HLE.HOS.Ipc
         public List<IpcBuffDesc> ExchangeBuff { get; private set; }
         public List<IpcRecvListBuffDesc> RecvListBuff { get; private set; }
 
-        public byte[] RawMessage { get; private set; }
-
         // [Nextendo] The pointer buffer of the server (where out-pointer data is put for the
         // kernel to copy back to the caller), set by the server loop.
         public ulong ServerPointerBuffer { get; set; }
@@ -45,12 +43,6 @@ namespace Ryujinx.HLE.HOS.Ipc
         public IpcMessage(ReadOnlySpan<byte> data, long cmdPtr)
         {
             RecyclableMemoryStream ms = MemoryStreamManager.Shared.GetStream(data);
-
-            // [Nextendo] Development: the start of the message as it came (NEXTENDO_IPC_RAW=1).
-            if (System.Environment.GetEnvironmentVariable("NEXTENDO_IPC_RAW") == "1")
-            {
-                RawMessage = data[..System.Math.Min(data.Length, 0x80)].ToArray();
-            }
 
             BinaryReader reader = new(ms);
 

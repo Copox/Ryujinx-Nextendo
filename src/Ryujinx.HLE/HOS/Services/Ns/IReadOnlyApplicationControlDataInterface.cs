@@ -72,12 +72,6 @@ namespace Ryujinx.HLE.HOS.Services.Ns
             // The virtual game cards page (22) has the friend page's room: the picture at that size.
             decoded |= command == 22;
 
-            if (capacity == 0x14000 && System.Environment.GetEnvironmentVariable("NEXTENDO_VGC_TRACE") == "1")
-            {
-                Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.ServiceNs, "[vgc] control data " + System.Convert.ToHexString(((System.IO.MemoryStream)context.RequestData.BaseStream).ToArray()) + " " +
-                    string.Concat(System.Linq.Enumerable.Select(System.Linq.Enumerable.Where(context.Device.System.KernelContext.Processes.Values, p => p.TitleId == 0x0100000000001000), p => p.DescribeGuestThreads())));
-            }
-
             Ryujinx.HLE.HOS.HomeMenuTitle title = Ryujinx.HLE.HOS.HomeMenuLibrary.Find(applicationId);
 
             if (title == null && capacity >= NacpSize)
@@ -90,11 +84,6 @@ namespace Ryujinx.HLE.HOS.Services.Ns
                 {
                     name = game.Name;
                     picture = game.Icon;
-                }
-                else if (System.Environment.GetEnvironmentVariable("NEXTENDO_FRIEND_DETAIL_PROBE") != null)
-                {
-                    name = applicationId.ToString("X16"); // probing aid: shows which field held the id
-                    picture = Ryujinx.HLE.HOS.HomeMenuLibrary.Titles().Count > 0 ? Ryujinx.HLE.HOS.HomeMenuLibrary.Titles()[0].Icon : null;
                 }
 
                 if (name != null)
@@ -118,30 +107,10 @@ namespace Ryujinx.HLE.HOS.Services.Ns
                 System.Array.Copy(title.Nacp, nacp, System.Math.Min(title.Nacp.Length, NacpSize));
             }
 
-            // NEXTENDO_NACP_PATCH=<hex offset>=<hex bytes>;... (study)
-            if (System.Environment.GetEnvironmentVariable("NEXTENDO_NACP_PATCH") is { Length: > 0 } nacpPatch)
-            {
-                foreach (string item in nacpPatch.Split(';'))
-                {
-                    string[] kv = item.Split('=');
-                    System.Convert.FromHexString(kv[1]).CopyTo(nacp, System.Convert.ToInt32(kv[0], 16));
-                }
-            }
-
             context.Memory.Write(position, nacp);
 
             // The icon follows the control property, as the title carries it (a JPEG).
-            string layout = System.Environment.GetEnvironmentVariable("NEXTENDO_NS_CONTROL_LAYOUT") ?? "j";
             byte[] icon = title.Icon;
-
-            if (decoded && icon != null && capacity > NacpSize && System.Environment.GetEnvironmentVariable("NEXTENDO_NS20_RAW") == "1")
-            {
-                // What is left of the buffer after the control property is exactly a square of
-                // four-byte pixels (128x128 for a title that is not on the console).
-                int side = (int)System.Math.Sqrt((capacity - NacpSize) / 4);
-
-                icon = DecodeIcon(icon, side);
-            }
 
             int iconSize = 0;
 
@@ -164,11 +133,6 @@ namespace Ryujinx.HLE.HOS.Services.Ns
                 using SkiaSharp.SKData plain = blank.Encode(SkiaSharp.SKEncodedImageFormat.Jpeg, 90);
 
                 icon = plain?.ToArray();
-            }
-
-            if (icon != null && System.Environment.GetEnvironmentVariable("NEXTENDO_FORCE_REENCODE") == "1")
-            {
-                icon = ShrinkIcon(icon, 60000); // test: are re-encoded pictures readable by the menu?
             }
 
             if (icon != null && (ulong)(NacpSize + icon.Length) > capacity && capacity > NacpSize)
@@ -194,7 +158,7 @@ namespace Ryujinx.HLE.HOS.Services.Ns
             context.ResponseData.Write(variant is "a" or "c" ? 1u : 0u);
             context.ResponseData.Write((uint)(NacpSize + iconSize));
 
-            Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.Service, $"[home] control data of {applicationId:X16}: icon {iconSize} bytes, layout {layout}, startup user account {nacp[0x3025]} option {nacp[0x3026]} NACP3000 {System.Convert.ToHexString(nacp, 0x3000, 0x400)}");
+            Ryujinx.Common.Logging.Logger.Notice.Print(Ryujinx.Common.Logging.LogClass.Service, $"[home] control data of {applicationId:X16}: icon {iconSize} bytes, startup user account {nacp[0x3025]} option {nacp[0x3026]} NACP3000 {System.Convert.ToHexString(nacp, 0x3000, 0x400)}");
 
             return ResultCode.Success;
         }

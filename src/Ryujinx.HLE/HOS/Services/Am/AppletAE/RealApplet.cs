@@ -84,7 +84,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
 
         public static void RegisterSystemApplet(Horizon system, ulong pid)
         {
-            if (!_systemApplets.ContainsKey(pid) && Environment.GetEnvironmentVariable("NEXTENDO_QL_NOOWN") != "1")
+            if (!_systemApplets.ContainsKey(pid))
             {
                 AppletStateMgr state = new(system);
 
@@ -109,8 +109,8 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
                 _systemApplets[pid] = state;
 
                 // [Nextendo, HOME Menu work] With the HOME Menu, the overlay applet that draws the
-                // notifications of the system (NEXTENDO_OVERLAY=0 goes without it).
-                if (first && Environment.GetEnvironmentVariable("NEXTENDO_OVERLAY") != "0")
+                // notifications of the system.
+                if (first)
                 {
                     StartOverlay(system.Device);
                 }
@@ -150,7 +150,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
 
             new Thread(() =>
             {
-                Thread.Sleep(int.TryParse(Environment.GetEnvironmentVariable("NEXTENDO_OVERLAY_DELAY"), out int delay) ? delay : 12000);
+                Thread.Sleep(12000);
 
                 ulong pid = device.Processes.LoadApplet(path, id => OverlayPid = id);
 
@@ -252,23 +252,9 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
                 HomeMenuStatus.Set(StatusOf(title));
 
                 System.Diagnostics.Stopwatch appRunning = System.Diagnostics.Stopwatch.StartNew();
-                bool appDumped = false;
 
                 while (system.KernelContext.Processes.TryGetValue(pid, out KProcess process) && process.State != ProcessState.Exited)
                 {
-                    if (!appDumped && int.TryParse(Environment.GetEnvironmentVariable("NEXTENDO_QL_APPDUMP_MS"), out int appDumpAt) && appRunning.ElapsedMilliseconds > appDumpAt)
-                    {
-                        appDumped = true;
-
-                        try
-                        {
-                            Logger.Notice.Print(LogClass.ServiceAm, "[dump] " + process.Debugger.GetMinidump());
-                        }
-                        catch (Exception e)
-                        {
-                            Logger.Notice.Print(LogClass.ServiceAm, "[dump] failed: " + e.Message);
-                        }
-                    }
 
                     if (application.TerminateRequested)
                     {
@@ -732,25 +718,10 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
                 System.Diagnostics.Stopwatch running = System.Diagnostics.Stopwatch.StartNew();
                 long span = 0, requestsBefore = 0, askedBefore = 0, busiest = 0;
                 int quiet = 0;
-                bool dumped = false;
 
                 while (system.KernelContext.Processes.TryGetValue(pid, out KProcess process) &&
                        process.State != ProcessState.Exited && !applet.Exited)
                 {
-                    if (!dumped && int.TryParse(Environment.GetEnvironmentVariable("NEXTENDO_QL_DUMP_MS"), out int dumpAt) && running.ElapsedMilliseconds > dumpAt)
-                    {
-                        // Debug aid: what every thread of the applet is doing at that moment.
-                        dumped = true;
-
-                        try
-                        {
-                            Logger.Notice.Print(LogClass.ServiceAm, "[dump] " + process.Debugger.GetMinidump());
-                        }
-                        catch (Exception e)
-                        {
-                            Logger.Notice.Print(LogClass.ServiceAm, "[dump] failed: " + e.Message);
-                        }
-                    }
 
                     // An applet that shows nothing before it has the foreground (the user selection)
                     // never tells its first frame. It is given the foreground once it has set itself
@@ -774,11 +745,6 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
                         busiest = Math.Max(busiest, asked);
                         askedBefore = asked;
                         requestsBefore = requests;
-
-                        if (Environment.GetEnvironmentVariable("NEXTENDO_FOCUS_TRACE") == "1")
-                        {
-                            Logger.Notice.Print(LogClass.ServiceAm, $"[focus] {applet.AppletId} at {running.ElapsedMilliseconds} ms: {requests} requests, quiet spans {quiet}");
-                        }
 
                         if (quiet >= 1)
                         {

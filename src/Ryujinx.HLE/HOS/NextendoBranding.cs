@@ -25,34 +25,6 @@ namespace Ryujinx.HLE.HOS
     public static class NextendoBranding
     {
         // "Nextendo Website" in each language of the console, by the folder of its messages.
-        // The place of a system file as a console takes it from the SD card, under a folder.
-        private static string ConsolePath(string folder, ulong programId, string archive)
-        {
-            return System.IO.Path.Combine(folder, "atmosphere", "contents", programId.ToString("X16"), "romfs", archive.TrimStart('/'));
-        }
-
-        // NEXTENDO_CONSOLE_IMPORT=<folder>: the file made for a console that stands for this one, or null.
-        private static string ConsoleFile(ulong programId, string archive)
-        {
-            return Environment.GetEnvironmentVariable("NEXTENDO_CONSOLE_IMPORT") is { Length: > 0 } folder &&
-                   File.Exists(ConsolePath(folder, programId, archive)) ? ConsolePath(folder, programId, archive) : null;
-        }
-
-        // NEXTENDO_CONSOLE_EXPORT=<folder>: a patched archive (not compressed) written where a console takes it.
-        private static void ExportForConsole(ulong programId, string archive, byte[] content)
-        {
-            if (Environment.GetEnvironmentVariable("NEXTENDO_CONSOLE_EXPORT") is not { Length: > 0 } folder)
-            {
-                return;
-            }
-
-            string target = ConsolePath(folder, programId, archive);
-
-            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(target));
-            File.WriteAllBytes(target, Yaz0Encode(content));
-            Logger.Notice.Print(LogClass.ModLoader, $"[Nextendo] console export: {target}");
-        }
-
         private static readonly Dictionary<string, string> _website = new()
         {
             ["fr"] = "Site Nextendo",
@@ -107,7 +79,7 @@ namespace Ryujinx.HLE.HOS
             }
         }
 
-        public static bool Enabled => Environment.GetEnvironmentVariable("NEXTENDO_BRANDING") != "0";
+        public static bool Enabled => true;
 
         // [Nextendo] the HOME Menu as the console has it: only the theme chosen is applied
         private static bool Vanilla => Ryujinx.Common.Configuration.NextendoHomeMenuVanilla.Enabled;
@@ -160,17 +132,6 @@ namespace Ryujinx.HLE.HOS
             }
             Dictionary<string, byte[]> changed = new();
 
-            // NEXTENDO_ROMFS_DUMP=<folder>: the layouts of the system programs are written there (study).
-            if (Environment.GetEnvironmentVariable("NEXTENDO_ROMFS_DUMP") is { Length: > 0 } dump)
-            {
-                foreach (DirectoryEntryEx entry in baseRom.EnumerateEntries().Where(f => f.Type == DirectoryEntryType.File && (f.FullPath.StartsWith("/lyt/", StringComparison.Ordinal) || f.FullPath.StartsWith("/message/", StringComparison.Ordinal))))
-                {
-                    string target = System.IO.Path.Combine(dump, programId.ToString("X16"), entry.FullPath.TrimStart('/'));
-
-                    Directory.CreateDirectory(System.IO.Path.GetDirectoryName(target));
-                    File.WriteAllBytes(target, Read(baseRom, entry.FullPath));
-                }
-            }
             int strings = 0;
 
             foreach (DirectoryEntryEx entry in baseRom.EnumerateEntries().Where(f => !Vanilla && f.Type == DirectoryEntryType.File &&
@@ -179,13 +140,8 @@ namespace Ryujinx.HLE.HOS
                 string language = LanguageOf(entry.FullPath);
                 byte[] packed = Read(baseRom, entry.FullPath);
                 byte[] msbt = Yaz0Decode(packed);
-                string grep = Environment.GetEnvironmentVariable("NEXTENDO_MSBT_GREP");
                 byte[] patched = PatchMsbt(msbt, text =>
                 {
-                    if (grep != null && Regex.IsMatch(text, grep))
-                    {
-                        Logger.Info?.Print(LogClass.ModLoader, $"[msbt] {programId:X16} {entry.FullPath}: {text.Replace('\n', '|')}");
-                    }
 
                     if (entry.FullPath.EndsWith("/setting.msbt.szs", StringComparison.Ordinal) && _systemVersionLabels.Contains(text))
                     {
@@ -320,21 +276,10 @@ namespace Ryujinx.HLE.HOS
             }
 
             // [Nextendo, HOME Menu work] "A friend is online": the friend's picture over both lines.
-            if (programId == 0x010000000000100C && ConsoleFile(programId, NextendoFriendPage.NotificationArchive) is { } notificationFile)
-            {
-                changed[NextendoFriendPage.NotificationArchive] = File.ReadAllBytes(notificationFile);
-                Logger.Notice.Print(LogClass.ModLoader, $"[Nextendo] console file loaded as it is: {notificationFile}");
-            }
-            else if (programId == 0x010000000000100C && !Vanilla && Exists(baseRom, NextendoFriendPage.NotificationArchive))
+            if (programId == 0x010000000000100C && !Vanilla && Exists(baseRom, NextendoFriendPage.NotificationArchive))
             {
                 try
                 {
-                    // for a console: from the system's own file, without what the emulator changes in it
-                    if (Exists(originalRom ?? baseRom, NextendoFriendPage.NotificationArchive) &&
-                        NextendoFriendPage.PatchNotification(Yaz0Decode(Read(originalRom ?? baseRom, NextendoFriendPage.NotificationArchive))) is { } notificationForConsole)
-                    {
-                        ExportForConsole(programId, NextendoFriendPage.NotificationArchive, notificationForConsole);
-                    }
 
                     byte[] notification = NextendoFriendPage.PatchNotification(Yaz0Decode(changed.TryGetValue(NextendoFriendPage.NotificationArchive, out byte[] themedNotification) ? themedNotification : Read(baseRom, NextendoFriendPage.NotificationArchive)));
 
@@ -351,14 +296,6 @@ namespace Ryujinx.HLE.HOS
                 }
             }
 
-            // NEXTENDO_CONSOLE_IMPORT=<folder>: the files made for a console (see NEXTENDO_CONSOLE_EXPORT)
-            // are loaded as they are, in place of the system's: what a console would show with them.
-            if (ConsoleFile(programId, NextendoFriendPage.Archive) is { } consoleFile)
-            {
-                changed[NextendoFriendPage.Archive] = File.ReadAllBytes(consoleFile);
-                Logger.Notice.Print(LogClass.ModLoader, $"[Nextendo] console file loaded as it is: {consoleFile}");
-            }
-            else
             // [Nextendo, HOME Menu work] The page of a friend: a banner and the friend's badges.
             if (programId == 0x0100000000001013 && !Vanilla && Exists(baseRom, NextendoFriendPage.Archive))
             {
@@ -367,15 +304,6 @@ namespace Ryujinx.HLE.HOS
                     byte[] ownBanner = NextendoFriendProfile.PaintOwn();
                     byte[] original = Yaz0Decode(changed.TryGetValue(NextendoFriendPage.Archive, out byte[] themedPage) ? themedPage : Read(baseRom, NextendoFriendPage.Archive));
                     byte[] page = NextendoFriendPage.Patch(ownBanner, original);
-
-                    // NEXTENDO_CONSOLE_EXPORT=<folder>: the files a console takes in place of its own.
-                    // Made from the system's own file (not a themed one), and without the banner of
-                    // a friend's page: nothing paints it on a console yet.
-                    if (Exists(originalRom ?? baseRom, NextendoFriendPage.Archive) &&
-                        NextendoFriendPage.Patch(ownBanner, Yaz0Decode(Read(originalRom ?? baseRom, NextendoFriendPage.Archive)), friendBanner: false) is { } forConsole)
-                    {
-                        ExportForConsole(programId, NextendoFriendPage.Archive, forConsole);
-                    }
 
                     if (page != null)
                     {

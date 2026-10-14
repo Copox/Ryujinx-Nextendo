@@ -43,12 +43,7 @@ namespace Ryujinx.HLE.HOS.Applets
             {
                 try
                 {
-                    // Development: the account already linked stands for a sign-in (scripted tests).
-                    if (Environment.GetEnvironmentVariable("NEXTENDO_LOGIN_SKIP") == "1" && NextendoAccount.IsLinked)
-                    {
-                        _ok = true;
-                    }
-                    else if (NextendoAccountLink.SignIn != null)
+                    if (NextendoAccountLink.SignIn != null)
                     {
                         (bool ok, string error) = await NextendoAccountLink.SignIn();
 
@@ -79,15 +74,6 @@ namespace Ryujinx.HLE.HOS.Applets
                 else
                 {
                     BitConverter.TryWriteBytes(output.AsSpan(0, 4), (uint)WebExitReason.BackButton);
-                }
-
-                if (Environment.GetEnvironmentVariable("NEXTENDO_LOGIN_PROBE") == "1")
-                {
-                    // Every 8-byte slot after the nickname holds its own offset (0x1000 + offset).
-                    for (int at = 0x30; at + 8 <= output.Length; at += 8)
-                    {
-                        BitConverter.TryWriteBytes(output.AsSpan(at, 8), 0x1000UL + (ulong)at);
-                    }
                 }
 
                 _normalSession.Push(output);

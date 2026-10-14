@@ -142,87 +142,6 @@ namespace Ryujinx.Ava.Common
             Ryujinx.Input.SDL3.SDL3GamepadDriver.NextendoControllerConnected += ControllerPlugged;
             Ryujinx.Input.SDL3.SDL3GamepadDriver.NextendoControllerDisconnected += ControllerUnplugged;
 
-            // Tests: messages to the overlay applet ("seconds:tag:data in hex;...").
-            if (Environment.GetEnvironmentVariable("NEXTENDO_OVLN_TEST") is { Length: > 0 } messages)
-            {
-                Task.Run(async () =>
-                {
-                    int waited = 0;
-
-                    foreach (string step in messages.Split(';'))
-                    {
-                        string[] parts = step.Split(':');
-                        int at = int.Parse(parts[0]);
-
-                        await Task.Delay(Math.Max(0, at - waited) * 1000);
-                        waited = at;
-                        // "seconds:peek:address:size[:offset from the pointer there]" reads the overlay applet's memory
-                        if (parts[1] == "glyphs")
-                        {
-                            Ryujinx.HLE.HOS.NextendoButtonGlyphs.Study(Console?.Invoke(), parts.Length > 2 ? parts[2] : null);
-
-                            continue;
-                        }
-
-                        // "seconds:friend": the "friend online" notification, for a friend who plays now
-                        if (parts[1] == "friend")
-                        {
-                            foreach (Ryujinx.Common.Configuration.NextendoFriends.Entry friend in Ryujinx.Common.Configuration.NextendoFriends.Get())
-                            {
-                                if (!string.IsNullOrEmpty(friend.Game))
-                                {
-                                    NextendoSystemNotifications.FriendOnline(friend.Pid);
-
-                                    break;
-                                }
-                            }
-
-                            continue;
-                        }
-
-                        if (parts[1] == "peek")
-                        {
-                            byte[] read = Console?.Invoke()?.PeekGuest(0x010000000000100C, Convert.ToUInt64(parts[2], 16), Convert.ToInt32(parts[3], 16), parts.Length > 4 ? Convert.ToInt64(parts[4], 16) : -1, parts.Length > 5 ? Convert.FromHexString(parts[5]) : null);
-
-                            Logger.Notice.Print(LogClass.Application, $"[peek] {parts[2]}{(parts.Length > 4 ? "->+" + parts[4] : "")}: {(read == null ? "none" : Convert.ToHexString(read))}");
-
-                            continue;
-                        }
-
-                        Ryujinx.Horizon.Ovln.OvlnNotifications.Post(Convert.ToUInt32(parts[1], 16), Convert.FromHexString(parts[2]));
-                    }
-                });
-            }
-
-            // Tests: controllers plugged in turn ("seconds:name;...").
-            if (Environment.GetEnvironmentVariable("NEXTENDO_CONTROLLER_LIVE") is { Length: > 0 } live)
-            {
-                Task.Run(async () =>
-                {
-                    int waited = 0;
-
-                    foreach (string step in live.Split(';'))
-                    {
-                        string[] parts = step.Split(':');
-                        int at = int.Parse(parts[0]);
-
-                        await Task.Delay(Math.Max(0, at - waited) * 1000);
-                        waited = at;
-
-                        // "seconds:-name" unplugs
-                        if (parts[1].StartsWith('-'))
-                        {
-                            RailEffect(parts[1][1..], 1);
-                            ControllerPicture(parts.Length > 2 ? parts[2] : null);
-                        }
-                        else
-                        {
-                            ControllerPlugged(parts[1]);
-                        }
-                    }
-                });
-            }
-
             Ryujinx.Input.SDL3.SDL3GamepadDriver.NextendoControllerDisconnected += ControllerDisconnected;
             Ryujinx.Input.SDL3.SDL3GamepadDriver.NextendoControllerBatteryLow += ControllerBatteryLow;
             Ryujinx.Input.SDL3.SDL3GamepadDriver.NextendoControllerConnected += ControllerConnected;
@@ -230,37 +149,6 @@ namespace Ryujinx.Ava.Common
             _pcBatteryTimer = new Timer(_ => CheckPcBattery(), null, TimeSpan.FromSeconds(20), TimeSpan.FromMinutes(1));
 
             _badgeTimer = new Timer(_ => _ = CheckBadgesAsync(), null, TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(10));
-
-            // Tests: each notification in turn, through the same code as the real events.
-            if (Environment.GetEnvironmentVariable("NEXTENDO_NOTIF_TEST") == "1")
-            {
-                Task.Run(async () =>
-                {
-                    await Task.Delay(25000);
-                    ControllerDisconnected("Xbox Wireless Controller");
-                    await Task.Delay(7000);
-                    ControllerConnected("DualSense Wireless Controller");
-                    await Task.Delay(7000);
-                    PcBatteryLow(11);
-                    await Task.Delay(7000);
-                    ServerConnection(false);
-                    await Task.Delay(7000);
-                    ServerConnection(true);
-                    await Task.Delay(7000);
-                    ControllerDisconnected("PS4 Controller");
-                    await Task.Delay(7000);
-                    ControllerDisconnected("DualSense Wireless Controller");
-                    await Task.Delay(7000);
-                    ControllerDisconnected("Nintendo Switch Pro Controller");
-                    await Task.Delay(7000);
-                    ControllerBatteryLow("DualSense Wireless Controller", 12);
-                    await Task.Delay(7000);
-                    BadgesSeen("notif-test", ["donor"], NextendoEndpoint.BaseUrl().TrimEnd('/'));
-                    BadgesSeen("notif-test", ["donor", "booster_3"], NextendoEndpoint.BaseUrl().TrimEnd('/'));
-                    await Task.Delay(7000);
-                    requestScreenshot?.Invoke();
-                });
-            }
         }
 
         private static void ControllerDisconnected(string name) =>

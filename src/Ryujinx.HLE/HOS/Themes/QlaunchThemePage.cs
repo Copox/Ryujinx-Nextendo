@@ -751,8 +751,7 @@ namespace Ryujinx.HLE.HOS.Themes
         }
 
         private static bool Enabled(string buildId) =>
-            buildId != null && buildId.StartsWith(BuildId, StringComparison.OrdinalIgnoreCase) &&
-            Environment.GetEnvironmentVariable("NEXTENDO_THEME_PAGE") != "0";
+            buildId != null && buildId.StartsWith(BuildId, StringComparison.OrdinalIgnoreCase);
 
         /// <summary>Puts the code and the data after the image, and points the page at them.</summary>
         internal static void Apply(KProcess process, ulong baseAddress)
@@ -981,11 +980,6 @@ namespace Ryujinx.HLE.HOS.Themes
                     {
                         try
                         {
-                            if (Environment.GetEnvironmentVariable("NEXTENDO_DLG_TRACE") == "1")
-                            {
-                                ulong dialog = process.CpuMemory.Read<ulong>(_base + Cave + CodeSize + 0x6100);
-                                Logger.Notice.Print(LogClass.ServiceSet, $"[settings] dialog {dialog:X}: state {(dialog != 0 ? process.CpuMemory.Read<int>(dialog + 0x24) : -1)} button {(dialog != 0 ? process.CpuMemory.Read<int>(dialog + 0xAF0) : -1)}");
-                            }
 
                             if (process == _process && QlaunchSettingsPage.Active)
                             {

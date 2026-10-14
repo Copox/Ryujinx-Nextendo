@@ -161,11 +161,7 @@ namespace Ryujinx.HLE.HOS.Applets.Browser
 
             try
             {
-                // NEXTENDO_ESHOP_DRYRUN=1: the address is only written in the log (tests).
-                if (Environment.GetEnvironmentVariable("NEXTENDO_ESHOP_DRYRUN") != "1")
-                {
-                    Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
-                }
+                Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
 
                 Logger.Info?.Print(LogClass.ServiceAm, $"[eShop redirect] opened {url} in host browser");
             }

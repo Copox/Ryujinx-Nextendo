@@ -250,8 +250,7 @@ namespace Ryujinx.Ava.Systems
         {
             Ryujinx.Common.Configuration.NextendoSystemUpdate.Check = async () =>
             {
-                // NEXTENDO_UPDATE_TEST_VERSION: checks as if this build had that version (tests).
-                string running = Environment.GetEnvironmentVariable("NEXTENDO_UPDATE_TEST_VERSION") ?? Program.Version;
+                string running = Program.Version;
 
                 if (!Version.TryParse(running, out Version currentVersion))
                 {
@@ -303,14 +302,13 @@ namespace Ryujinx.Ava.Systems
 
         /// <summary>
         /// [Nextendo] The version of a newer release this build can install, or null (silent:
-        /// unreachable means none). NEXTENDO_UPDATE_TEST_VERSION checks as if this build had that
-        /// version (tests).
+        /// unreachable means none).
         /// </summary>
         public static async Task<string> NextendoNewerVersionAsync()
         {
             try
             {
-                string running = Environment.GetEnvironmentVariable("NEXTENDO_UPDATE_TEST_VERSION") ?? Program.Version;
+                string running = Program.Version;
 
                 if (!Version.TryParse(running, out Version currentVersion))
                 {
