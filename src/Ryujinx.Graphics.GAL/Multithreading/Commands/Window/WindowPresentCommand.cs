@@ -31,9 +31,17 @@ namespace Ryujinx.Graphics.GAL.Multithreading.Commands.Window
         public static void Run(ref WindowPresentCommand command, ThreadedRenderer threaded, IRenderer renderer)
         {
             threaded.SignalFrame();
-            renderer.Window.SetOverlay(command._overlay.Get(threaded)?.Base);
-            renderer.Window.SetNotification(command._notification.Get(threaded)?.Base, command._notificationX, command._notificationY, command._notificationWidth, command._notificationHeight);
-            renderer.Window.Present(command._texture.Get(threaded)?.Base, command._crop, command._swapBuffersCallback.Get(threaded));
+
+            // The references come out of the table in the order they were put in (see
+            // ThreadedWindow.Present): the frame, the callback, the overlay, the notification.
+            ThreadedTexture texture = command._texture.Get(threaded);
+            Action swapBuffersCallback = command._swapBuffersCallback.Get(threaded);
+            ThreadedTexture overlay = command._overlay.Get(threaded);
+            ThreadedTexture notification = command._notification.Get(threaded);
+
+            renderer.Window.SetOverlay(overlay?.Base);
+            renderer.Window.SetNotification(notification?.Base, command._notificationX, command._notificationY, command._notificationWidth, command._notificationHeight);
+            renderer.Window.Present(texture?.Base, command._crop, swapBuffersCallback);
         }
     }
 }
