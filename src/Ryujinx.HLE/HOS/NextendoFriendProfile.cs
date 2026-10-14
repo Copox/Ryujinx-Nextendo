@@ -43,7 +43,8 @@ namespace Ryujinx.HLE.HOS
         public static void Attach(Switch device)
         {
             _device = device;
-            NextendoImages.Decorate ??= Decorate;
+            NextendoImages.Decorate ??= (picture, decoration) => Decorate(picture, decoration);
+            NextendoOwnDecoration.Attach(device);
 
             if (!_listening)
             {
@@ -211,7 +212,7 @@ namespace Ryujinx.HLE.HOS
         /// circle, the decoration 20 % larger around it. The corners, outside the circle, take the
         /// picture itself, blurred and darker (the HOME Menu shows square pictures).
         /// </summary>
-        public static byte[] Decorate(byte[] jpeg, byte[] decoration)
+        public static byte[] Decorate(byte[] jpeg, byte[] decoration, byte mark = 0)
         {
             using SKBitmap photo = SKBitmap.Decode(jpeg);
             using SKBitmap ring = SKBitmap.Decode(decoration);
@@ -222,12 +223,108 @@ namespace Ryujinx.HLE.HOS
             }
 
             int side = Math.Max(photo.Width, photo.Height);
+
+            using SKBitmap picture = Backdrop(photo, side);
+            using SKCanvas canvas = new(picture);
+            using SKPaint smooth = new() { IsAntialias = true, FilterQuality = SKFilterQuality.High };
+
+            canvas.DrawBitmap(ring, SKRect.Create(0, 0, side, side), smooth);
+
+            if (mark != 0)
+            {
+                // the mark that finds the picture in the textures of the programs (see
+                // NextendoOwnDecoration): whole blocks of JPEG, in a corner the rounding hides
+                using SKPaint flat = new();
+
+                flat.Color = new SKColor(16, 16, 16);
+                canvas.DrawRect(SKRect.Create(0, 0, 8, 16), flat);
+                flat.Color = new SKColor(mark, mark, mark);
+                canvas.DrawRect(SKRect.Create(8, 0, 24, 16), flat);
+            }
+
+            canvas.Flush();
+
+            using SKImage image = SKImage.FromBitmap(picture);
+            using SKData data = image.Encode(SKEncodedImageFormat.Jpeg, 95);
+
+            return data?.ToArray();
+        }
+
+        /// <summary>
+        /// The pictures of an animated decoration (APNG) over a profile picture, as RGBA pixels of
+        /// the side of the picture, with how long each one shows; null when it does not move.
+        /// </summary>
+        public static List<(byte[] Pixels, int Milliseconds)> DecorateFrames(byte[] jpeg, byte[] animation, out int side)
+        {
+            side = 0;
+
+            using SKBitmap photo = SKBitmap.Decode(jpeg);
+
+            if (photo == null)
+            {
+                return null;
+            }
+
+            List<(SKBitmap Picture, int Milliseconds)> rings = NextendoApng.Frames(animation, MostFrames);
+
+            try
+            {
+                if (rings == null || rings.Count < 2)
+                {
+                    return null;
+                }
+
+                side = Math.Max(photo.Width, photo.Height);
+
+                using SKBitmap under = Backdrop(photo, side);
+                using SKPaint smooth = new() { IsAntialias = true, FilterQuality = SKFilterQuality.High };
+                List<(byte[] Pixels, int Milliseconds)> frames = [];
+
+                foreach ((SKBitmap ring, int milliseconds) in rings)
+                {
+                    using SKBitmap frame = under.Copy();
+                    using SKCanvas canvas = new(frame);
+
+                    canvas.DrawBitmap(ring, SKRect.Create(0, 0, side, side), smooth);
+                    canvas.Flush();
+                    frames.Add((frame.Bytes, Math.Max(milliseconds, ShortestFrame)));
+                }
+
+                return frames;
+            }
+            finally
+            {
+                foreach ((SKBitmap ring, _) in rings ?? [])
+                {
+                    ring.Dispose();
+                }
+            }
+        }
+
+        /// <summary>RGBA pixels of a square picture, at another size.</summary>
+        public static byte[] Resize(byte[] pixels, int side, int width, int height)
+        {
+            using SKBitmap from = new(new SKImageInfo(side, side, SKColorType.Rgba8888, SKAlphaType.Premul));
+            System.Runtime.InteropServices.Marshal.Copy(pixels, 0, from.GetPixels(), pixels.Length);
+
+            using SKBitmap to = from.Resize(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul), SKFilterQuality.High);
+
+            return to?.Bytes;
+        }
+
+        // The picture under a decoration, as Discord draws it: the photo in a circle, the
+        // decoration 20 % larger around it. The corners, outside the circle, take the photo
+        // itself, blurred and darker (the HOME Menu shows square pictures).
+        private static SKBitmap Backdrop(SKBitmap photo, int side)
+        {
             float inner = side / 1.2f;
             SKRect circle = SKRect.Create((side - inner) / 2, (side - inner) / 2, inner, inner);
 
-            using SKBitmap picture = new(new SKImageInfo(side, side, SKColorType.Rgba8888, SKAlphaType.Premul));
+            SKBitmap picture = new(new SKImageInfo(side, side, SKColorType.Rgba8888, SKAlphaType.Premul));
             using SKCanvas canvas = new(picture);
             using SKPaint smooth = new() { IsAntialias = true, FilterQuality = SKFilterQuality.High };
+
+            canvas.Clear(SKColors.Black);
 
             using (SKPaint backdrop = new()
             {
@@ -249,13 +346,9 @@ namespace Ryujinx.HLE.HOS
 
             canvas.DrawBitmap(photo, circle, smooth);
             canvas.Restore();
-            canvas.DrawBitmap(ring, SKRect.Create(0, 0, side, side), smooth);
             canvas.Flush();
 
-            using SKImage image = SKImage.FromBitmap(picture);
-            using SKData data = image.Encode(SKEncodedImageFormat.Jpeg, 92);
-
-            return data?.ToArray();
+            return picture;
         }
 
         // The icon of a badge on the website.

@@ -465,6 +465,20 @@ namespace Ryujinx.Graphics.Gpu
             });
         }
 
+        /// <summary>
+        /// [Nextendo, HOME Menu work] New pixels for the square pictures of a program that carry a
+        /// mark (see TextureCache.NextendoUploadMarked); <paramref name="done"/> gets the number found.
+        /// </summary>
+        public void NextendoUploadMarked(ulong pid, Func<int, int, byte[]> pixelsFor, Func<byte[], bool> marked, Action<int> done = null, Action<string> report = null)
+        {
+            _nextendoUploads.Enqueue(() =>
+            {
+                int found = PhysicalMemoryRegistry.TryGetValue(pid, out PhysicalMemory memory) ? memory.TextureCache.NextendoUploadMarked(pixelsFor, marked, report) : 0;
+
+                done?.Invoke(found);
+            });
+        }
+
         internal void RunDeferredActions()
         {
             while (_nextendoUploads.TryDequeue(out Action upload))

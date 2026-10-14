@@ -32,6 +32,59 @@ namespace Ryujinx.Graphics.Gpu.Image
             }
         }
 
+        /// <summary>
+        /// [Nextendo] New pixels for the textures of 4 bytes a pixel whose first 64 bytes in the
+        /// memory of the program satisfy <paramref name="marked"/> (a picture the emulator gave the
+        /// program, recognised by a mark painted in it, at whatever size the program keeps it):
+        /// <paramref name="pixelsFor"/> gives them for the size of each. The number found.
+        /// </summary>
+        public int NextendoUploadMarked(Func<int, int, byte[]> pixelsFor, Func<byte[], bool> marked, Action<string> report = null)
+        {
+            int found = 0;
+
+            foreach (Texture texture in _textures)
+            {
+                if (texture.Info.FormatInfo.BytesPerPixel != 4 || texture.Info.FormatInfo.IsCompressed || texture.Info.GetLayers() != 1 || texture.Info.Width < 16)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    MemoryRange first = texture.Range.GetSubRange(0);
+
+                    if (first.Size < 64 || first.Address == MemoryManager.PteUnmapped)
+                    {
+                        continue;
+                    }
+
+                    byte[] start = _physicalMemory.GetSpan(first.Address, 64).ToArray();
+
+                    // what the program has, to see where the mark went
+                    report?.Invoke($"{texture.Info.Width}x{texture.Info.Height} {texture.Info.FormatInfo.Format} levels={texture.Info.Levels} {Convert.ToHexString(start, 0, 32)}");
+
+                    if (!marked(start))
+                    {
+                        continue;
+                    }
+                }
+                catch (Exception)
+                {
+                    continue;
+                }
+
+                byte[] pixels = pixelsFor(texture.Info.Width, texture.Info.Height);
+
+                if (pixels != null && pixels.Length == texture.Info.Width * texture.Info.Height * 4)
+                {
+                    texture.SetData(Ryujinx.Common.Memory.MemoryOwner<byte>.RentCopy(pixels), 0, 0);
+                    found++;
+                }
+            }
+
+            return found;
+        }
+
         private readonly struct OverlapInfo
         {
             public TextureViewCompatibility Compatibility { get; }
