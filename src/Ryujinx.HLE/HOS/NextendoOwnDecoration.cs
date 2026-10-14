@@ -20,7 +20,7 @@ namespace Ryujinx.HLE.HOS
 
         private static string _address;          // the decoration's address ("" = none)
         private static byte[] _decoration;       // its still picture
-        private static long _askedAt = long.MinValue;
+        private static long _askedAt = -1; // -1 = never asked
         private static int _asking;
 
         private static byte[] _plain;            // the last picture decorated, and the result
@@ -60,7 +60,7 @@ namespace Ryujinx.HLE.HOS
         // The decoration of the account, asked again every ten minutes, in the background.
         private static void Refresh()
         {
-            if (Environment.TickCount64 - _askedAt < 10 * 60 * 1000 || Interlocked.Exchange(ref _asking, 1) == 1)
+            if ((_askedAt >= 0 && Environment.TickCount64 - _askedAt < 10 * 60 * 1000) || Interlocked.Exchange(ref _asking, 1) == 1)
             {
                 return;
             }
@@ -73,6 +73,8 @@ namespace Ryujinx.HLE.HOS
                 {
                     if (string.IsNullOrEmpty(NextendoAccount.NexToken))
                     {
+                        Logger.Info?.Print(LogClass.Application, "[Nextendo] own picture: no account token yet");
+                        _askedAt = -1; // asked again next time
                         return;
                     }
 
