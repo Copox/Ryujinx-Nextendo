@@ -10475,7 +10475,7 @@
         "zh_TW": "在背景載入（視窗直接顯示選單，沒有載入畫面）"
       }
     },
-        {
+    {
       "ID": "QLaunchVanilla",
       "Translations": {
         "ar_SA": "قائمة HOME الأصلية (بدون إضافات Nextendo)",
@@ -10500,57 +10500,57 @@
         "zh_TW": "原版HOME選單（不含Nextendo的附加內容）"
       }
     },
-        {
+    {
       "ID": "QLaunchVanillaHint",
       "Translations": {
-        "ar_SA": "يوقف كل ما يضيفه Nextendo إلى قائمة HOME: الشعار والنصوص، صفحة السمات، صور ذراع التحكم ورموز الأزرار المباشرة، بانرات وشارات الملف الشخصي، الصور ذات الزوايا الدائرية، صورة الصديق الأكبر في الإشعارات وإشعارات المحاكي نفسه. يستمر اللعب عبر الإنترنت والأصدقاء في العمل. يُطبَّق عند بدء قائمة HOME في المرة القادمة.",
-        "de_DE": "Schaltet alles ab, was Nextendo zum HOME-Menü hinzufügt: Logo und Texte, die Designs-Seite, die Live-Controllerbilder und Tastensymbole, Profilbanner und Abzeichen, abgerundete Bilder, das größere Freundesbild in Benachrichtigungen und die eigenen Benachrichtigungen des Emulators. Online-Spiel und Freunde funktionieren weiter. Wird beim nächsten Start des HOME-Menüs angewendet.",
-        "el_GR": "Απενεργοποιεί όλα όσα προσθέτει το Nextendo στο μενού HOME: το λογότυπο και τα κείμενα, τη σελίδα Θέματα, τις εικόνες χειριστηρίου και τα σύμβολα κουμπιών σε πραγματικό χρόνο, τα banner και τα σήματα προφίλ, τις στρογγυλεμένες εικόνες, τη μεγαλύτερη φωτογραφία φίλου στις ειδοποιήσεις και τις ειδοποιήσεις του ίδιου του εξομοιωτή. Το διαδικτυακό παιχνίδι και οι φίλοι συνεχίζουν να λειτουργούν. Εφαρμόζεται στην επόμενη εκκίνηση του μενού HOME.",
-        "en_US": "Turns off everything Nextendo adds to the HOME Menu: the logo and texts, the Themes page, the live controller pictures and button symbols, the profile banners and badges, the rounded pictures, the larger friend picture in notifications and the emulator's own notifications. Online play and friends keep working. Applied the next time the HOME Menu starts.",
-        "es_ES": "Desactiva todo lo que Nextendo añade al menú HOME: el logotipo y los textos, la página Temas, las imágenes de mando y los símbolos de botones en directo, los banners e insignias de perfil, las imágenes redondeadas, la foto de amigo más grande en las notificaciones y las notificaciones propias del emulador. El juego en línea y los amigos siguen funcionando. Se aplica la próxima vez que se inicie el menú HOME.",
-        "fr_FR": "Désactive tout ce que Nextendo ajoute au menu HOME : le logo et les textes, la page Thèmes, les images de manette et les symboles de touches en direct, les bannières et badges de profil, les images arrondies, la photo d'ami agrandie dans les notifications et les notifications propres à l'émulateur. Le jeu en ligne et les amis continuent de fonctionner. Appliqué au prochain démarrage du menu HOME.",
-        "he_IL": "מכבה את כל מה ש-Nextendo מוסיף לתפריט HOME: הלוגו והטקסטים, עמוד ערכות הנושא, תמונות הבקר וסמלי הכפתורים בזמן אמת, באנרים ותגים בפרופיל, תמונות מעוגלות, תמונת החבר המוגדלת בהתראות וההתראות של האמולטור עצמו. משחק מקוון וחברים ממשיכים לפעול. מוחל בהפעלה הבאה של תפריט HOME.",
-        "it_IT": "Disattiva tutto ciò che Nextendo aggiunge al menu HOME: logo e testi, la pagina Temi, le immagini del controller e i simboli dei pulsanti in tempo reale, banner e distintivi del profilo, le immagini arrotondate, la foto dell'amico più grande nelle notifiche e le notifiche proprie dell'emulatore. Il gioco online e gli amici continuano a funzionare. Applicato al prossimo avvio del menu HOME.",
-        "ja_JP": "NextendoがHOMEメニューに追加するものをすべて無効にします：ロゴとテキスト、テーマページ、リアルタイムのコントローラー画像とボタン記号、プロフィールのバナーとバッジ、角丸の画像、通知の大きなフレンド写真、エミュレーター独自の通知。オンラインプレイとフレンドは引き続き動作します。次回HOMEメニューを起動したときに適用されます。",
-        "ko_KR": "Nextendo가 HOME 메뉴에 추가하는 모든 것을 끕니다: 로고와 문구, 테마 페이지, 실시간 컨트롤러 이미지와 버튼 기호, 프로필 배너와 배지, 둥근 이미지, 알림의 큰 친구 사진, 에뮬레이터 자체 알림. 온라인 플레이와 친구는 계속 작동합니다. 다음에 HOME 메뉴를 시작할 때 적용됩니다.",
-        "no_NO": "Slår av alt Nextendo legger til i HOME-menyen: logoen og tekstene, Temaer-siden, kontrollerbildene og knappesymbolene i sanntid, profilbannere og merker, avrundede bilder, det større vennebildet i varsler og emulatorens egne varsler. Nettspill og venner fungerer som før. Tas i bruk neste gang HOME-menyen starter.",
-        "pl_PL": "Wyłącza wszystko, co Nextendo dodaje do menu HOME: logo i teksty, stronę Motywy, obrazy kontrolera i symbole przycisków na żywo, banery i odznaki profilu, zaokrąglone obrazy, większe zdjęcie znajomego w powiadomieniach oraz własne powiadomienia emulatora. Gra online i znajomi działają dalej. Stosowane przy następnym uruchomieniu menu HOME.",
-        "pt_BR": "Desativa tudo o que a Nextendo adiciona ao menu HOME: o logotipo e os textos, a página Temas, as imagens do controle e os símbolos de botões ao vivo, os banners e emblemas de perfil, as imagens arredondadas, a foto de amigo maior nas notificações e as notificações próprias do emulador. O jogo online e os amigos continuam funcionando. Aplicado na próxima vez que o menu HOME iniciar.",
-        "ru_RU": "Отключает всё, что Nextendo добавляет в меню HOME: логотип и тексты, страницу «Темы», изображения контроллера и символы кнопок в реальном времени, баннеры и значки профиля, скруглённые изображения, увеличенное фото друга в уведомлениях и собственные уведомления эмулятора. Сетевая игра и друзья продолжают работать. Применяется при следующем запуске меню HOME.",
-        "sv_SE": "Stänger av allt som Nextendo lägger till i HOME-menyn: logotypen och texterna, sidan Teman, kontrollbilderna och knappsymbolerna i realtid, profilbanderoller och märken, rundade bilder, den större vänbilden i aviseringar och emulatorns egna aviseringar. Onlinespel och vänner fungerar som vanligt. Tillämpas nästa gång HOME-menyn startar.",
-        "th_TH": "ปิดทุกอย่างที่ Nextendo เพิ่มในเมนู HOME: โลโก้และข้อความ หน้าธีม รูปคอนโทรลเลอร์และสัญลักษณ์ปุ่มแบบเรียลไทม์ แบนเนอร์และเหรียญตราโปรไฟล์ รูปภาพมุมโค้ง รูปเพื่อนขนาดใหญ่ในการแจ้งเตือน และการแจ้งเตือนของอีมูเลเตอร์เอง การเล่นออนไลน์และเพื่อนยังใช้งานได้ตามปกติ มีผลเมื่อเริ่มเมนู HOME ครั้งถัดไป",
-        "tr_TR": "Nextendo'nun HOME Menüsüne eklediği her şeyi kapatır: logo ve metinler, Temalar sayfası, canlı kontrolcü görselleri ve düğme simgeleri, profil afişleri ve rozetleri, yuvarlatılmış görseller, bildirimlerdeki büyük arkadaş fotoğrafı ve emülatörün kendi bildirimleri. Çevrimiçi oyun ve arkadaşlar çalışmaya devam eder. HOME Menüsü bir sonraki açılışında uygulanır.",
-        "uk_UA": "Вимикає все, що Nextendo додає до меню HOME: логотип і тексти, сторінку «Теми», зображення контролера та символи кнопок у реальному часі, банери та значки профілю, заокруглені зображення, збільшене фото друга у сповіщеннях і власні сповіщення емулятора. Мережева гра та друзі працюють далі. Застосовується під час наступного запуску меню HOME.",
-        "zh_CN": "关闭 Nextendo 为 HOME 菜单添加的所有内容：标志和文字、主题页面、实时手柄图片和按键符号、个人资料横幅和徽章、圆角图片、通知中更大的好友头像以及模拟器自己的通知。在线游戏和好友功能照常工作。下次启动 HOME 菜单时生效。",
-        "zh_TW": "關閉 Nextendo 為 HOME 選單加入的所有內容：標誌和文字、主題頁面、即時控制器圖片和按鍵符號、個人檔案橫幅和徽章、圓角圖片、通知中較大的好友相片，以及模擬器自己的通知。線上遊玩和好友功能照常運作。下次啟動 HOME 選單時生效。"
+        "ar_SA": "يوقف كل ما تضيفه Nextendo إلى قائمة HOME: الشعار والنصوص، وصفحة السمات، وصور وحدات التحكم ورموز الأزرار المباشرة، ولافتات الملف الشخصي (بما فيها المتحركة) والشارات، وزخارف الصورة الرمزية من Discord، والصور المستديرة، وصورة الصديق المكبرة في الإشعارات، وإشعارات المحاكي الخاصة، وبطاقات الألعاب الافتراضية. يستمر اللعب عبر الإنترنت والأصدقاء في العمل. يُطبَّق عند التشغيل التالي لقائمة HOME. تعمل الإضافات مع البرنامج الثابت 22.5.0 فقط: مع أي إصدار آخر تكون معطلة دائمًا.",
+        "de_DE": "Schaltet alles ab, was Nextendo dem HOME-Menü hinzufügt: Logo und Texte, die Seite Designs, die Live-Controllerbilder und Tastensymbole, die Profilbanner (auch animierte) und Abzeichen, die Discord-Avatardekorationen, die abgerundeten Bilder, das größere Freundesbild in Benachrichtigungen, die eigenen Benachrichtigungen des Emulators und die virtuellen Spielkarten. Online-Spiel und Freunde funktionieren weiter. Wird beim nächsten Start des HOME-Menüs angewendet. Die Ergänzungen funktionieren nur mit Firmware 22.5.0: mit jeder anderen Version sind sie immer aus.",
+        "el_GR": "Απενεργοποιεί ό,τι προσθέτει το Nextendo στο μενού HOME: το λογότυπο και τα κείμενα, τη σελίδα Θέματα, τις ζωντανές εικόνες χειριστηρίων και τα σύμβολα κουμπιών, τα banner προφίλ (και τα κινούμενα) και τα σήματα, τις διακοσμήσεις avatar του Discord, τις στρογγυλεμένες εικόνες, τη μεγαλύτερη φωτογραφία φίλου στις ειδοποιήσεις, τις ειδοποιήσεις του ίδιου του εξομοιωτή και τις εικονικές κάρτες παιχνιδιών. Το διαδικτυακό παιχνίδι και οι φίλοι συνεχίζουν να λειτουργούν. Εφαρμόζεται στην επόμενη εκκίνηση του μενού HOME. Οι προσθήκες λειτουργούν μόνο με το υλικολογισμικό 22.5.0: με οποιαδήποτε άλλη έκδοση είναι πάντα απενεργοποιημένες.",
+        "en_US": "Turns off everything Nextendo adds to the HOME Menu: the logo and texts, the Themes page, the live controller pictures and button symbols, the profile banners (animated ones too) and badges, the Discord avatar decorations, the rounded pictures, the larger friend picture in notifications, the emulator's own notifications and the virtual game cards. Online play and friends keep working. Applied the next time the HOME Menu starts. The additions only work with firmware 22.5.0: with any other version they are always off.",
+        "es_ES": "Desactiva todo lo que Nextendo añade al menú HOME: el logotipo y los textos, la página Temas, las imágenes de mando y los símbolos de botones en directo, los banners de perfil (también los animados) y las insignias, las decoraciones de avatar de Discord, las imágenes redondeadas, la foto de amigo ampliada en las notificaciones, las notificaciones propias del emulador y las tarjetas de juego virtuales. El juego en línea y los amigos siguen funcionando. Se aplica la próxima vez que se inicie el menú HOME. Los añadidos solo funcionan con el firmware 22.5.0: con cualquier otra versión están siempre desactivados.",
+        "fr_FR": "Désactive tout ce que Nextendo ajoute au menu HOME : le logo et les textes, la page Thèmes, les images de manette et les symboles de touches en direct, les bannières de profil (animées comprises) et les badges, les décorations d'avatar Discord, les images arrondies, la photo d'ami agrandie dans les notifications, les notifications propres à l'émulateur et les cartes de jeu virtuelles. Le jeu en ligne et les amis continuent de fonctionner. Appliqué au prochain démarrage du menu HOME. Les ajouts ne fonctionnent qu'avec le firmware 22.5.0 : avec toute autre version, ils sont toujours désactivés.",
+        "he_IL": "מכבה את כל מה ש-Nextendo מוסיפה לתפריט HOME: הלוגו והטקסטים, דף ערכות הנושא, תמונות הבקרים וסמלי הכפתורים בזמן אמת, באנרי הפרופיל (גם המונפשים) והתגים, קישוטי האווטאר של Discord, התמונות המעוגלות, תמונת החבר המוגדלת בהתראות, ההתראות של האמולטור עצמו וכרטיסי המשחק הווירטואליים. משחק מקוון וחברים ממשיכים לעבוד. מוחל בהפעלה הבאה של תפריט HOME. התוספות פועלות רק עם קושחה 22.5.0: עם כל גרסה אחרת הן תמיד כבויות.",
+        "it_IT": "Disattiva tutto ciò che Nextendo aggiunge al menu HOME: il logo e i testi, la pagina Temi, le immagini dei controller e i simboli dei pulsanti in diretta, i banner del profilo (anche animati) e i badge, le decorazioni avatar di Discord, le immagini arrotondate, la foto dell'amico ingrandita nelle notifiche, le notifiche proprie dell'emulatore e le schede di gioco virtuali. Il gioco online e gli amici continuano a funzionare. Applicato al prossimo avvio del menu HOME. Le aggiunte funzionano solo con il firmware 22.5.0: con qualsiasi altra versione sono sempre disattivate.",
+        "ja_JP": "Nextendo が HOME メニューに加えたものをすべてオフにします: ロゴとテキスト、テーマページ、コントローラーの画像とボタン記号のライブ表示、プロフィールのバナー（アニメーション付きも）とバッジ、Discord のアバターデコレーション、角の丸い画像、通知内の大きなフレンド画像、エミュレーター独自の通知、仮想ゲームカード。オンラインプレイとフレンドはそのまま使えます。次に HOME メニューを起動したときに反映されます。追加機能はファームウェア 22.5.0 でのみ動作し、それ以外のバージョンでは常にオフです。",
+        "ko_KR": "Nextendo가 HOME 메뉴에 추가한 모든 것을 끕니다: 로고와 텍스트, 테마 페이지, 실시간 컨트롤러 그림과 버튼 기호, 프로필 배너(움직이는 배너 포함)와 배지, Discord 아바타 장식, 둥근 이미지, 알림의 큰 친구 사진, 에뮬레이터 자체 알림, 가상 게임 카드. 온라인 플레이와 친구 기능은 계속 작동합니다. 다음에 HOME 메뉴를 시작할 때 적용됩니다. 추가 기능은 펌웨어 22.5.0에서만 작동하며, 다른 버전에서는 항상 꺼져 있습니다.",
+        "no_NO": "Slår av alt Nextendo legger til i HOME-menyen: logoen og tekstene, Temaer-siden, kontrollerbildene og knappesymbolene i sanntid, profilbannerne (også animerte) og merkene, Discord-avatardekorasjonene, de avrundede bildene, det større vennebildet i varsler, emulatorens egne varsler og de virtuelle spillkortene. Nettspill og venner fungerer fortsatt. Tas i bruk neste gang HOME-menyen starter. Tilleggene fungerer bare med fastvare 22.5.0: med alle andre versjoner er de alltid av.",
+        "pl_PL": "Wyłącza wszystko, co Nextendo dodaje do menu HOME: logo i teksty, stronę Motywy, obrazy kontrolerów i symbole przycisków na żywo, banery profilu (także animowane) i odznaki, dekoracje awatara z Discorda, zaokrąglone obrazy, powiększone zdjęcie znajomego w powiadomieniach, własne powiadomienia emulatora oraz wirtualne karty gier. Gra online i znajomi nadal działają. Stosowane przy następnym uruchomieniu menu HOME. Dodatki działają tylko z firmware 22.5.0: z każdą inną wersją są zawsze wyłączone.",
+        "pt_BR": "Desativa tudo o que a Nextendo adiciona ao menu HOME: o logotipo e os textos, a página Temas, as imagens de controle e os símbolos de botões ao vivo, os banners de perfil (inclusive os animados) e os emblemas, as decorações de avatar do Discord, as imagens arredondadas, a foto de amigo ampliada nas notificações, as notificações próprias do emulador e os cartões de jogo virtuais. O jogo online e os amigos continuam funcionando. Aplicado na próxima vez que o menu HOME iniciar. Os acréscimos só funcionam com o firmware 22.5.0: com qualquer outra versão ficam sempre desativados.",
+        "ru_RU": "Отключает всё, что Nextendo добавляет в меню HOME: логотип и тексты, страницу «Темы», живые изображения контроллеров и символы кнопок, баннеры профиля (включая анимированные) и значки, украшения аватара Discord, скруглённые изображения, увеличенное фото друга в уведомлениях, собственные уведомления эмулятора и виртуальные игровые карты. Сетевая игра и друзья продолжают работать. Применяется при следующем запуске меню HOME. Дополнения работают только с прошивкой 22.5.0: с любой другой версией они всегда отключены.",
+        "sv_SE": "Stänger av allt som Nextendo lägger till i HOME-menyn: logotypen och texterna, sidan Teman, handkontrollsbilderna och knappsymbolerna i realtid, profilbanderollerna (även animerade) och märkena, Discord-avatardekorationerna, de rundade bilderna, den större vänbilden i aviseringar, emulatorns egna aviseringar och de virtuella spelkorten. Onlinespel och vänner fungerar fortfarande. Tillämpas nästa gång HOME-menyn startar. Tilläggen fungerar bara med firmware 22.5.0: med alla andra versioner är de alltid avstängda.",
+        "th_TH": "ปิดทุกอย่างที่ Nextendo เพิ่มให้เมนู HOME: โลโก้และข้อความ หน้าธีม ภาพคอนโทรลเลอร์และสัญลักษณ์ปุ่มแบบสด แบนเนอร์โปรไฟล์ (รวมแบบเคลื่อนไหว) และเหรียญตรา การตกแต่งอวาตาร์ของ Discord ภาพมุมมน ภาพเพื่อนขนาดใหญ่ในการแจ้งเตือน การแจ้งเตือนของอีมูเลเตอร์เอง และการ์ดเกมเสมือน การเล่นออนไลน์และเพื่อนยังใช้งานได้ มีผลเมื่อเปิดเมนู HOME ครั้งถัดไป ส่วนเพิ่มเติมใช้ได้กับเฟิร์มแวร์ 22.5.0 เท่านั้น: กับเวอร์ชันอื่นจะปิดอยู่เสมอ",
+        "tr_TR": "Nextendo'nun HOME Menüsü'ne eklediği her şeyi kapatır: logo ve metinler, Temalar sayfası, canlı kumanda resimleri ve düğme simgeleri, profil afişleri (hareketliler de) ve rozetler, Discord avatar süslemeleri, yuvarlatılmış resimler, bildirimlerdeki büyük arkadaş resmi, emülatörün kendi bildirimleri ve sanal oyun kartları. Çevrimiçi oyun ve arkadaşlar çalışmaya devam eder. HOME Menüsü bir sonraki başladığında uygulanır. Eklemeler yalnızca 22.5.0 donanım yazılımıyla çalışır: başka herhangi bir sürümde her zaman kapalıdır.",
+        "uk_UA": "Вимикає все, що Nextendo додає до меню HOME: логотип і тексти, сторінку «Теми», живі зображення контролерів і символи кнопок, банери профілю (зокрема анімовані) і значки, прикраси аватара Discord, заокруглені зображення, збільшене фото друга в сповіщеннях, власні сповіщення емулятора та віртуальні ігрові картки. Гра онлайн і друзі продовжують працювати. Застосовується під час наступного запуску меню HOME. Доповнення працюють лише з прошивкою 22.5.0: з будь-якою іншою версією вони завжди вимкнені.",
+        "zh_CN": "关闭 Nextendo 为 HOME 菜单添加的所有内容：标志和文字、主题页面、实时手柄图片和按键符号、个人资料横幅（包括动态横幅）和徽章、Discord 头像装饰、圆角图片、通知中放大的好友照片、模拟器自己的通知以及虚拟游戏卡。在线游戏和好友功能照常可用。下次启动 HOME 菜单时生效。这些新增内容只适用于固件 22.5.0：使用其他任何版本时始终关闭。",
+        "zh_TW": "關閉 Nextendo 為 HOME 選單加入的所有內容：標誌與文字、主題頁面、即時控制器圖片與按鍵符號、個人檔案橫幅（包括動態橫幅）與徽章、Discord 頭像裝飾、圓角圖片、通知中放大的好友照片、模擬器自己的通知以及虛擬遊戲卡。線上遊玩與好友功能照常可用。下次啟動 HOME 選單時生效。這些新增內容只適用於韌體 22.5.0：使用其他任何版本時一律關閉。"
       }
     },
-{
-  "ID": "QLaunchXciCards",
-  "Translations": {
-    "ar_SA": "بطاقات الألعاب (.xci) كبطاقات ألعاب افتراضية",
-    "de_DE": "Spielkarten (.xci) als virtuelle Spielkarten",
-    "el_GR": "Κάρτες παιχνιδιών (.xci) ως εικονικές κάρτες",
-    "en_US": "Game cards (.xci) as virtual game cards",
-    "es_ES": "Tarjetas de juego (.xci) como tarjetas virtuales",
-    "fr_FR": "Cartes de jeu (.xci) en cartes de jeu virtuelles",
-    "he_IL": "כרטיסי משחק (.xci) ככרטיסי משחק וירטואליים",
-    "it_IT": "Schede di gioco (.xci) come schede virtuali",
-    "ja_JP": "ゲームカード（.xci）をバーチャルゲームカードとして",
-    "ko_KR": "게임 카드(.xci)를 가상 게임 카드로",
-    "no_NO": "Spillkort (.xci) som virtuelle spillkort",
-    "pl_PL": "Karty gier (.xci) jako wirtualne karty gier",
-    "pt_BR": "Cartões de jogo (.xci) como cartões virtuais",
-    "ru_RU": "Игровые карты (.xci) как виртуальные игровые карты",
-    "sv_SE": "Spelkort (.xci) som virtuella spelkort",
-    "th_TH": "การ์ดเกม (.xci) เป็นการ์ดเกมเสมือน",
-    "tr_TR": "Oyun kartları (.xci) sanal oyun kartı olarak",
-    "uk_UA": "Ігрові картки (.xci) як віртуальні ігрові картки",
-    "zh_CN": "将游戏卡（.xci）作为虚拟游戏卡",
-    "zh_TW": "將遊戲卡（.xci）作為虛擬遊戲卡"
-  }
-},
-{
+    {
+      "ID": "QLaunchXciCards",
+      "Translations": {
+        "ar_SA": "بطاقات الألعاب (.xci) كبطاقات ألعاب افتراضية",
+        "de_DE": "Spielkarten (.xci) als virtuelle Spielkarten",
+        "el_GR": "Κάρτες παιχνιδιών (.xci) ως εικονικές κάρτες",
+        "en_US": "Game cards (.xci) as virtual game cards",
+        "es_ES": "Tarjetas de juego (.xci) como tarjetas virtuales",
+        "fr_FR": "Cartes de jeu (.xci) en cartes de jeu virtuelles",
+        "he_IL": "כרטיסי משחק (.xci) ככרטיסי משחק וירטואליים",
+        "it_IT": "Schede di gioco (.xci) come schede virtuali",
+        "ja_JP": "ゲームカード（.xci）をバーチャルゲームカードとして",
+        "ko_KR": "게임 카드(.xci)를 가상 게임 카드로",
+        "no_NO": "Spillkort (.xci) som virtuelle spillkort",
+        "pl_PL": "Karty gier (.xci) jako wirtualne karty gier",
+        "pt_BR": "Cartões de jogo (.xci) como cartões virtuais",
+        "ru_RU": "Игровые карты (.xci) как виртуальные игровые карты",
+        "sv_SE": "Spelkort (.xci) som virtuella spelkort",
+        "th_TH": "การ์ดเกม (.xci) เป็นการ์ดเกมเสมือน",
+        "tr_TR": "Oyun kartları (.xci) sanal oyun kartı olarak",
+        "uk_UA": "Ігрові картки (.xci) як віртуальні ігрові картки",
+        "zh_CN": "将游戏卡（.xci）作为虚拟游戏卡",
+        "zh_TW": "將遊戲卡（.xci）作為虛擬遊戲卡"
+      }
+    },
+    {
       "ID": "QLaunchFullscreen",
       "Translations": {
         "ar_SA": "فتح قائمة HOME بملء الشاشة",
@@ -11103,26 +11103,26 @@
     {
       "ID": "HomeMenuNoFirmware",
       "Translations": {
-        "ar_SA": "تأتي قائمة HOME مع البرنامج الثابت للنظام. ثبّت برنامجاً ثابتاً أولاً (إجراءات > تثبيت البرنامج الثابت).",
-        "de_DE": "Das HOME-Menü gehört zur System-Firmware. Installiere zuerst eine Firmware (Aktionen > Firmware installieren).",
-        "el_GR": "Το μενού HOME έρχεται με το firmware του συστήματος. Εγκατάστησε πρώτα ένα firmware (Ενέργειες > Εγκατάσταση firmware).",
-        "en_US": "The HOME Menu comes with the system firmware. Install a firmware first (Actions > Install Firmware).",
-        "es_ES": "El menú HOME viene con el firmware del sistema. Instala primero un firmware (Acciones > Instalar firmware).",
-        "fr_FR": "Le menu HOME vient avec le firmware du système. Installe d'abord un firmware (Actions > Installer un firmware).",
-        "he_IL": "תפריט ה-HOME מגיע עם קושחת המערכת. התקן קודם קושחה (פעולות > התקנת קושחה).",
-        "it_IT": "Il menu HOME fa parte del firmware di sistema. Installa prima un firmware (Azioni > Installa firmware).",
-        "ja_JP": "HOMEメニューはシステムファームウェアに含まれています。先にファームウェアをインストールしてください（アクション > ファームウェアをインストール）。",
-        "ko_KR": "HOME 메뉴는 시스템 펌웨어에 포함되어 있습니다. 먼저 펌웨어를 설치하세요 (작업 > 펌웨어 설치).",
-        "no_NO": "HOME-menyen følger med systemfastvaren. Installer en fastvare først (Handlinger > Installer fastvare).",
-        "pl_PL": "Menu HOME jest częścią firmware'u systemu. Najpierw zainstaluj firmware (Akcje > Zainstaluj firmware).",
-        "pt_BR": "O menu HOME vem com o firmware do sistema. Instale um firmware primeiro (Ações > Instalar firmware).",
-        "ru_RU": "Меню HOME входит в системную прошивку. Сначала установи прошивку (Действия > Установить прошивку).",
-        "sv_SE": "HOME-menyn följer med systemets firmware. Installera en firmware först (Åtgärder > Installera firmware).",
-        "th_TH": "เมนู HOME มาพร้อมกับเฟิร์มแวร์ของระบบ ติดตั้งเฟิร์มแวร์ก่อน (การกระทำ > ติดตั้งเฟิร์มแวร์)",
-        "tr_TR": "HOME Menüsü sistem donanım yazılımıyla gelir. Önce bir donanım yazılımı yükle (Eylemler > Donanım Yazılımı Yükle).",
-        "uk_UA": "Меню HOME входить до системної прошивки. Спочатку встанови прошивку (Дії > Встановити прошивку).",
-        "zh_CN": "HOME菜单随系统固件提供。请先安装固件（操作 > 安装固件）。",
-        "zh_TW": "HOME選單隨系統韌體提供。請先安裝韌體（動作 > 安裝韌體）。"
+        "ar_SA": "لا يمكن تشغيل قائمة HOME: لا يوجد برنامج ثابت مثبت، وقائمة HOME تأتي معه. ثبّت برنامجًا ثابتًا أولًا (الإجراءات > تثبيت البرنامج الثابت)؛ تحتاج إضافات Nextendo إلى البرنامج الثابت 22.5.0.",
+        "de_DE": "Das HOME-Menü kann nicht starten: Es ist keine Firmware installiert, und das HOME-Menü ist Teil davon. Installiere zuerst eine Firmware (Aktionen > Firmware installieren); die Nextendo-Ergänzungen benötigen Firmware 22.5.0.",
+        "el_GR": "Το μενού HOME δεν μπορεί να ξεκινήσει: δεν είναι εγκατεστημένο υλικολογισμικό, και το μενού HOME έρχεται μαζί του. Εγκαταστήστε πρώτα ένα υλικολογισμικό (Ενέργειες > Εγκατάσταση υλικολογισμικού). Οι προσθήκες του Nextendo χρειάζονται το υλικολογισμικό 22.5.0.",
+        "en_US": "The HOME Menu cannot start: no firmware is installed, and the HOME Menu comes with it. Install a firmware first (Actions > Install Firmware); the Nextendo additions need firmware 22.5.0.",
+        "es_ES": "El menú HOME no puede iniciarse: no hay ningún firmware instalado, y el menú HOME viene con él. Instala primero un firmware (Acciones > Instalar firmware); los añadidos de Nextendo necesitan el firmware 22.5.0.",
+        "fr_FR": "Le menu HOME ne peut pas démarrer : aucun firmware n'est installé, et le menu HOME vient avec lui. Installe d'abord un firmware (Actions > Installer un firmware) ; les ajouts Nextendo demandent le firmware 22.5.0.",
+        "he_IL": "תפריט HOME לא יכול להתחיל: לא מותקנת קושחה, ותפריט HOME מגיע איתה. התקן קודם קושחה (פעולות > התקן קושחה); התוספות של Nextendo דורשות קושחה 22.5.0.",
+        "it_IT": "Il menu HOME non può avviarsi: non è installato alcun firmware, e il menu HOME ne fa parte. Installa prima un firmware (Azioni > Installa firmware); le aggiunte Nextendo richiedono il firmware 22.5.0.",
+        "ja_JP": "HOME メニューを起動できません: ファームウェアがインストールされておらず、HOME メニューはその一部です。先にファームウェアをインストールしてください（アクション > ファームウェアをインストール）。Nextendo の追加機能にはファームウェア 22.5.0 が必要です。",
+        "ko_KR": "HOME 메뉴를 시작할 수 없습니다: 펌웨어가 설치되어 있지 않으며 HOME 메뉴는 펌웨어에 포함되어 있습니다. 먼저 펌웨어를 설치하세요(작업 > 펌웨어 설치). Nextendo 추가 기능에는 펌웨어 22.5.0이 필요합니다.",
+        "no_NO": "HOME-menyen kan ikke starte: ingen fastvare er installert, og HOME-menyen følger med den. Installer en fastvare først (Handlinger > Installer fastvare); Nextendo-tilleggene krever fastvare 22.5.0.",
+        "pl_PL": "Menu HOME nie może się uruchomić: nie zainstalowano firmware, a menu HOME jest jego częścią. Najpierw zainstaluj firmware (Akcje > Zainstaluj firmware); dodatki Nextendo wymagają firmware 22.5.0.",
+        "pt_BR": "O menu HOME não pode iniciar: nenhum firmware está instalado, e o menu HOME vem com ele. Instale um firmware primeiro (Ações > Instalar firmware); os acréscimos da Nextendo precisam do firmware 22.5.0.",
+        "ru_RU": "Меню HOME не может запуститься: прошивка не установлена, а меню HOME входит в неё. Сначала установите прошивку (Действия > Установить прошивку); дополнениям Nextendo нужна прошивка 22.5.0.",
+        "sv_SE": "HOME-menyn kan inte starta: ingen firmware är installerad, och HOME-menyn ingår i den. Installera en firmware först (Åtgärder > Installera firmware); Nextendos tillägg kräver firmware 22.5.0.",
+        "th_TH": "เมนู HOME เริ่มไม่ได้: ไม่มีเฟิร์มแวร์ติดตั้งอยู่ และเมนู HOME มาพร้อมเฟิร์มแวร์ ติดตั้งเฟิร์มแวร์ก่อน (การทำงาน > ติดตั้งเฟิร์มแวร์) ส่วนเพิ่มเติมของ Nextendo ต้องใช้เฟิร์มแวร์ 22.5.0",
+        "tr_TR": "HOME Menüsü başlatılamıyor: yüklü bir donanım yazılımı yok ve HOME Menüsü onunla birlikte gelir. Önce bir donanım yazılımı yükleyin (Eylemler > Donanım Yazılımı Yükle); Nextendo eklemeleri 22.5.0 donanım yazılımını gerektirir.",
+        "uk_UA": "Меню HOME не може запуститися: прошивку не встановлено, а меню HOME входить до неї. Спершу встановіть прошивку (Дії > Встановити прошивку); доповненням Nextendo потрібна прошивка 22.5.0.",
+        "zh_CN": "无法启动 HOME 菜单：未安装固件，而 HOME 菜单包含在固件中。请先安装固件（操作 > 安装固件）；Nextendo 新增内容需要固件 22.5.0。",
+        "zh_TW": "無法啟動 HOME 選單：未安裝韌體，而 HOME 選單包含在韌體中。請先安裝韌體（動作 > 安裝韌體）；Nextendo 新增內容需要韌體 22.5.0。"
       }
     },
     {
@@ -11623,6 +11623,56 @@
         "uk_UA": "Друзі й сповіщення знову працюють",
         "zh_CN": "好友和通知已恢复",
         "zh_TW": "好友和通知已恢復"
+      }
+    },
+    {
+      "ID": "HomeMenuOtherFirmware",
+      "Translations": {
+        "en_US": "Firmware {0} is installed, but the Nextendo additions to the HOME Menu are made for firmware {1} only. The HOME Menu starts without them, and the option \"Original HOME Menu\" cannot be changed. Once firmware {1} is installed again, they come back as you had set them.",
+        "fr_FR": "Le firmware {0} est installé, mais les ajouts Nextendo au menu HOME sont faits pour le firmware {1} uniquement. Le menu HOME démarre sans eux, et l'option « Menu HOME d'origine » ne peut pas être changée. Dès que le firmware {1} est de nouveau installé, ils reviennent comme tu les avais réglés.",
+        "de_DE": "Firmware {0} ist installiert, aber die Nextendo-Ergänzungen des HOME-Menüs sind nur für Firmware {1} gemacht. Das HOME-Menü startet ohne sie, und die Option „Original-HOME-Menü“ kann nicht geändert werden. Sobald Firmware {1} wieder installiert ist, kommen sie so zurück, wie du sie eingestellt hattest.",
+        "es_ES": "Está instalado el firmware {0}, pero los añadidos de Nextendo al menú HOME están hechos solo para el firmware {1}. El menú HOME se inicia sin ellos y la opción «Menú HOME original» no se puede cambiar. En cuanto vuelvas a instalar el firmware {1}, regresarán tal como los tenías configurados.",
+        "it_IT": "È installato il firmware {0}, ma le aggiunte Nextendo al menu HOME sono fatte solo per il firmware {1}. Il menu HOME si avvia senza di esse e l'opzione «Menu HOME originale» non può essere modificata. Appena il firmware {1} sarà di nuovo installato, torneranno come le avevi impostate.",
+        "pt_BR": "O firmware {0} está instalado, mas os acréscimos da Nextendo ao menu HOME são feitos apenas para o firmware {1}. O menu HOME inicia sem eles, e a opção \"Menu HOME original\" não pode ser alterada. Assim que o firmware {1} for instalado de novo, eles voltam como você os tinha configurado.",
+        "ru_RU": "Установлена прошивка {0}, но дополнения Nextendo для меню HOME сделаны только для прошивки {1}. Меню HOME запускается без них, а параметр «Оригинальное меню HOME» нельзя изменить. Как только прошивка {1} снова будет установлена, они вернутся в том виде, как вы их настроили.",
+        "uk_UA": "Встановлено прошивку {0}, але доповнення Nextendo для меню HOME зроблені лише для прошивки {1}. Меню HOME запускається без них, а параметр «Оригінальне меню HOME» не можна змінити. Щойно прошивку {1} буде знову встановлено, вони повернуться так, як ви їх налаштували.",
+        "pl_PL": "Zainstalowano firmware {0}, ale dodatki Nextendo do menu HOME są przygotowane tylko dla firmware {1}. Menu HOME uruchamia się bez nich, a opcji „Oryginalne menu HOME” nie można zmienić. Gdy firmware {1} zostanie ponownie zainstalowane, wrócą tak, jak je ustawiłeś.",
+        "sv_SE": "Firmware {0} är installerad, men Nextendos tillägg till HOME-menyn är gjorda endast för firmware {1}. HOME-menyn startar utan dem, och alternativet ”Original-HOME-meny” kan inte ändras. Så snart firmware {1} installeras igen kommer de tillbaka som du hade ställt in dem.",
+        "no_NO": "Fastvare {0} er installert, men Nextendo-tilleggene til HOME-menyen er laget bare for fastvare {1}. HOME-menyen starter uten dem, og valget «Original HOME-meny» kan ikke endres. Så snart fastvare {1} er installert igjen, kommer de tilbake slik du hadde stilt dem inn.",
+        "tr_TR": "{0} donanım yazılımı yüklü, ancak Nextendo'nun HOME Menüsü eklemeleri yalnızca {1} donanım yazılımı için yapılmıştır. HOME Menüsü onlar olmadan başlar ve \"Orijinal HOME Menüsü\" seçeneği değiştirilemez. {1} donanım yazılımı yeniden yüklendiğinde, ayarladığınız gibi geri gelirler.",
+        "el_GR": "Είναι εγκατεστημένο το υλικολογισμικό {0}, αλλά οι προσθήκες του Nextendo στο μενού HOME είναι φτιαγμένες μόνο για το υλικολογισμικό {1}. Το μενού HOME ξεκινά χωρίς αυτές και η επιλογή «Αρχικό μενού HOME» δεν μπορεί να αλλάξει. Μόλις εγκατασταθεί ξανά το υλικολογισμικό {1}, θα επιστρέψουν όπως τις είχατε ρυθμίσει.",
+        "ar_SA": "البرنامج الثابت {0} مثبت، لكن إضافات Nextendo إلى قائمة HOME مصممة للبرنامج الثابت {1} فقط. تبدأ قائمة HOME بدونها، ولا يمكن تغيير خيار \"قائمة HOME الأصلية\". بمجرد تثبيت البرنامج الثابت {1} مجددًا، تعود كما ضبطتها.",
+        "he_IL": "מותקנת קושחה {0}, אבל התוספות של Nextendo לתפריט HOME נבנו רק עבור קושחה {1}. תפריט HOME מתחיל בלעדיהן, ואי אפשר לשנות את האפשרות \"תפריט HOME מקורי\". ברגע שקושחה {1} תותקן שוב, הן יחזרו כפי שהגדרת אותן.",
+        "ja_JP": "ファームウェア {0} がインストールされていますが、HOME メニューへの Nextendo の追加機能はファームウェア {1} 専用です。HOME メニューは追加機能なしで起動し、「オリジナルの HOME メニュー」オプションは変更できません。ファームウェア {1} を再びインストールすると、設定していたとおりに戻ります。",
+        "ko_KR": "펌웨어 {0}이(가) 설치되어 있지만, HOME 메뉴에 대한 Nextendo 추가 기능은 펌웨어 {1} 전용입니다. HOME 메뉴는 추가 기능 없이 시작되며 \"원래 HOME 메뉴\" 옵션은 변경할 수 없습니다. 펌웨어 {1}을(를) 다시 설치하면 설정해 둔 대로 돌아옵니다.",
+        "th_TH": "ติดตั้งเฟิร์มแวร์ {0} อยู่ แต่ส่วนเพิ่มเติมของ Nextendo สำหรับเมนู HOME ทำมาสำหรับเฟิร์มแวร์ {1} เท่านั้น เมนู HOME จะเริ่มโดยไม่มีส่วนเพิ่มเติม และเปลี่ยนตัวเลือก \"เมนู HOME ดั้งเดิม\" ไม่ได้ เมื่อติดตั้งเฟิร์มแวร์ {1} อีกครั้ง ส่วนเพิ่มเติมจะกลับมาตามที่คุณตั้งไว้",
+        "zh_CN": "已安装固件 {0}，但 Nextendo 为 HOME 菜单做的新增内容只适用于固件 {1}。HOME 菜单将不带这些内容启动，且无法更改“原版 HOME 菜单”选项。重新安装固件 {1} 后，它们会按你之前的设置恢复。",
+        "zh_TW": "已安裝韌體 {0}，但 Nextendo 為 HOME 選單做的新增內容只適用於韌體 {1}。HOME 選單將不帶這些內容啟動，且無法變更「原版 HOME 選單」選項。重新安裝韌體 {1} 後，它們會依你先前的設定恢復。"
+      }
+    },
+    {
+      "ID": "QLaunchOtherFirmwareHint",
+      "Translations": {
+        "en_US": "Firmware {0} installed: the Nextendo additions need firmware {1}, so they are off and this option is locked. Install firmware {1} to get them back.",
+        "fr_FR": "Firmware {0} installé : les ajouts Nextendo demandent le firmware {1}, ils sont donc désactivés et cette option est verrouillée. Installe le firmware {1} pour les retrouver.",
+        "de_DE": "Firmware {0} installiert: Die Nextendo-Ergänzungen benötigen Firmware {1}, daher sind sie aus und diese Option ist gesperrt. Installiere Firmware {1}, um sie zurückzubekommen.",
+        "es_ES": "Firmware {0} instalado: los añadidos de Nextendo necesitan el firmware {1}, así que están desactivados y esta opción está bloqueada. Instala el firmware {1} para recuperarlos.",
+        "it_IT": "Firmware {0} installato: le aggiunte Nextendo richiedono il firmware {1}, quindi sono disattivate e questa opzione è bloccata. Installa il firmware {1} per riaverle.",
+        "pt_BR": "Firmware {0} instalado: os acréscimos da Nextendo precisam do firmware {1}, então estão desativados e esta opção está bloqueada. Instale o firmware {1} para tê-los de volta.",
+        "ru_RU": "Установлена прошивка {0}: дополнениям Nextendo нужна прошивка {1}, поэтому они отключены, а этот параметр заблокирован. Установите прошивку {1}, чтобы вернуть их.",
+        "uk_UA": "Встановлено прошивку {0}: доповненням Nextendo потрібна прошивка {1}, тому вони вимкнені, а цей параметр заблоковано. Встановіть прошивку {1}, щоб повернути їх.",
+        "pl_PL": "Zainstalowano firmware {0}: dodatki Nextendo wymagają firmware {1}, więc są wyłączone, a ta opcja jest zablokowana. Zainstaluj firmware {1}, aby je przywrócić.",
+        "sv_SE": "Firmware {0} installerad: Nextendos tillägg kräver firmware {1}, så de är avstängda och alternativet är låst. Installera firmware {1} för att få tillbaka dem.",
+        "no_NO": "Fastvare {0} installert: Nextendo-tilleggene krever fastvare {1}, så de er av og dette valget er låst. Installer fastvare {1} for å få dem tilbake.",
+        "tr_TR": "{0} donanım yazılımı yüklü: Nextendo eklemeleri {1} donanım yazılımını gerektirir, bu yüzden kapalıdırlar ve bu seçenek kilitlidir. Geri almak için {1} donanım yazılımını yükleyin.",
+        "el_GR": "Εγκατεστημένο υλικολογισμικό {0}: οι προσθήκες του Nextendo χρειάζονται το υλικολογισμικό {1}, άρα είναι απενεργοποιημένες και η επιλογή είναι κλειδωμένη. Εγκαταστήστε το υλικολογισμικό {1} για να τις επαναφέρετε.",
+        "ar_SA": "البرنامج الثابت {0} مثبت: تحتاج إضافات Nextendo إلى البرنامج الثابت {1}، لذا فهي معطلة وهذا الخيار مقفل. ثبّت البرنامج الثابت {1} لاستعادتها.",
+        "he_IL": "מותקנת קושחה {0}: התוספות של Nextendo דורשות קושחה {1}, ולכן הן כבויות והאפשרות נעולה. התקן קושחה {1} כדי להחזיר אותן.",
+        "ja_JP": "ファームウェア {0} がインストールされています: Nextendo の追加機能にはファームウェア {1} が必要なため、オフになっており、このオプションはロックされています。ファームウェア {1} をインストールすると元に戻ります。",
+        "ko_KR": "펌웨어 {0} 설치됨: Nextendo 추가 기능에는 펌웨어 {1}이(가) 필요하므로 꺼져 있으며 이 옵션은 잠겨 있습니다. 펌웨어 {1}을(를) 설치하면 다시 사용할 수 있습니다.",
+        "th_TH": "ติดตั้งเฟิร์มแวร์ {0}: ส่วนเพิ่มเติมของ Nextendo ต้องใช้เฟิร์มแวร์ {1} จึงถูกปิดและตัวเลือกนี้ถูกล็อก ติดตั้งเฟิร์มแวร์ {1} เพื่อใช้งานอีกครั้ง",
+        "zh_CN": "已安装固件 {0}：Nextendo 新增内容需要固件 {1}，因此已关闭，此选项已锁定。安装固件 {1} 即可恢复。",
+        "zh_TW": "已安裝韌體 {0}：Nextendo 新增內容需要韌體 {1}，因此已關閉，此選項已鎖定。安裝韌體 {1} 即可恢復。"
       }
     }
   ]

@@ -890,6 +890,37 @@ namespace Ryujinx.Ava.UI.Windows
         /// </summary>
         public void LaunchHomeMenu()
         {
+            // The Nextendo additions are made for one firmware: with another one they are turned
+            // off for this start (the player's choice is kept), and the player is told first.
+            Ryujinx.HLE.FileSystem.SystemVersion firmware = ViewModel.ContentManager.GetCurrentFirmwareVersion();
+
+            Ryujinx.Common.Configuration.NextendoHomeMenuVanilla.Firmware = firmware == null ? "" : $"{firmware.Major}.{firmware.Minor}.{firmware.Micro}";
+
+            if (Ryujinx.Common.Configuration.NextendoHomeMenuVanilla.Forced)
+            {
+                Logger.Warning?.Print(LogClass.Application, $"HOME Menu: firmware {Ryujinx.Common.Configuration.NextendoHomeMenuVanilla.Firmware}, the Nextendo additions need {Ryujinx.Common.Configuration.NextendoHomeMenuVanilla.SupportedFirmware}: turned off.");
+
+                RevealAfterBackgroundLoad();
+
+                Dispatcher.UIThread.Post(async () =>
+                {
+                    await Ryujinx.Ava.UI.Helpers.ContentDialogHelper.CreateWarningDialog(
+                        LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_HomeMenuName],
+                        LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_HomeMenuOtherFirmware]
+                            .Replace("{0}", Ryujinx.Common.Configuration.NextendoHomeMenuVanilla.Firmware)
+                            .Replace("{1}", Ryujinx.Common.Configuration.NextendoHomeMenuVanilla.SupportedFirmware));
+
+                    LaunchHomeMenuNow();
+                });
+
+                return;
+            }
+
+            LaunchHomeMenuNow();
+        }
+
+        private void LaunchHomeMenuNow()
+        {
             // The menu draws through the shared frame buffers of the system applets.
             Environment.SetEnvironmentVariable("NEXTENDO_SHARED_FB", "1");
 

@@ -345,7 +345,7 @@ namespace Ryujinx.Common.Configuration
         // (staff and donors: the server only gives it to them). The still picture of the decoration.
         private static byte[] Decorated(ulong pid, byte[] picture)
         {
-            if (picture == null || picture.Length == 0 || NextendoImages.Decorate == null)
+            if (picture == null || picture.Length == 0 || NextendoImages.Decorate == null || NextendoHomeMenuVanilla.Enabled)
             {
                 return picture;
             }

@@ -27,6 +27,8 @@
                 <CheckBox Name="FullscreenCheck" Content="{ext:Locale Dialog_Nextendo_QLaunchFullscreen}" />
                 <CheckBox Name="VanillaCheck" Content="{ext:Locale Dialog_Nextendo_QLaunchVanilla}"
                           ToolTip.Tip="{ext:Locale Dialog_Nextendo_QLaunchVanillaHint}" />
+                <TextBlock Name="FirmwareHint" IsVisible="False" Margin="28,0,0,0" TextWrapping="Wrap"
+                           Foreground="Orange" FontSize="12" />
                 <CheckBox Name="XciCardsCheck" Content="{ext:Locale Dialog_Nextendo_QLaunchXciCards}" />
             </StackPanel>
 

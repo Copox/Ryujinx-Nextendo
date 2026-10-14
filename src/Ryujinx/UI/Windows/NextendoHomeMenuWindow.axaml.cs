@@ -53,8 +53,28 @@ namespace Ryujinx.Ava.UI.Windows
             ShowAlbumHint();
 
             // [Nextendo] the HOME Menu as the console has it (taken when it starts again)
-            VanillaCheck.IsChecked = Ryujinx.Common.Configuration.NextendoHomeMenuVanilla.Enabled;
-            VanillaCheck.IsCheckedChanged += (_, _) => Ryujinx.Common.Configuration.NextendoHomeMenuVanilla.Enabled = VanillaCheck.IsChecked == true;
+            // With another firmware than the one the additions are made for, they are off and the
+            // option is locked; with none, the HOME Menu cannot start at all.
+            Ryujinx.HLE.FileSystem.SystemVersion firmware = RyujinxApp.MainWindow?.ViewModel.ContentManager.GetCurrentFirmwareVersion();
+
+            NextendoHomeMenuVanilla.Firmware = firmware == null ? "" : $"{firmware.Major}.{firmware.Minor}.{firmware.Micro}";
+
+            VanillaCheck.IsChecked = NextendoHomeMenuVanilla.Enabled;
+            VanillaCheck.IsEnabled = !NextendoHomeMenuVanilla.Forced;
+            VanillaCheck.IsCheckedChanged += (_, _) => NextendoHomeMenuVanilla.Enabled = VanillaCheck.IsChecked == true;
+
+            if (firmware == null)
+            {
+                FirmwareHint.Text = LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_HomeMenuNoFirmware];
+                FirmwareHint.IsVisible = true;
+            }
+            else if (NextendoHomeMenuVanilla.Forced)
+            {
+                FirmwareHint.Text = LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_QLaunchOtherFirmwareHint]
+                    .Replace("{0}", NextendoHomeMenuVanilla.Firmware)
+                    .Replace("{1}", NextendoHomeMenuVanilla.SupportedFirmware);
+                FirmwareHint.IsVisible = true;
+            }
 
             // [Nextendo] the game cards (.xci) as virtual game cards, or as games of the HOME Menu
             XciCardsCheck.IsChecked = Ryujinx.HLE.HOS.NextendoVirtualCards.Option;
