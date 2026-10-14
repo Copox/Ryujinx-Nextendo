@@ -288,12 +288,25 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
 
         public ResultCode GetNintendoAccountUserResourceCacheForApplication(ServiceCtx context)
         {
-            Logger.Stub?.PrintStub(LogClass.ServiceAcc, new { NetworkServiceAccountId });
+            // NasUserBase is a fixed 0x1a output pointer (C/X), not the B resource buffer.
+            ResultCode result = CachedAccountInfo.PrepareResponse(context.Request, context.Response,
+                context.OutputPointerBufferAddress, context.OutputPointerBufferSize);
+            if (result != ResultCode.Success)
+            {
+                Logger.Warning?.Print(LogClass.ServiceAcc, "[Nextendo account cache] Invalid output buffers.");
+                return result;
+            }
+
+            context.Memory.Write(context.OutputPointerBufferAddress, CachedAccountInfo.Create());
+            if (context.Request.ReceiveBuff.Count > 0)
+            {
+                var resource = context.Request.ReceiveBuff[0];
+                context.Memory.Fill(resource.Position, resource.Size, 0);
+            }
 
             context.ResponseData.Write(NetworkServiceAccountId);
-
-            // TODO: determine and fill the output IPC buffer.
-
+            Logger.Info?.Print(LogClass.ServiceAcc,
+                "[Nextendo account cache] Returned 0x68-byte user base; shared birthday=2000-01-01.");
             return ResultCode.Success;
         }
 
