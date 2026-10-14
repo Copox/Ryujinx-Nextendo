@@ -12,6 +12,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 namespace Ryujinx.HLE.HOS
 {
@@ -367,7 +368,7 @@ namespace Ryujinx.HLE.HOS
                 }
             }
 
-            Logger.Info?.Print(LogClass.ModLoader, $"[Nextendo] texts of {programId:X16}: {strings} string(s) in {changed.Count} file(s) name Nextendo");
+            Logger.Info?.Print(LogClass.ModLoader, $"[Nextendo] texts of {programId:X16}: {strings} string(s) in {changed.Count} file(s) name Nextendo, {Interlocked.Exchange(ref _systemUpdateHits, 0)} of the System Update page");
 
             return builder.Build();
         }
@@ -692,6 +693,65 @@ namespace Ryujinx.HLE.HOS
             ["Definições da consola"] = "Definições de Ryujinx | Nextendo",
         };
 
+        // The System Update page updates the emulator: its texts name it, in every language (French
+        // already says "la console", which becomes the emulator's name). The generic "Update"
+        // buttons stay: they are used elsewhere too.
+        private static int _systemUpdateHits;
+
+        private static readonly Dictionary<string, string> _systemUpdateTexts = new()
+        {
+            ["System Update"] = "Ryujinx | Nextendo Update",
+            ["A system update is available. Select Update to start the process."] = "A Ryujinx | Nextendo update is available. Select Update to start the process.",
+            ["A system update is available. Update now?"] = "A Ryujinx | Nextendo update is available. Update now?",
+            ["The download will continue even if you exit this screen. You will need to update the system once downloading finishes."] = "The download will continue even if you exit this screen. You will need to update Ryujinx | Nextendo once downloading finishes.",
+            ["Download will continue even if you leave this screen. Update your console after the download is complete."] = "Download will continue even if you leave this screen. Update Ryujinx | Nextendo after the download is complete.",
+
+            ["System-Update"] = "Ryujinx | Nextendo-Update",
+            ["Ein System-Update ist verfügbar. Wähle „Aktualisieren“, um den Prozess zu starten."] = "Ein Update für Ryujinx | Nextendo ist verfügbar. Wähle „Aktualisieren“, um den Prozess zu starten.",
+            ["Der Download wird auch dann fortgesetzt, wenn du diesen Bildschirm verlässt. Führe das System-Update durch, sobald der Download beendet ist."] = "Der Download wird auch dann fortgesetzt, wenn du diesen Bildschirm verlässt. Führe das Update von Ryujinx | Nextendo durch, sobald der Download beendet ist.",
+
+            ["Actualización de la consola"] = "Actualización de Ryujinx | Nextendo",
+            ["Hay una actualización disponible para la consola. Selecciona \"Actualizar\" para iniciar el proceso."] = "Hay una actualización disponible para Ryujinx | Nextendo. Selecciona \"Actualizar\" para iniciar el proceso.",
+            ["Hay una actualización disponible para la consola. ¿Quieres descargarla ahora?"] = "Hay una actualización disponible para Ryujinx | Nextendo. ¿Quieres descargarla ahora?",
+            ["La descarga no se detendrá aunque salgas de esta pantalla. Cuando finalice, tendrás que actualizar la consola."] = "La descarga no se detendrá aunque salgas de esta pantalla. Cuando finalice, tendrás que actualizar Ryujinx | Nextendo.",
+            ["La descarga continuará aun cuando salgas de esta pantalla. Actualiza la consola una vez que haya terminado la descarga."] = "La descarga continuará aun cuando salgas de esta pantalla. Actualiza Ryujinx | Nextendo una vez que haya terminado la descarga.",
+
+            ["Aggiornamento della console"] = "Aggiornamento di Ryujinx | Nextendo",
+            ["È disponibile un aggiornamento della console. Per scaricarlo, seleziona Aggiorna."] = "È disponibile un aggiornamento di Ryujinx | Nextendo. Per scaricarlo, seleziona Aggiorna.",
+            ["Il download proseguirà anche dopo aver abbandonato questo schermo. Una volta terminato il download, sarà necessario aggiornare la console."] = "Il download proseguirà anche dopo aver abbandonato questo schermo. Una volta terminato il download, sarà necessario aggiornare Ryujinx | Nextendo.",
+
+            ["Systeemupdate"] = "Ryujinx | Nextendo-update",
+            ["Er is een systeemupdate beschikbaar. Wil je de update nu uitvoeren?"] = "Er is een update voor Ryujinx | Nextendo beschikbaar. Wil je de update nu uitvoeren?",
+            ["De download wordt voortgezet, ook al verlaat je dit scherm. Nadat het downloaden is voltooid, moet je de systeemupdate installeren."] = "De download wordt voortgezet, ook al verlaat je dit scherm. Nadat het downloaden is voltooid, moet je de update van Ryujinx | Nextendo installeren.",
+
+            ["Atualização da consola"] = "Atualização do Ryujinx | Nextendo",
+            ["Está disponível uma atualização. Seleciona \"Atualizar\" para iniciar o processo."] = "Está disponível uma atualização do Ryujinx | Nextendo. Seleciona \"Atualizar\" para iniciar o processo.",
+            ["O download continuará em curso, mesmo que saias deste ecrã. Assim que este terminar, será necessário atualizar a consola."] = "O download continuará em curso, mesmo que saias deste ecrã. Assim que este terminar, será necessário atualizar o Ryujinx | Nextendo.",
+            ["Atualização do console"] = "Atualização do Ryujinx | Nextendo",
+            ["Há uma atualização disponível para o console. Selecione \"Atualizar\" para iniciar o processo."] = "Há uma atualização disponível para o Ryujinx | Nextendo. Selecione \"Atualizar\" para iniciar o processo.",
+            ["O download continuará mesmo se você sair desta tela. Atualize o console quando o download tiver sido concluído."] = "O download continuará mesmo se você sair desta tela. Atualize o Ryujinx | Nextendo quando o download tiver sido concluído.",
+
+            ["Обновление системы"] = "Обновление Ryujinx | Nextendo",
+            ["Доступно обновление системы. Выберите Обновить, чтобы запустить процесс."] = "Доступно обновление Ryujinx | Nextendo. Выберите Обновить, чтобы запустить процесс.",
+            ["Загрузка продолжится, даже если вы выйдете с этого экрана. После завершения загрузки будет необходимо обновить систему."] = "Загрузка продолжится, даже если вы выйдете с этого экрана. После завершения загрузки будет необходимо обновить Ryujinx | Nextendo.",
+
+            ["本体の更新"] = "Ryujinx | Nextendoの更新",
+            ["本体の更新があります。更新しますか？"] = "Ryujinx | Nextendoの更新があります。更新しますか？",
+            ["本体を更新する"] = "Ryujinx | Nextendoを更新する",
+            ["この画面から抜けても、ダウンロードはつづきます。ダウンロードがおわったら本体を更新してください｡"] = "この画面から抜けても、ダウンロードはつづきます。ダウンロードがおわったらRyujinx | Nextendoを更新してください｡",
+
+            ["본체 업데이트"] = "Ryujinx | Nextendo 업데이트",
+            ["본체 업데이트가 있습니다. 업데이트하겠습니까?"] = "Ryujinx | Nextendo 업데이트가 있습니다. 업데이트하겠습니까?",
+            ["이 화면에서 나가더라도 다운로드는 계속됩니다. 다운로드가 완료되면 본체를 업데이트해 주십시오."] = "이 화면에서 나가더라도 다운로드는 계속됩니다. 다운로드가 완료되면 Ryujinx | Nextendo를 업데이트해 주십시오.",
+
+            ["更新主机"] = "更新Ryujinx | Nextendo",
+            ["发现主机可以更新。是否开始更新？"] = "发现Ryujinx | Nextendo可以更新。是否开始更新？",
+            ["退出此画面后也将继续下载。下载完成后，请更新主机｡"] = "退出此画面后也将继续下载。下载完成后，请更新Ryujinx | Nextendo｡",
+            ["更新主機"] = "更新Ryujinx | Nextendo",
+            ["有主機的更新檔。是否要更新？"] = "有Ryujinx | Nextendo的更新檔。是否要更新？",
+            ["即使離開此畫面，下載仍會繼續進行。下載結束後請更新主機。"] = "即使離開此畫面，下載仍會繼續進行。下載結束後請更新Ryujinx | Nextendo。",
+        };
+
         // Nintendo's postal address (after the name of the provider of the online services): ours
         // is the website. "Nintendo Co., Ltd.[,] Kyoto 601-8501, Japan" in each language.
         private static readonly Regex _nintendoProducts = new(
@@ -707,6 +767,13 @@ namespace Ryujinx.HLE.HOS
             if (_settingsTitles.TryGetValue(text, out string title))
             {
                 return title;
+            }
+
+            if (_systemUpdateTexts.TryGetValue(text, out string update))
+            {
+                Interlocked.Increment(ref _systemUpdateHits);
+
+                return update;
             }
 
             text = _postalAddress.Replace(text, "Nextendo Network, nextendo.network");
