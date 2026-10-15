@@ -6,6 +6,11 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
 
         public IManagerForApplication(UserId userId)
         {
+            // [Nextendo] Plusieurs comptes : l'utilisateur que le jeu ouvre decide du compte
+            // Nextendo actif, comme une console ou chaque utilisateur porte son propre compte.
+            // Un profil local sans compte ne change rien (il reste hors ligne).
+            Ryujinx.Common.Configuration.NextendoAccount.ActivateForProfile(userId.ToString());
+
             _managerServer = new ManagerServer(userId);
         }
 

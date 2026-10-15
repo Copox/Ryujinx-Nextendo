@@ -76,6 +76,19 @@ namespace Ryujinx.Ava.UI.Views.Settings
         {
             base.OnAttachedToVisualTree(e);
 
+            // Plusieurs comptes Nextendo : a chaque ouverture de l'onglet, on demande lequel.
+            if (NextendoAccount.Count > 1)
+            {
+                _loaded = true;
+                Avalonia.Threading.Dispatcher.UIThread.Post(async () =>
+                {
+                    await Ryujinx.Ava.UI.Windows.NextendoAccountPicker.EnsureChosen(TopLevel.GetTopLevel(this) as Window);
+                    Refresh();
+                });
+
+                return;
+            }
+
             if (_loaded)
             {
                 return;

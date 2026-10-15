@@ -2128,6 +2128,14 @@ namespace Ryujinx.Ava.UI.ViewModels
                 return;
             }
 
+            // [Nextendo] Plusieurs comptes Nextendo : qui joue ? (un seul compte = pris d'office,
+            // et c'est son profil qui lance le jeu). Pas pour le menu HOME : l'utilisateur y est
+            // choisi dans le menu lui-meme, et son compte suit (IManagerForApplication).
+            if (application.Id != 0x0100000000001000 && !await NextendoAccountPicker.EnsureChosen())
+            {
+                return;
+            }
+
             // [Nextendo] Splatoon 3 : prevenir AVANT le lancement que les mods installes seront
             // ignores.
             //
@@ -2550,7 +2558,13 @@ namespace Ryujinx.Ava.UI.ViewModels
         /// [Nextendo] Ctrl+F, and the Nextendo > Friends menu entry. Non-modal on purpose so it can
         /// be opened, read and left open while a game keeps running.
         /// </summary>
-        public void OpenNextendoFriends() => NextendoFriendsWindow.Open();
+        public async void OpenNextendoFriends()
+        {
+            if (await NextendoAccountPicker.EnsureChosen())
+            {
+                NextendoFriendsWindow.Open();
+            }
+        }
 
         /// <summary>
         /// [Nextendo] Ctrl+F toggles the in-window dashboard over the game renderer.
