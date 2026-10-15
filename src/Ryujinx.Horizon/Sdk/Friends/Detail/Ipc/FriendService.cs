@@ -92,6 +92,13 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                 return PresenceStatus.Offline;
             }
 
+            // on the Nextendo App: online, with the app's card (the server gives it a title id of
+            // its own), not "playing"
+            if (entry.Platform == "app")
+            {
+                return PresenceStatus.Online;
+            }
+
             return entry.AppField is { Length: > 0 } || entry.AppId != 0 ? PresenceStatus.OnlinePlay : PresenceStatus.Online;
         }
 
