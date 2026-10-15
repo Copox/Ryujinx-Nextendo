@@ -1588,22 +1588,6 @@ namespace Ryujinx.Ava.Systems
                 hasTouch = TouchScreenManager.Update(true, (_inputManager.MouseDriver as AvaloniaMouseDriver).IsButtonPressed(MouseButton.Button1), ConfigurationState.Instance.Graphics.AspectRatio.Value.ToFloat());
             }
 
-            if (Ryujinx.Input.HLE.ScriptedInput.Touch(out uint scriptedX, out uint scriptedY))
-            {
-                // [Nextendo, HOME Menu work] A tap from the test script.
-                Device.Hid.Touchscreen.Update(new Ryujinx.HLE.HOS.Services.Hid.TouchPoint
-                {
-                    Attribute = Ryujinx.HLE.HOS.Services.Hid.Types.SharedMemory.TouchScreen.TouchAttribute.Start,
-                    X = scriptedX,
-                    Y = scriptedY,
-                    DiameterX = 10,
-                    DiameterY = 10,
-                    Angle = 90,
-                });
-
-                hasTouch = true;
-            }
-
             if (!hasTouch)
             {
                 Device.Hid.Touchscreen.Update();

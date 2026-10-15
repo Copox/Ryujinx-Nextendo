@@ -447,18 +447,6 @@ namespace Ryujinx.Input.HLE
                     hleKeyboardInput = NpadController.GetHLEKeyboardInput(_keyboardDriver);
                 }
 
-                ScriptedInput.Apply(_hleInputStates);
-
-                if (ScriptedInput.HomePressed())
-                {
-                    _device.System.PressHomeButton();
-                }
-
-                if (ScriptedInput.DockStep() is bool docked)
-                {
-                    _device.System.ChangeDockedModeState(docked);
-                }
-
                 AnyButtonPressed = _hleInputStates.Exists(state => state.Buttons != 0);
 
                 _device.Hid.Npads.Update(_hleInputStates);

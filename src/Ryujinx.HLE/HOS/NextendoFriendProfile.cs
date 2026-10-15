@@ -161,13 +161,6 @@ namespace Ryujinx.HLE.HOS
             Switch device = _device;
             NextendoFriends.Entry friend = NextendoFriends.Get().FirstOrDefault(f => f.Pid == pid);
 
-            // tests: NEXTENDO_TEST_NAMEPLATE = "<address>[|#colour]", a nameplate shown for every friend
-            if (Environment.GetEnvironmentVariable("NEXTENDO_TEST_NAMEPLATE") is { Length: > 0 } test)
-            {
-                string[] parts = test.Split('|');
-                friend = friend with { Nameplate = parts[0], NameplateColor = parts.Length > 1 ? parts[1] : "" };
-            }
-
             string address = friend.Nameplate ?? "";
             SKColor? colour = SKColor.TryParse(friend.NameplateColor ?? "", out SKColor parsed) ? parsed : null;
 
