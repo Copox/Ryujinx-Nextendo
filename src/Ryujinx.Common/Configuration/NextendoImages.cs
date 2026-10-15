@@ -16,7 +16,7 @@ namespace Ryujinx.Common.Configuration
         /// [Nextendo] A profile picture (JPEG) with a Discord avatar decoration (PNG) over it, as a
         /// JPEG of the same size, or null. Set by the layer that draws pictures (HLE).
         /// </summary>
-        public static Func<byte[], byte[], byte[]> Decorate { get; set; }
+        public static Func<ulong, byte[], byte[], byte[]> Decorate { get; set; }
 
         /// <summary>
         /// The picture of a player who never chose one: the default avatar of the account

@@ -340,6 +340,13 @@ namespace Ryujinx.Common.Configuration
             return null;
         }
 
+        // [Nextendo] The friends' pictures without their decoration (the page of a friend draws
+        // the decoration on its own, moving and past the edge of the picture).
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<ulong, byte[]> _plainImages = new();
+
+        /// <summary>The picture of a friend without its decoration (JPEG), or null while it has not come.</summary>
+        public static byte[] PlainImage(ulong pid) => _plainImages.TryGetValue(pid, out byte[] picture) ? picture : null;
+
         // [Nextendo] The friend's Discord avatar decoration over their picture, when they have one
         // (staff and donors: the server only gives it to them). The still picture of the decoration.
         private static byte[] Decorated(ulong pid, byte[] picture)
@@ -348,6 +355,8 @@ namespace Ryujinx.Common.Configuration
             {
                 return picture;
             }
+
+            _plainImages[pid] = picture;
 
             string address = "";
 
@@ -379,7 +388,7 @@ namespace Ryujinx.Common.Configuration
 
                 byte[] decoration = resp.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult();
 
-                return NextendoImages.Decorate(picture, decoration) ?? picture;
+                return NextendoImages.Decorate(pid, picture, decoration) ?? picture;
             }
             catch (Exception)
             {

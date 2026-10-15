@@ -45,6 +45,15 @@ namespace Ryujinx.HLE.HOS
         public const int DetailWidth = 1148, DetailHeight = 80;
         private static readonly (float X, float Y, float W, float H) _detail = (0f, -141f, 574f, 40f);
 
+        // The Discord avatar decoration, as on Discord: over the round picture and past its edge,
+        // moving. A picture of its own, larger than the profile picture and centred on it, that
+        // the emulator paints (the picture under it too, for the one the applet has to be hidden),
+        // one for the page of a friend and one for the user's own. Sizes no other texture has.
+        private const string DecorationTexture = "IcoFrdAddPanel_03_32^t";
+        private const string OwnDecorationTexture = "IcoMail_32^s";
+        public const int DecorationSide = 432, OwnDecorationSide = 448;
+        public const float DecorationScale = 1.25f; // the decoration is 1.2 times the picture, as on Discord
+
         // The layouts whose picture gets round corners (the icons of the games in the rows of a
         // page) or is made round (the profile picture of a friend's page), the material of the
         // picture in each and the mask it gets.
@@ -141,7 +150,7 @@ namespace Ryujinx.HLE.HOS
                 {
                     files[i] = (name, tile);
                 }
-                else if (name == OwnPictureLayout && PatchOwnPicture(files[i].Data) is { } rounded)
+                else if (name == OwnPictureLayout && PatchOwnPicture(files[i].Data, friendBanner ? page : null) is { } rounded)
                 {
                     files[i] = (name, rounded);
                 }
@@ -505,6 +514,25 @@ namespace Ryujinx.HLE.HOS
                 sections.Insert(inside + 2, BannerPane(picture, _detail, materials.Count - 1, "P_NxDetail"));
             }
 
+            // the decoration: right after the picture of the friend, drawn over it
+            int icon = sections.FindIndex(s => Kind(s) == "prt1" && PaneName(s) == "L_UserIcon");
+            int decorationTexture = icon < 0 ? -1 : AddTexture(sections, DecorationTexture);
+
+            if (decorationTexture >= 0)
+            {
+                icon = sections.FindIndex(s => Kind(s) == "prt1" && PaneName(s) == "L_UserIcon");
+
+                materials = Materials(sections, out materialsAt);
+                materials.Add(BannerMaterial(model, decorationTexture, "P_NxDeco"));
+                sections[materialsAt] = MaterialSection(materials);
+
+                byte[] part = sections[icon];
+                float side = BinaryPrimitives.ReadSingleLittleEndian(part.AsSpan(0x4C)) * BinaryPrimitives.ReadSingleLittleEndian(part.AsSpan(0x44)) * DecorationScale;
+                (float X, float Y, float W, float H) place = (BinaryPrimitives.ReadSingleLittleEndian(part.AsSpan(0x2C)), BinaryPrimitives.ReadSingleLittleEndian(part.AsSpan(0x30)), side, side);
+
+                sections.Insert(After(sections, icon), BannerPane(picture, place, materials.Count - 1, "P_NxDeco"));
+            }
+
             return Layout_(layout, header, sections);
         }
 
@@ -581,12 +609,63 @@ namespace Ryujinx.HLE.HOS
             return Layout_(layout, header, sections);
         }
 
+        // Where the pane after this one goes: past its settings and its children.
+        private static int After(List<byte[]> sections, int pane)
+        {
+            int at = pane + 1;
+
+            while (at < sections.Count && Kind(sections[at]) == "usd1")
+            {
+                at++;
+            }
+
+            if (at < sections.Count && Kind(sections[at]) == "pas1")
+            {
+                for (int depth = 0; at < sections.Count; at++)
+                {
+                    depth += Kind(sections[at]) switch { "pas1" => 1, "pae1" => -1, _ => 0 };
+
+                    if (depth == 0)
+                    {
+                        return at + 1;
+                    }
+                }
+            }
+
+            return at;
+        }
+
         // The own picture of the user: round corners, by the setting of the system, on the
-        // picture and on the cursor around it.
-        private static byte[] PatchOwnPicture(byte[] layout)
+        // picture and on the cursor around it; its decoration over all of it, when
+        // <paramref name="friendPage"/> gives the models of a picture.
+        private static byte[] PatchOwnPicture(byte[] layout, byte[] friendPage)
         {
             List<byte[]> sections = Sections(layout, out int header);
             bool done = false;
+
+            if (friendPage != null)
+            {
+                List<byte[]> models = Sections(friendPage, out _);
+                byte[] model = Materials(models, out _)?.Find(m => MaterialName(m) == "P_Pict");
+                byte[] picture = models.Find(s => Kind(s) == "pic1" && PaneName(s) == "P_LineVertical");
+                int image = sections.FindIndex(s => Kind(s) == "pic1" && PaneName(s) == "P_Image");
+                int texture = model == null || picture == null || image < 0 ? -1 : AddTexture(sections, OwnDecorationTexture);
+                int materialsAt = -1;
+                List<byte[]> materials = texture < 0 ? null : Materials(sections, out materialsAt);
+
+                if (materials != null)
+                {
+                    materials.Add(BannerMaterial(model, texture, "P_NxDeco"));
+                    sections[materialsAt] = MaterialSection(materials);
+
+                    image = sections.FindIndex(s => Kind(s) == "pic1" && PaneName(s) == "P_Image");
+
+                    float side = BinaryPrimitives.ReadSingleLittleEndian(sections[image].AsSpan(0x4C)) * DecorationScale;
+
+                    // right over the picture: the pencil on it and the cursor around it stay over it
+                    sections.Insert(After(sections, image), BannerPane(picture, (0f, 0f, side, side), materials.Count - 1, "P_NxDeco"));
+                }
+            }
 
             for (int i = 0; i + 1 < sections.Count; i++)
             {
@@ -882,6 +961,12 @@ namespace Ryujinx.HLE.HOS
                 // the detail before it is painted: nothing (transparent)
                 added.Add((DetailTexture, DetailWidth, DetailHeight, 0x0B01u, 0x05040302u, BlockHeightLog2,
                     new byte[(DetailWidth * 4 + 63) / 64 * 64 * ((DetailHeight + 127) / 128 * 128)]));
+
+                // the decorations before they are painted: nothing (transparent)
+                foreach ((string name, int side) in new[] { (DecorationTexture, DecorationSide), (OwnDecorationTexture, OwnDecorationSide) })
+                {
+                    added.Add((name, side, side, 0x0B01u, 0x05040302u, BlockHeightLog2, new byte[(side * 4 + 63) / 64 * 64 * ((side + 127) / 128 * 128)]));
+                }
             }
 
             return AddData(bntx, [.. added]);
