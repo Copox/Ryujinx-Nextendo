@@ -289,25 +289,53 @@ namespace Ryujinx.HLE.HOS
         }
 
         // The pixels of the frame: black, a little see-through, round corners smoothed over a pixel.
-        public static byte[] NotificationBasePixels(SkiaSharp.SKBitmap inside = null)
+        // With a nameplate, as Discord draws it behind a name: a gradient of the colour of its
+        // palette (none on the left, 8 % from a fifth to the middle, 20 % on the right), then the
+        // nameplate against the right edge, at 30 % up to the last part, where it comes back to full.
+        public static byte[] NotificationBasePixels(SkiaSharp.SKBitmap inside = null, SkiaSharp.SKColor? colour = null)
         {
+            const float W = NotificationBaseWidth, H = NotificationBaseHeight;
+
             using SkiaSharp.SKBitmap frame = new(new SkiaSharp.SKImageInfo(NotificationBaseWidth, NotificationBaseHeight, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Premul));
             using SkiaSharp.SKCanvas canvas = new(frame);
             using SkiaSharp.SKPaint paint = new() { IsAntialias = true, Color = new SkiaSharp.SKColor(0, 0, 0, 235) };
-            using SkiaSharp.SKRoundRect shape = new(SkiaSharp.SKRect.Create(0, 0, NotificationBaseWidth, NotificationBaseHeight), NotificationBaseRadius);
+            using SkiaSharp.SKRoundRect shape = new(SkiaSharp.SKRect.Create(0, 0, W, H), NotificationBaseRadius);
 
             canvas.Clear(SkiaSharp.SKColors.Transparent);
             canvas.DrawRoundRect(shape, paint);
 
+            if (inside != null || colour != null)
+            {
+                canvas.ClipRoundRect(shape, antialias: true);
+            }
+
+            if (colour is SkiaSharp.SKColor c)
+            {
+                using SkiaSharp.SKPaint gradient = new()
+                {
+                    Shader = SkiaSharp.SKShader.CreateLinearGradient(new SkiaSharp.SKPoint(0, 0), new SkiaSharp.SKPoint(W, 0),
+                        [c.WithAlpha(0), c.WithAlpha(20), c.WithAlpha(20), c.WithAlpha(51)], [0f, 0.2f, 0.5f, 1f], SkiaSharp.SKShaderTileMode.Clamp),
+                };
+
+                canvas.DrawRect(0, 0, W, H, gradient);
+            }
+
             if (inside != null)
             {
-                // a picture (a nameplate) over the frame, inside its round corners: as tall as the
-                // frame and against its right edge, as Discord draws it behind a name
+                // Discord: 30 % up to 218 of 248, full at 268 (past the edge: 72 % at the edge)
                 using SkiaSharp.SKPaint smooth = new() { IsAntialias = true, FilterQuality = SkiaSharp.SKFilterQuality.High };
-                float width = (float)inside.Width * NotificationBaseHeight / inside.Height;
+                using SkiaSharp.SKPaint fade = new()
+                {
+                    BlendMode = SkiaSharp.SKBlendMode.DstIn,
+                    Shader = SkiaSharp.SKShader.CreateLinearGradient(new SkiaSharp.SKPoint(0, 0), new SkiaSharp.SKPoint(W * 268f / 248f, 0),
+                        [new SkiaSharp.SKColor(0, 0, 0, 77), new SkiaSharp.SKColor(0, 0, 0, 77), new SkiaSharp.SKColor(0, 0, 0, 255)], [0f, 218f / 268f, 1f], SkiaSharp.SKShaderTileMode.Clamp),
+                };
+                float width = (float)inside.Width * H / inside.Height;
 
-                canvas.ClipRoundRect(shape, antialias: true);
-                canvas.DrawBitmap(inside, SkiaSharp.SKRect.Create(NotificationBaseWidth - width, 0, width, NotificationBaseHeight), smooth);
+                canvas.SaveLayer();
+                canvas.DrawBitmap(inside, SkiaSharp.SKRect.Create(W - width, 0, width, H), smooth);
+                canvas.DrawRect(0, 0, W, H, fade);
+                canvas.Restore();
             }
 
             canvas.Flush();

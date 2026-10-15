@@ -56,7 +56,7 @@ namespace Ryujinx.HLE.HOS
             {
                 HvEngine cpuEngine = new(_tickSource);
                 HvMemoryManager memoryManager = new(context.Memory, addressSpaceSize, invalidAccessHandler);
-                processContext = new ArmProcessContext<HvMemoryManager>(pid, cpuEngine, _gpu, memoryManager, addressSpaceSize, for64Bit);
+                processContext = new ArmProcessContext<HvMemoryManager>(pid, cpuEngine, _gpu, memoryManager, addressSpaceSize, for64Bit, _titleIdText);
             }
             else
             {
@@ -90,7 +90,7 @@ namespace Ryujinx.HLE.HOS
                 {
                     case MemoryManagerMode.SoftwarePageTable:
                         MemoryManager memoryManager = new(context.Memory, addressSpaceSize, invalidAccessHandler);
-                        processContext = new ArmProcessContext<MemoryManager>(pid, cpuEngine, _gpu, memoryManager, addressSpaceSize, for64Bit);
+                        processContext = new ArmProcessContext<MemoryManager>(pid, cpuEngine, _gpu, memoryManager, addressSpaceSize, for64Bit, _titleIdText);
                         break;
 
                     case MemoryManagerMode.HostMapped:
@@ -98,7 +98,7 @@ namespace Ryujinx.HLE.HOS
                         if (addressSpace == null)
                         {
                             MemoryManagerHostTracked memoryManagerHostTracked = new(context.Memory, addressSpaceSize, mode == MemoryManagerMode.HostMappedUnsafe, invalidAccessHandler);
-                            processContext = new ArmProcessContext<MemoryManagerHostTracked>(pid, cpuEngine, _gpu, memoryManagerHostTracked, addressSpaceSize, for64Bit);
+                            processContext = new ArmProcessContext<MemoryManagerHostTracked>(pid, cpuEngine, _gpu, memoryManagerHostTracked, addressSpaceSize, for64Bit, _titleIdText);
                         }
                         else
                         {
@@ -108,7 +108,7 @@ namespace Ryujinx.HLE.HOS
                             }
 
                             MemoryManagerHostMapped memoryManagerHostMapped = new(addressSpace, mode == MemoryManagerMode.HostMappedUnsafe, invalidAccessHandler);
-                            processContext = new ArmProcessContext<MemoryManagerHostMapped>(pid, cpuEngine, _gpu, memoryManagerHostMapped, addressSpace.AddressSpaceSize, for64Bit);
+                            processContext = new ArmProcessContext<MemoryManagerHostMapped>(pid, cpuEngine, _gpu, memoryManagerHostMapped, addressSpace.AddressSpaceSize, for64Bit, _titleIdText);
                         }
 
                         break;

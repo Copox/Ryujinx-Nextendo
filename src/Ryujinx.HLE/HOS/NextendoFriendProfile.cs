@@ -159,7 +159,9 @@ namespace Ryujinx.HLE.HOS
         private static void NotificationShown(ulong pid)
         {
             Switch device = _device;
-            string address = NextendoFriends.Get().FirstOrDefault(f => f.Pid == pid).Nameplate ?? "";
+            NextendoFriends.Entry friend = NextendoFriends.Get().FirstOrDefault(f => f.Pid == pid);
+            string address = friend.Nameplate ?? "";
+            SKColor? colour = SKColor.TryParse(friend.NameplateColor ?? "", out SKColor parsed) ? parsed : null;
 
             // tests: NEXTENDO_TEST_NAMEPLATE = the address of a nameplate shown for every friend
             address = Environment.GetEnvironmentVariable("NEXTENDO_TEST_NAMEPLATE") is { Length: > 0 } test ? test : address;
@@ -182,20 +184,22 @@ namespace Ryujinx.HLE.HOS
             {
                 try
                 {
-                    if (!_nameplates.TryGetValue(address, out List<byte[]> frames))
+                    string key = address + "|" + friend.NameplateColor;
+
+                    if (!_nameplates.TryGetValue(key, out List<byte[]> frames))
                     {
-                        frames = NameplateFrames(Picture(address), out List<int> times);
+                        frames = NameplateFrames(Picture(address), colour, out List<int> times);
 
                         if (frames == null)
                         {
                             return;
                         }
 
-                        _nameplates[address] = frames;
-                        _nameplateTimes[address] = times;
+                        _nameplates[key] = frames;
+                        _nameplateTimes[key] = times;
                     }
 
-                    List<int> durations = _nameplateTimes.TryGetValue(address, out List<int> t) ? t : [];
+                    List<int> durations = _nameplateTimes.TryGetValue(key, out List<int> t) ? t : [];
                     long until = Environment.TickCount64 + NotificationMilliseconds;
 
                     for (int at = 0; turn == _notificationTurn && Environment.TickCount64 < until; at = (at + 1) % frames.Count)
@@ -219,7 +223,7 @@ namespace Ryujinx.HLE.HOS
         private static readonly ConcurrentDictionary<string, List<int>> _nameplateTimes = new();
 
         // The pictures of a nameplate (animated PNG) in the frame of the notification.
-        private static List<byte[]> NameplateFrames(byte[] png, out List<int> times)
+        private static List<byte[]> NameplateFrames(byte[] png, SKColor? colour, out List<int> times)
         {
             times = [];
             List<(SKBitmap Picture, int Milliseconds)> pictures = NextendoApng.Frames(png, 90);
@@ -242,7 +246,7 @@ namespace Ryujinx.HLE.HOS
 
                 foreach ((SKBitmap picture, int milliseconds) in pictures)
                 {
-                    frames.Add(NextendoFriendPage.NotificationBasePixels(picture));
+                    frames.Add(NextendoFriendPage.NotificationBasePixels(picture, colour));
                     times.Add(Math.Max(milliseconds, ShortestFrame));
                 }
 

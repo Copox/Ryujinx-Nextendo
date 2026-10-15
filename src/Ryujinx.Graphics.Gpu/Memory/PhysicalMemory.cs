@@ -44,11 +44,11 @@ namespace Ryujinx.Graphics.Gpu.Memory
         /// </summary>
         /// <param name="context">GPU context that the physical memory belongs to</param>
         /// <param name="cpuMemory">CPU memory manager of the application process</param>
-        public PhysicalMemory(GpuContext context, IVirtualMemoryManagerTracked cpuMemory)
+        public PhysicalMemory(GpuContext context, IVirtualMemoryManagerTracked cpuMemory, string titleId = null)
         {
             _context = context;
             _cpuMemory = cpuMemory;
-            ShaderCache = new ShaderCache(context);
+            ShaderCache = new ShaderCache(context, titleId);
             BufferCache = new BufferCache(context, this);
             TextureCache = new TextureCache(context, this);
 

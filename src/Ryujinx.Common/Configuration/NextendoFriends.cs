@@ -63,6 +63,8 @@ namespace Ryujinx.Common.Configuration
             // The Discord nameplate of a staff member or a donor (address of its animated picture,
             // served by nextendo.network), or "": drawn behind their "online" notification.
             public string Nameplate { get; init; }
+            // The colour of the gradient Discord draws behind that nameplate ("#893a99"), or "".
+            public string NameplateColor { get; init; }
             public float[] BannerCrop { get; init; }
             public long RequestedAt { get; init; }
             public bool HasPicture { get; init; }
@@ -735,6 +737,7 @@ namespace Ryujinx.Common.Configuration
                                 BannerUrl = BannerOf(f, out float[] bannerCrop),
                                 Decoration = f.TryGetProperty("avatar_decoration", out JsonElement decorationEl) && decorationEl.ValueKind == JsonValueKind.String ? decorationEl.GetString() ?? "" : "",
                                 Nameplate = f.TryGetProperty("nameplate", out JsonElement nameplateEl) && nameplateEl.ValueKind == JsonValueKind.String ? nameplateEl.GetString() ?? "" : "",
+                                NameplateColor = f.TryGetProperty("nameplate_color", out JsonElement nameplateColorEl) && nameplateColorEl.ValueKind == JsonValueKind.String ? nameplateColorEl.GetString() ?? "" : "",
                                 BannerCrop = bannerCrop,
                             });
                         }

@@ -196,10 +196,11 @@ namespace Ryujinx.Graphics.Gpu
         /// </summary>
         /// <param name="pid">ID of the process that owns <paramref name="cpuMemory"/></param>
         /// <param name="cpuMemory">Virtual memory owned by the process</param>
+        /// <param name="titleId">[Nextendo] The program of the process: its own disk shader cache (null: the one of the application)</param>
         /// <exception cref="ArgumentException">Thrown if <paramref name="pid"/> was already registered</exception>
-        public void RegisterProcess(ulong pid, Cpu.IVirtualMemoryManagerTracked cpuMemory)
+        public void RegisterProcess(ulong pid, Cpu.IVirtualMemoryManagerTracked cpuMemory, string titleId = null)
         {
-            PhysicalMemory physicalMemory = new(this, cpuMemory);
+            PhysicalMemory physicalMemory = new(this, cpuMemory, titleId);
             if (!PhysicalMemoryRegistry.TryAdd(pid, physicalMemory))
             {
                 throw new ArgumentException("The PID was already registered", nameof(pid));
