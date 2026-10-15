@@ -55,21 +55,24 @@ namespace Ryujinx.HLE.HOS
         // par application — et les codes de triche, dont l'activation lit son fichier directement.
         public const ulong Splatoon3ApplicationId = 0x0100C2500FC20000;
 
-        /// <summary>Vrai si ce titre refuse tout mod (Splatoon 3 : test en ligne sans triche).</summary>
         /// <summary>
-        /// L'interdiction ne vaut que sur NOS serveurs : elle existe parce que Splatoon 3 s'y
-        /// joue contre de vraies personnes et qu'un seul mod de jeu gâcherait leur partie. En
-        /// mode « serveur personnalisé », l'émulateur ne parle plus à Nextendo du tout, et la
-        /// politique d'un serveur privé n'est pas la nôtre à faire respecter.
+        /// ⚠️ [DÉVIATION LOCALE — NE PAS RÉIMPORTER DEPUIS L'AMONT]
+        ///
+        /// Toujours false sur ce build : l'interdiction de mods de Splatoon 3 a été levée à la
+        /// demande du propriétaire de ce build. Le chargeur collecte donc et applique normalement
+        /// romfs, romfs.bin, exefs, les correctifs IPS/pchtxt — y compris les correctifs GLOBAUX,
+        /// qui ne passent pas par le cache par application — et les codes de triche.
+        ///
+        /// La garde est CONSERVÉE plutôt que supprimée : les appels existants (sept dans ce
+        /// fichier, plus l'avertissement de l'interface) restent ainsi valides, et un retour en
+        /// arrière ne casse pas la compilation.
+        ///
+        /// ⚠️ Les correctifs INTÉGRÉS (NextendoS3Patches) ne dépendent PAS de cette méthode. Ils
+        /// sont versés par AppliquerCorrectifsIntegres, appelé inconditionnellement par
+        /// ApplyNsoPatches : ils restent donc appliqués pour tous les titres, y compris quand
+        /// cette garde vaudrait true. La connectivité aux serveurs n'est jamais en jeu ici.
         /// </summary>
-        /// ⚠️ La condition est <see cref="NextendoServerOverride.IsActive"/>, PAS
-        /// <c>HorsNextendo</c>. HorsNextendo est vrai dès que la case est cochée, même sans
-        /// adresse valide — et dans ce cas la redirection retombe sur nos serveurs. Se fier à
-        /// HorsNextendo laissait donc jouer moddé SUR NOS SERVEURS PUBLICS, en éditant à la main
-        /// un fichier JSON pour cocher la case sans rien remplir. IsActive exige une adresse
-        /// utilisable, donc un trafic qui part réellement ailleurs.
-        public static bool ModsInterdits(ulong applicationId) =>
-            applicationId == Splatoon3ApplicationId && !NextendoServerOverride.IsActive;
+        public static bool ModsInterdits(ulong applicationId) => false;
 
         /// <summary>
         /// Noms des mods trouves sur le disque pour un titre qui les refuse, et donc IGNORES.
