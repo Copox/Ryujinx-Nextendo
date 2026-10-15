@@ -74,9 +74,11 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
 
             // The game being played, right before the presence (found by probing: the friend
             // page asks the title card of the id at 0xE0 for its top line).
-            if (entry.Status > 0 && entry.AppId != 0)
+            if (entry.Status > 0)
             {
-                BitConverter.TryWriteBytes(record.Slice(0xE0, 8), entry.AppId);
+                // online without a game (the HOME Menu of a console): the HOME Menu's card, not a
+                // card of id 0 ("?", "Loading failed")
+                BitConverter.TryWriteBytes(record.Slice(0xE0, 8), entry.AppId != 0 ? entry.AppId : NextendoGames.HomeMenuId);
             }
         }
 
