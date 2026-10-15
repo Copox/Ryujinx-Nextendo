@@ -18,10 +18,22 @@ namespace Ryujinx.Graphics.Gpu.Image
     /// </summary>
     class TextureCache : IDisposable
     {
+        // [Nextendo] The last pixels given for each size (see GpuContext.NextendoUploadTexture):
+        // a texture of that size read again from the program's memory gets them back, instead of
+        // the program's empty one. Nothing is ever written in the program's memory: the program
+        // may have freed it and given it to something else meanwhile (written there, a picture
+        // showed up in another place, and the overlay applet crashed).
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<(int Width, int Height, int BytesPerPixel), byte[]> _nextendoLatest = new();
+
         /// <summary>[Nextendo] See GpuContext.NextendoUploadTexture.</summary>
-        public int NextendoUpload(int width, int height, byte[] pixels, int bytesPerPixel, bool persist = false)
+        public int NextendoUpload(int width, int height, byte[] pixels, int bytesPerPixel)
         {
             int found = 0;
+
+            if (pixels.Length == width * height * bytesPerPixel)
+            {
+                _nextendoLatest[(width, height, bytesPerPixel)] = pixels;
+            }
 
             foreach (Texture texture in _textures)
             {
@@ -30,27 +42,26 @@ namespace Ryujinx.Graphics.Gpu.Image
                     texture.Info.Levels == 1 && texture.Info.GetLayers() == 1 && pixels.Length == width * height * bytesPerPixel)
                 {
                     texture.SetData(Ryujinx.Common.Memory.MemoryOwner<byte>.RentCopy(pixels));
-
-                    // also in the memory of the program, laid out as the graphics processor reads
-                    // it: when the texture is read again from there (the page shown again, the
-                    // memory touched), it keeps the picture instead of the program's empty one
-                    if (persist)
-                    {
-                        try
-                        {
-                            _physicalMemory.Write(texture.Range, texture.ConvertFromHostCompatibleFormat(Span<byte>.Empty, pixels));
-                        }
-                        catch (Exception)
-                        {
-                            // the picture stays on the graphics processor only
-                        }
-                    }
-
                     found++;
                 }
             }
 
             return found;
+        }
+
+        /// <summary>[Nextendo] The pixels given for this size forgotten (the page of another friend).</summary>
+        public void NextendoForget(int width, int height, int bytesPerPixel) => _nextendoLatest.TryRemove((width, height, bytesPerPixel), out _);
+
+        /// <summary>[Nextendo] The pixels last given for a texture of this size, copied over the ones read from the program's memory.</summary>
+        internal bool NextendoLatest(int width, int height, int bytesPerPixel, Span<byte> pixels)
+        {
+            if (_nextendoLatest.TryGetValue((width, height, bytesPerPixel), out byte[] latest) && pixels.Length >= latest.Length)
+            {
+                latest.CopyTo(pixels);
+                return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -165,7 +176,6 @@ namespace Ryujinx.Graphics.Gpu.Image
                     }
 
                     texture.SetData(Ryujinx.Common.Memory.MemoryOwner<byte>.RentCopy(pixels));
-                    _physicalMemory.Write(texture.Range, texture.ConvertFromHostCompatibleFormat(Span<byte>.Empty, pixels));
                     found++;
                 }
                 catch (Exception)

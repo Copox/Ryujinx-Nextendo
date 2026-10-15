@@ -37,6 +37,7 @@ namespace Ryujinx.HLE.HOS
         private static Switch _device;
         private static bool _listening;
         private static int _shown;
+        private static ulong _lastShownPid;
         private static int _own;
 
         public static void Attach(Switch device)
@@ -63,6 +64,21 @@ namespace Ryujinx.HLE.HOS
             }
 
             int turn = Interlocked.Increment(ref _shown);
+
+            // the page of another friend: the pictures of the last one are not given again to its
+            // textures (read again before this friend's come, they would show the other friend's)
+            if (Interlocked.Exchange(ref _lastShownPid, pid) != pid)
+            {
+                foreach (KProcess process in device.System.KernelContext.Processes.Values)
+                {
+                    if (process.TitleId == MyPageProgram && process.State != ProcessState.Exited)
+                    {
+                        device.Gpu.NextendoForget(process.Pid, NextendoFriendPage.BannerWidth, NextendoFriendPage.BannerHeight);
+                        device.Gpu.NextendoForget(process.Pid, NextendoFriendPage.DetailWidth, NextendoFriendPage.DetailHeight);
+                        device.Gpu.NextendoForget(process.Pid, NextendoFriendPage.DecorationSide, NextendoFriendPage.DecorationSide);
+                    }
+                }
+            }
 
             Task.Run(async () =>
             {
@@ -364,7 +380,7 @@ namespace Ryujinx.HLE.HOS
 
             TaskCompletionSource<int> found = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-            device.Gpu.NextendoUploadTexture(page.Pid, width, height, pixels, 4, n => found.TrySetResult(n), persist: true);
+            device.Gpu.NextendoUploadTexture(page.Pid, width, height, pixels, 4, n => found.TrySetResult(n));
 
             // the renderer gives its answer at its next frame; none within a second: try again
             return Task.WhenAny(found.Task, Task.Delay(1000)).ContinueWith(t => found.Task.IsCompleted ? found.Task.Result : 0);

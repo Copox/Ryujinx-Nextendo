@@ -480,13 +480,12 @@ namespace Ryujinx.Graphics.Gpu
         private readonly ConcurrentQueue<Action> _nextendoUploads = new();
 
         /// <param name="done">Gets the number of textures given the pixels.</param>
-        /// <param name="persist">Also writes them in the memory of the program (pictures it never writes itself).</param>
-        public void NextendoUploadTexture(ulong pid, int width, int height, byte[] pixels, int bytesPerPixel = 1, Action<int> done = null, bool persist = false)
+        public void NextendoUploadTexture(ulong pid, int width, int height, byte[] pixels, int bytesPerPixel = 1, Action<int> done = null)
         {
             _nextendoUploads.Enqueue(() =>
             {
                 int found = PhysicalMemoryRegistry.TryGetValue(pid, out PhysicalMemory memory)
-                    ? memory.TextureCache.NextendoUpload(width, height, pixels, bytesPerPixel, persist)
+                    ? memory.TextureCache.NextendoUpload(width, height, pixels, bytesPerPixel)
                     : 0;
 
                 done?.Invoke(found);
@@ -527,6 +526,15 @@ namespace Ryujinx.Graphics.Gpu
 
                 done?.Invoke(found);
             });
+        }
+
+        /// <summary>[Nextendo, HOME Menu work] The pixels last given for this size to a program forgotten (see TextureCache.NextendoLatest).</summary>
+        public void NextendoForget(ulong pid, int width, int height, int bytesPerPixel = 4)
+        {
+            if (PhysicalMemoryRegistry.TryGetValue(pid, out PhysicalMemory memory))
+            {
+                memory.TextureCache.NextendoForget(width, height, bytesPerPixel);
+            }
         }
 
         internal void RunDeferredActions()

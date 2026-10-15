@@ -686,10 +686,21 @@ namespace Ryujinx.Graphics.Gpu.Image
         // to be round (see GpuContext.NextendoRoundOnLoad): made round as it is read, never shown square.
         private void NextendoRound(ReadOnlySpan<byte> data, Span<byte> pixels)
         {
+            if (Info.FormatInfo.IsCompressed || Info.Levels != 1 || Info.GetLayers() != 1 ||
+                pixels.Length < Info.Width * Info.Height * Info.FormatInfo.BytesPerPixel)
+            {
+                return;
+            }
+
+            // a picture the emulator gave for this size: given again
+            if (_physicalMemory.TextureCache.NextendoLatest(Info.Width, Info.Height, Info.FormatInfo.BytesPerPixel, pixels))
+            {
+                return;
+            }
+
             Func<byte[], float> round = GpuContext.NextendoRoundOnLoad;
 
-            if (round == null || Info.FormatInfo.BytesPerPixel != 4 || Info.FormatInfo.IsCompressed || Info.Levels != 1 || Info.GetLayers() != 1 ||
-                Info.Width != Info.Height || Info.Width < 16 || data.Length < 64)
+            if (round == null || Info.FormatInfo.BytesPerPixel != 4 || Info.Width != Info.Height || Info.Width < 16 || data.Length < 64)
             {
                 return;
             }

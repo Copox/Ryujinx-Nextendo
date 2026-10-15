@@ -288,7 +288,7 @@ namespace Ryujinx.HLE.HOS
                             {
                                 if (process.TitleId == _programs[1] && process.State != ProcessState.Exited)
                                 {
-                                    device.Gpu.NextendoUploadTexture(process.Pid, Side, Side, frames[at].Pixels, 4, persist: frames.Count == 1);
+                                    device.Gpu.NextendoUploadTexture(process.Pid, Side, Side, frames[at].Pixels, 4);
                                 }
                             }
                         }
