@@ -182,7 +182,8 @@ namespace Ryujinx.HLE.HOS
 
         // "A friend is online" (overlay applet, 22.5.0): the friend's picture is a small one next
         // to the name, with nothing under it. It is made to take both lines, name and game.
-        private static readonly (float X, float Y, float Scale) _notificationPicture = (-131f, 0f, 1.35f);
+        private static readonly (float X, float Y, float Scale) _notificationPicture = (-127f, 0f, 1.7f);
+        private const float NotificationTextShift = 8f; // the name and the game, clear of the larger picture
 
         /// <summary>The notification archive of the overlay applet (not compressed) with a larger friend picture, or null.</summary>
         public static byte[] PatchNotification(byte[] archive)
@@ -208,6 +209,11 @@ namespace Ryujinx.HLE.HOS
             BinaryPrimitives.WriteSingleLittleEndian(picture.AsSpan(0x30), _notificationPicture.Y);
             BinaryPrimitives.WriteSingleLittleEndian(picture.AsSpan(0x44), _notificationPicture.Scale);
             BinaryPrimitives.WriteSingleLittleEndian(picture.AsSpan(0x48), _notificationPicture.Scale);
+
+            foreach (byte[] text in sections.Skip(shown).Where(s => Kind(s) is "txt1" or "pic1" && PaneName(s) is "T_01" or "T_02" or "P_OnlineLamp"))
+            {
+                BinaryPrimitives.WriteSingleLittleEndian(text.AsSpan(0x2C), BinaryPrimitives.ReadSingleLittleEndian(text.AsSpan(0x2C)) + NotificationTextShift);
+            }
 
             files[at] = (NotificationLayout, Layout_(files[at].Data, header, sections));
 
@@ -292,7 +298,7 @@ namespace Ryujinx.HLE.HOS
         // With a nameplate, as Discord draws it behind a name: a gradient of the colour of its
         // palette (none on the left, 8 % from a fifth to the middle, 20 % on the right), then the
         // nameplate against the right edge, at 30 % up to the last part, where it comes back to full.
-        public static byte[] NotificationBasePixels(SkiaSharp.SKBitmap inside = null, SkiaSharp.SKColor? colour = null)
+        public static byte[] NotificationBasePixels(SkiaSharp.SKBitmap inside = null, SkiaSharp.SKColor? colour = null, SkiaSharp.SKBitmap game = null)
         {
             const float W = NotificationBaseWidth, H = NotificationBaseHeight;
 
@@ -335,6 +341,21 @@ namespace Ryujinx.HLE.HOS
                 canvas.SaveLayer();
                 canvas.DrawBitmap(inside, SkiaSharp.SKRect.Create(W - width, 0, width, H), smooth);
                 canvas.DrawRect(0, 0, W, H, fade);
+                canvas.Restore();
+            }
+
+            if (game != null)
+            {
+                // the icon of the game (or application) the friend is in, against the right edge
+                const float Inset = 12;
+                float side = H - Inset * 2;
+                SkiaSharp.SKRect place = SkiaSharp.SKRect.Create(W - Inset - side, Inset, side, side);
+                using SkiaSharp.SKPaint smooth = new() { IsAntialias = true, FilterQuality = SkiaSharp.SKFilterQuality.High };
+                using SkiaSharp.SKRoundRect corners = new(place, side * 0.18f);
+
+                canvas.Save();
+                canvas.ClipRoundRect(corners, antialias: true);
+                canvas.DrawBitmap(game, place, smooth);
                 canvas.Restore();
             }
 

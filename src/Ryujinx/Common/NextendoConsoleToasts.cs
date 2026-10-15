@@ -21,6 +21,7 @@ namespace Ryujinx.Ava.Common
         private const int CardHeight = 114;
         private const double SlideSeconds = 0.25;
         private const double HoldSeconds = 4.5;
+        private const float Margin = 30;
 
         private static readonly ConcurrentQueue<(string Title, string Text, byte[] Icon, string Glyph)> _queue = new();
         private static Thread _thread;
@@ -105,7 +106,8 @@ namespace Ryujinx.Ava.Common
                     shown = 1;
                 }
 
-                window.SetNotificationPlace(true, (float)((shown - 1) * width), 0, width, height);
+                // away from the edges, as the console's (20 of 1280: 30 pixels of 1920)
+                window.SetNotificationPlace(true, (float)((shown - 1) * width + shown * Margin / 1920f), Margin / 1080f, width, height);
 
                 Thread.Sleep(8);
             }
@@ -192,7 +194,7 @@ namespace Ryujinx.Ava.Common
 
         private static double EaseIn(double t) => Math.Pow(Math.Clamp(t, 0, 1), 3);
 
-        // The card: the console's dark grey, a thin light edge, the icon in a circle, the text in white.
+        // The card: black with round corners, the icon in a circle, the text in white.
         private static byte[] Draw(string title, string text, byte[] icon, string glyph)
         {
             SKImageInfo info = new(CardWidth, CardHeight, SKColorType.Rgba8888, SKAlphaType.Unpremul);
@@ -200,11 +202,13 @@ namespace Ryujinx.Ava.Common
             using SKBitmap bitmap = new(info);
             using SKCanvas canvas = new(bitmap);
 
-            canvas.Clear(new SKColor(0x0F, 0x0F, 0x0F, 0xF0));
+            // as the console's notifications now are (NextendoFriendPage): black, round corners in
+            // Discord's proportion (a fifth of the height), no edge
+            canvas.Clear(SKColors.Transparent);
 
-            using (SKPaint edge = new() { Color = new SKColor(0x3A, 0x3A, 0x3A), Style = SKPaintStyle.Stroke, StrokeWidth = 2 })
+            using (SKPaint card = new() { Color = new SKColor(0, 0, 0, 235), IsAntialias = true })
             {
-                canvas.DrawRect(1, 1, CardWidth - 2, CardHeight - 2, edge);
+                canvas.DrawRoundRect(0, 0, CardWidth, CardHeight, CardHeight * 0.19f, CardHeight * 0.19f, card);
             }
 
             const float iconSize = 76;

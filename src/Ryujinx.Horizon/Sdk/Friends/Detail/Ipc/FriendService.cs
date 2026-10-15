@@ -865,6 +865,14 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                         BitConverter.TryWriteBytes(info.Slice(0x578, 8), entry.AppId);
                         Logger.Info?.Print(LogClass.ServiceFriend, $"[Nextendo] friend 0x{friendId.Id:X} plays {entry.AppId:X16} ({entry.Game}) on {entry.Platform}");
                     }
+                    else if (entry.Status > 0)
+                    {
+                        // online without a game (the HOME Menu of a console): the page shows a card
+                        // for the game all the same, a "?" "Loading failed" for an id of 0; the
+                        // HOME Menu's card instead, as on the user's own page
+                        BitConverter.TryWriteBytes(info.Slice(0x570, 8), NextendoGames.HomeMenuId);
+                        BitConverter.TryWriteBytes(info.Slice(0x578, 8), NextendoGames.HomeMenuId);
+                    }
 
                     // "Friends since", in Unix seconds (found at 0x5D0 by probing).
                     if (entry.Since > 0)

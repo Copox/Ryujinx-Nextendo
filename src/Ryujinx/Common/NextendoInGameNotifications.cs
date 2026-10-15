@@ -89,9 +89,21 @@ namespace Ryujinx.Ava.Common
             // online after that many seconds, on this machine only (nothing is asked of the server).
             string test = Environment.GetEnvironmentVariable("NEXTENDO_TEST_NOTIF");
 
-            if (test?.Split('@') is [string pid, string after] && ulong.TryParse(pid, System.Globalization.NumberStyles.HexNumber, null, out ulong friend) && int.TryParse(after, out int seconds))
+            // "auto" picks a friend who really is online, in a game if one is (the overlay applet
+            // shows nothing for a friend who is not online).
+            if (test?.Split('@') is [string pid, string after] && int.TryParse(after, out int seconds) &&
+                (pid == "auto" || ulong.TryParse(pid, System.Globalization.NumberStyles.HexNumber, null, out _)))
             {
-                _ = Task.Delay(seconds * 1000).ContinueWith(_ => NextendoSystemNotifications.FriendOnline(friend));
+                _ = Task.Delay(seconds * 1000).ContinueWith(_ =>
+                {
+                    ulong friend = pid != "auto" ? ulong.Parse(pid, System.Globalization.NumberStyles.HexNumber)
+                        : Ryujinx.Common.Configuration.NextendoFriends.Get().Where(f => f.Status > 0).OrderByDescending(f => f.AppId != 0).Select(f => f.Pid).FirstOrDefault();
+
+                    if (friend != 0)
+                    {
+                        NextendoSystemNotifications.FriendOnline(friend);
+                    }
+                });
             }
         }
 

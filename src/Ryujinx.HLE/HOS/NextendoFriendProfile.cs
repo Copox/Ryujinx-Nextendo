@@ -177,11 +177,15 @@ namespace Ryujinx.HLE.HOS
             }
 
             int turn = Interlocked.Increment(ref _notificationTurn);
+            byte[] gameIcon = friend.AppId != 0 && NextendoGames.TryGet(friend.AppId, out NextendoGames.Game played) ? played.Icon : null;
 
-            // a friend without one: the plain frame at once (the last nameplate may still be on it)
+            // a friend without a nameplate: the plain frame at once (the last nameplate may still
+            // be on it), with the icon of their game
             if (address.Length == 0)
             {
-                UploadOverlay(device, NextendoFriendPage.NotificationBasePixels());
+                using SKBitmap icon = gameIcon == null ? null : SKBitmap.Decode(gameIcon);
+
+                UploadOverlay(device, NextendoFriendPage.NotificationBasePixels(game: icon));
                 return;
             }
 
@@ -189,11 +193,11 @@ namespace Ryujinx.HLE.HOS
             {
                 try
                 {
-                    string key = address + "|" + friend.NameplateColor;
+                    string key = address + "|" + friend.NameplateColor + "|" + friend.AppId;
 
                     if (!_nameplates.TryGetValue(key, out List<byte[]> frames))
                     {
-                        frames = NameplateFrames(Picture(address), colour, out List<int> times);
+                        frames = NameplateFrames(Picture(address), colour, gameIcon, out List<int> times);
 
                         if (frames == null)
                         {
@@ -228,7 +232,7 @@ namespace Ryujinx.HLE.HOS
         private static readonly ConcurrentDictionary<string, List<int>> _nameplateTimes = new();
 
         // The pictures of a nameplate (animated PNG) in the frame of the notification.
-        private static List<byte[]> NameplateFrames(byte[] png, SKColor? colour, out List<int> times)
+        private static List<byte[]> NameplateFrames(byte[] png, SKColor? colour, byte[] gameIcon, out List<int> times)
         {
             times = [];
             List<(SKBitmap Picture, int Milliseconds)> pictures = NextendoApng.Frames(png, 90);
@@ -248,10 +252,11 @@ namespace Ryujinx.HLE.HOS
             try
             {
                 List<byte[]> frames = [];
+                using SKBitmap icon = gameIcon == null ? null : SKBitmap.Decode(gameIcon);
 
                 foreach ((SKBitmap picture, int milliseconds) in pictures)
                 {
-                    frames.Add(NextendoFriendPage.NotificationBasePixels(picture, colour));
+                    frames.Add(NextendoFriendPage.NotificationBasePixels(picture, colour, icon));
                     times.Add(Math.Max(milliseconds, ShortestFrame));
                 }
 
