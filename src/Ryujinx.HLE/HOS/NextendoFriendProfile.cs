@@ -170,7 +170,9 @@ namespace Ryujinx.HLE.HOS
             }
 
             int turn = Interlocked.Increment(ref _notificationTurn);
-            byte[] gameIcon = friend.AppId != 0 && NextendoGames.TryGet(friend.AppId, out NextendoGames.Game played) ? played.Icon : null;
+            // the title shown: the game, the Nextendo App, or the HOME Menu for a friend online without one
+            ulong title = friend.AppId != 0 ? friend.AppId : friend.Status > 0 ? NextendoGames.HomeMenuId : 0;
+            byte[] gameIcon = title != 0 && NextendoGames.TryGet(title, out NextendoGames.Game played) ? played.Icon : null;
 
             // a friend without a nameplate: the plain frame at once (the last nameplate may still
             // be on it), with the icon of their game

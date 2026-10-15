@@ -92,14 +92,13 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                 return PresenceStatus.Offline;
             }
 
-            // on the Nextendo App: online, with the app's card (the server gives it a title id of
-            // its own), not "playing"
-            if (entry.Platform == "app")
-            {
-                return PresenceStatus.Online;
-            }
-
-            return entry.AppField is { Length: > 0 } || entry.AppId != 0 ? PresenceStatus.OnlinePlay : PresenceStatus.Online;
+            // Online at all: "playing", always with a title (the game, the Nextendo App, or the HOME
+            // Menu, written at 0xE0 by WriteNextendoFriendV2), as the user's own presence is
+            // (GetUserPresenceViewV2). The page still says "Online" with the title's card; the
+            // overlay applet only reads the title of a friend "playing": with "Online" alone, a
+            // friend coming online without a game was announced "Online" instead of "HOME Menu".
+            // ("Playing" with a title of 0 was the "Loading failed" card: never written any more.)
+            return PresenceStatus.OnlinePlay;
         }
 
         private static FriendImpl MakeNextendoFriend(ulong netId, string nick, PresenceStatus status, byte[] appField = null, bool sameApp = true)
@@ -1417,7 +1416,9 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
 
             if (IsNextendoProfile(userId) && NextendoAccount.IsLinked)
             {
-                NextendoActivity.Set("AddFriend");
+                // the user's own page asks for these settings too (its friend code), not only the
+                // page to add a friend: Discord said "Adding a friend" on the profile
+                NextendoActivity.Set("Profile");
 
                 // The user's own settings: who they are, then their friend code as text.
                 MemoryMarshal.Write(setting, in userId);

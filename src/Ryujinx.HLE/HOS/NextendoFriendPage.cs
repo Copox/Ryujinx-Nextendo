@@ -1025,11 +1025,17 @@ namespace Ryujinx.HLE.HOS
 
         // A friend of the list: the picture smaller and round, in the card's margins; the
         // nickname and the status under it; the card and its cursor with rounder corners.
+        /// <summary>
+        /// The file is made for a real console (by the export tool): no emulator there to make the
+        /// friends' pictures of the list round as they load, so the layout masks them as well.
+        /// </summary>
+        public static bool ForConsole { get; set; }
+
         private static byte[] PatchFriendTile(byte[] layout)
         {
             List<byte[]> sections = Sections(layout, out int header);
 
-            if (!PatchPictures(sections, _friendTilePictures, CircleTexture))
+            if (!PatchPictures(sections, ForConsole ? [.. _friendTilePictures, "P_Image"] : _friendTilePictures, CircleTexture))
             {
                 return null;
             }
