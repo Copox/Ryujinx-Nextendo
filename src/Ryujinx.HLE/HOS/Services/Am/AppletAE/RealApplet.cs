@@ -152,7 +152,23 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
             {
                 Thread.Sleep(12000);
 
-                ulong pid = device.Processes.LoadApplet(path, id => OverlayPid = id);
+                // The HOME Menu may have been closed in the meantime: starting the overlay in a
+                // stopped emulator took the whole emulator down (disposed GPU events).
+                if (device.System.Stopping)
+                {
+                    return;
+                }
+
+                ulong pid;
+
+                try
+                {
+                    pid = device.Processes.LoadApplet(path, id => OverlayPid = id);
+                }
+                catch (Exception) when (device.System.Stopping)
+                {
+                    return;
+                }
 
                 Logger.Notice.Print(LogClass.ServiceAm, $"[overlay] overlayDisp started as process {pid}");
             })
@@ -216,6 +232,9 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
                     }
                     else
                     {
+                        // its online data up to date first, as from the game list
+                        Ryujinx.Common.Configuration.NextendoHomeLaunch.Run(title.Id);
+
                         started = isXci ? device.Processes.LoadXci(title.Path, title.Id) : device.Processes.LoadNsp(title.Path, title.Id);
                     }
                 }

@@ -89,7 +89,9 @@ namespace Ryujinx.Graphics.Gpu.Shader
         /// Creates a new instance of the shader cache.
         /// </summary>
         /// <param name="context">GPU context that the shader cache belongs to</param>
-        public ShaderCache(GpuContext context)
+        private int _initialized;
+
+        public ShaderCache(GpuContext context, string titleId = null)
         {
             _context = context;
 
@@ -100,7 +102,7 @@ namespace Ryujinx.Graphics.Gpu.Shader
 
             _programsToSaveQueue = new Queue<ProgramToSave>();
 
-            string diskCacheTitleId = GetDiskCachePath();
+            string diskCacheTitleId = GetDiskCachePath(titleId);
 
             _computeShaderCache = new ComputeShaderCacheHashTable();
             _graphicsShaderCache = new ShaderCacheHashTable();
@@ -115,10 +117,19 @@ namespace Ryujinx.Graphics.Gpu.Shader
         /// <summary>
         /// Gets the path where the disk cache for the current application is stored.
         /// </summary>
-        private static string GetDiskCachePath()
+        /// <remarks>
+        /// [Nextendo] Each process with its own program's cache: GraphicsConfig.TitleId is the last
+        /// application loaded, so a process started right after a game (the overlay applet, when a
+        /// game is launched from the HOME Menu) took the game's cache, and both wrote the same files
+        /// at once: the game then read wrong shaders (wrong colours, broken ink in Splatoon 3).
+        /// GraphicsConfig.TitleId null still turns the cache off (homebrew).
+        /// </remarks>
+        private static string GetDiskCachePath(string titleId)
         {
-            return GraphicsConfig.EnableShaderCache && GraphicsConfig.TitleId != null
-                ? Path.Combine(AppDataManager.GamesDirPath, GraphicsConfig.TitleId.ToLower(), "cache", "shader")
+            string id = titleId ?? GraphicsConfig.TitleId;
+
+            return GraphicsConfig.EnableShaderCache && GraphicsConfig.TitleId != null && !string.IsNullOrEmpty(id)
+                ? Path.Combine(AppDataManager.GamesDirPath, id.ToLower(), "cache", "shader")
                 : null;
         }
 
@@ -155,6 +166,13 @@ namespace Ryujinx.Graphics.Gpu.Shader
         /// <param name="cancellationToken">Cancellation token to cancel the shader cache initialization process</param>
         internal void Initialize(CancellationToken cancellationToken)
         {
+            // [Nextendo] once per process: a game started from the HOME Menu is initialized after
+            // the start-up pass, and must never load its cache twice
+            if (Interlocked.Exchange(ref _initialized, 1) != 0)
+            {
+                return;
+            }
+
             if (_diskCacheHostStorage.CacheEnabled)
             {
                 ParallelDiskCacheLoader loader = new(

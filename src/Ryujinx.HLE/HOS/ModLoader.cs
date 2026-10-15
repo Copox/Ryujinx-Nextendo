@@ -980,6 +980,11 @@ namespace Ryujinx.HLE.HOS
                     count++;
                 }
 
+                if (NextendoPvZBfNPatch.Apply(applicationId, Convert.ToHexString(nso.BuildId).TrimEnd('0'), nso.Program))
+                {
+                    count++;
+                }
+
                 MemPatch patch = new();
 
                 if (NextendoS3Patches.Verser(Convert.ToHexString(nso.BuildId).TrimEnd('0'), patch) == 0)

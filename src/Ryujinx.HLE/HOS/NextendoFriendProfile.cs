@@ -25,7 +25,6 @@ namespace Ryujinx.HLE.HOS
         private const ulong MyPageProgram = 0x0100000000001013;
 
         // The page draws its textures a moment after it asks for the friend: given again meanwhile.
-        private static readonly int[] _delays = [0, 120, 250, 400, 600, 900, 1300, 1800, 2600, 4000];
 
         private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(6) };
         private static readonly ConcurrentDictionary<string, SKBitmap> _badges = new();
@@ -38,18 +37,21 @@ namespace Ryujinx.HLE.HOS
         private static Switch _device;
         private static bool _listening;
         private static int _shown;
+        private static ulong _lastShownPid;
         private static int _own;
 
         public static void Attach(Switch device)
         {
             _device = device;
-            NextendoImages.Decorate ??= (picture, decoration) => Decorate(picture, decoration);
+            NextendoImages.Decorate ??= NextendoFriendListDecoration.Decorate;
             NextendoOwnDecoration.Attach(device);
+            NextendoFriendListDecoration.Attach(device);
 
             if (!_listening)
             {
                 _listening = true;
                 NextendoFriends.FriendPageShown += Shown;
+                NextendoFriends.FriendNotificationShown += NotificationShown;
             }
         }
 
@@ -64,6 +66,21 @@ namespace Ryujinx.HLE.HOS
 
             int turn = Interlocked.Increment(ref _shown);
 
+            // the page of another friend: the pictures of the last one are not given again to its
+            // textures (read again before this friend's come, they would show the other friend's)
+            if (Interlocked.Exchange(ref _lastShownPid, pid) != pid)
+            {
+                foreach (KProcess process in device.System.KernelContext.Processes.Values)
+                {
+                    if (process.TitleId == MyPageProgram && process.State != ProcessState.Exited)
+                    {
+                        device.Gpu.NextendoForget(process.Pid, NextendoFriendPage.BannerWidth, NextendoFriendPage.BannerHeight);
+                        device.Gpu.NextendoForget(process.Pid, NextendoFriendPage.DetailWidth, NextendoFriendPage.DetailHeight);
+                        device.Gpu.NextendoForget(process.Pid, NextendoFriendPage.DecorationSide, NextendoFriendPage.DecorationSide);
+                    }
+                }
+            }
+
             Task.Run(async () =>
             {
                 try
@@ -71,20 +88,45 @@ namespace Ryujinx.HLE.HOS
                     NextendoFriends.Entry friend = NextendoFriends.Get().FirstOrDefault(f => f.Pid == pid);
                     List<(byte[] Pixels, int Milliseconds)> banner = Banner(pid, friend.Color, friend.Badges ?? [], NextendoFriendPage.BannerWidth, friend.BannerUrl, friend.BannerCrop);
 
+                    ShowDetail(device, turn, friend.Status > 0 ? friend.Detail : "");
+                    ShowDecoration(device, pid, friend.Decoration);
+
                     Logger.Info?.Print(LogClass.Application, $"[Nextendo] friend page: banner of 0x{pid:X} ({friend.Badges?.Length ?? 0} badge(s), colour \"{friend.Color}\", {banner.Count} picture(s))");
 
-                    // a still one: given again for a while (an animated one is given all the time)
-                    foreach (int delay in banner.Count > 1 ? [] : _delays)
+                    // A still one: given until the applet has made its texture (it makes it only
+                    // when it draws the page: later on a slow machine, after the 12 seconds the
+                    // banner used to be given for, which left it empty "sometimes"), then twice
+                    // more. Kept in the applet's memory too: read again from there, the texture
+                    // keeps it. An animated one is given all the time.
+                    if (banner.Count == 1)
                     {
-                        await Task.Delay(delay);
+                        long until = Environment.TickCount64 + 20000;
+                        int given = 0;
 
-                        // the page of another friend meanwhile: theirs is the one to show
-                        if (turn != _shown || device != _device)
+                        while (given < 3 && Environment.TickCount64 < until)
                         {
-                            return;
+                            // the page of another friend meanwhile: theirs is the one to show
+                            if (turn != _shown || device != _device)
+                            {
+                                return;
+                            }
+
+                            int found = await UploadCounted(device, NextendoFriendPage.BannerWidth, banner[0].Pixels);
+
+                            if (found < 0)
+                            {
+                                return; // the applet is closed
+                            }
+
+                            given += found > 0 ? 1 : 0;
+
+                            await Task.Delay(given == 0 ? 200 : 700);
                         }
 
-                        Upload(device, NextendoFriendPage.BannerWidth, banner[0].Pixels);
+                        if (given == 0)
+                        {
+                            Logger.Warning?.Print(LogClass.Application, $"[Nextendo] friend page: the banner texture of 0x{pid:X} never appeared");
+                        }
                     }
 
                     // an animated one: its pictures in turn, as long as this page is the one shown
@@ -105,8 +147,269 @@ namespace Ryujinx.HLE.HOS
             });
         }
 
+        // The decoration of the friend over their picture, moving and past its edge (nothing when
+        // they have none: the one of the last page must go), as long as this page is the one shown.
+        // The "online" notification of a friend with a Discord nameplate: the nameplate, moving,
+        // in the frame of the notification while it shows, then the plain frame again.
+        private const ulong OverlayProgram = 0x010000000000100C;
+        private const int NotificationMilliseconds = 12000; // at most: the next notification ends it
+        private static int _notificationTurn;
+        private static readonly ConcurrentDictionary<string, List<byte[]>> _nameplates = new();
+
+        private static void NotificationShown(ulong pid)
+        {
+            Switch device = _device;
+            NextendoFriends.Entry friend = NextendoFriends.Get().FirstOrDefault(f => f.Pid == pid);
+
+            string address = friend.Nameplate ?? "";
+            SKColor? colour = SKColor.TryParse(friend.NameplateColor ?? "", out SKColor parsed) ? parsed : null;
+
+            if (device == null || NextendoHomeMenuVanilla.Enabled)
+            {
+                return;
+            }
+
+            int turn = Interlocked.Increment(ref _notificationTurn);
+            byte[] gameIcon = friend.AppId != 0 && NextendoGames.TryGet(friend.AppId, out NextendoGames.Game played) ? played.Icon : null;
+
+            // a friend without a nameplate: the plain frame at once (the last nameplate may still
+            // be on it), with the icon of their game
+            if (address.Length == 0)
+            {
+                using SKBitmap icon = gameIcon == null ? null : SKBitmap.Decode(gameIcon);
+
+                UploadOverlay(device, NextendoFriendPage.NotificationBasePixels(game: icon));
+
+                // the plain frame again once it has gone (for the notifications that come next)
+                if (icon != null)
+                {
+                    Task.Delay(NotificationMilliseconds).ContinueWith(_ =>
+                    {
+                        if (turn == _notificationTurn)
+                        {
+                            UploadOverlay(device, NextendoFriendPage.NotificationBasePixels());
+                        }
+                    });
+                }
+
+                return;
+            }
+
+            Task.Run(async () =>
+            {
+                try
+                {
+                    string key = address + "|" + friend.NameplateColor + "|" + friend.AppId;
+
+                    if (!_nameplates.TryGetValue(key, out List<byte[]> frames))
+                    {
+                        frames = NameplateFrames(Picture(address), colour, gameIcon, out List<int> times);
+
+                        if (frames == null)
+                        {
+                            return;
+                        }
+
+                        _nameplates[key] = frames;
+                        _nameplateTimes[key] = times;
+                    }
+
+                    List<int> durations = _nameplateTimes.TryGetValue(key, out List<int> t) ? t : [];
+                    long until = Environment.TickCount64 + NotificationMilliseconds;
+
+                    for (int at = 0; turn == _notificationTurn && Environment.TickCount64 < until; at = (at + 1) % frames.Count)
+                    {
+                        UploadOverlay(device, frames[at]);
+                        await Task.Delay(at < durations.Count ? durations[at] : 80);
+                    }
+
+                    if (turn == _notificationTurn)
+                    {
+                        UploadOverlay(device, NextendoFriendPage.NotificationBasePixels());
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.Warning?.Print(LogClass.Application, $"[Nextendo] notification: nameplate of 0x{pid:X} not shown: {e.Message}");
+                }
+            });
+        }
+
+        private static readonly ConcurrentDictionary<string, List<int>> _nameplateTimes = new();
+
+        // The pictures of a nameplate (animated PNG) in the frame of the notification.
+        private static List<byte[]> NameplateFrames(byte[] png, SKColor? colour, byte[] gameIcon, out List<int> times)
+        {
+            times = [];
+            List<(SKBitmap Picture, int Milliseconds)> pictures = NextendoApng.Frames(png, 90);
+
+            if (pictures == null || pictures.Count == 0)
+            {
+                SKBitmap still = png == null ? null : SKBitmap.Decode(png);
+
+                if (still == null)
+                {
+                    return null;
+                }
+
+                pictures = [(still, 0)];
+            }
+
+            try
+            {
+                List<byte[]> frames = [];
+                using SKBitmap icon = gameIcon == null ? null : SKBitmap.Decode(gameIcon);
+
+                foreach ((SKBitmap picture, int milliseconds) in pictures)
+                {
+                    frames.Add(NextendoFriendPage.NotificationBasePixels(picture, colour, icon));
+                    times.Add(Math.Max(milliseconds, ShortestFrame));
+                }
+
+                return frames;
+            }
+            finally
+            {
+                foreach ((SKBitmap picture, _) in pictures)
+                {
+                    picture.Dispose();
+                }
+            }
+        }
+
+        private static void UploadOverlay(Switch device, byte[] pixels)
+        {
+            foreach (KProcess process in device.System.KernelContext.Processes.Values)
+            {
+                if (process.TitleId == OverlayProgram && process.State != ProcessState.Exited)
+                {
+                    device.Gpu.NextendoUploadTexture(process.Pid, NextendoFriendPage.NotificationBaseWidth, NextendoFriendPage.NotificationBaseHeight, pixels, 4);
+                }
+            }
+        }
+
+        // The decoration shown, and its pictures (made once: the applet asks for the friend's
+        // status every few seconds while the page shows, the decoration keeps going meanwhile).
+        private static ulong _decorationPid;
+        private static string _decorationAddress;
+        private static int _decorationTurn;
+        private static int _decorationRunning;
+        private static readonly ConcurrentDictionary<string, List<(byte[] Pixels, int Milliseconds)>> _decorationFrames = new();
+
+        private static void ShowDecoration(Switch device, ulong pid, string address)
+        {
+            address ??= "";
+
+            if (pid == _decorationPid && address == _decorationAddress && Volatile.Read(ref _decorationRunning) == 1)
+            {
+                return;
+            }
+
+            _decorationPid = pid;
+            _decorationAddress = address;
+            Volatile.Write(ref _decorationRunning, 1);
+
+            int turn = Interlocked.Increment(ref _decorationTurn);
+
+            Task.Run(async () =>
+            {
+                try
+                {
+                    const int Side = NextendoFriendPage.DecorationSide;
+                    List<(byte[] Pixels, int Milliseconds)> frames = null;
+
+                    if (Uri.TryCreate(address, UriKind.Absolute, out Uri uri) && uri.Scheme == Uri.UriSchemeHttps && uri.Host == "cdn.discordapp.com" &&
+                        uri.AbsolutePath.StartsWith("/avatar-decoration-presets/", StringComparison.Ordinal))
+                    {
+                        // the picture of the friend comes with the list: a few seconds at most
+                        byte[] photo = NextendoFriends.PlainImage(pid);
+
+                        for (int wait = 0; photo == null && wait < 50 && turn == _decorationTurn; wait++)
+                        {
+                            await Task.Delay(100);
+                            photo = NextendoFriends.PlainImage(pid);
+                        }
+
+                        string key = $"{pid:X}|{address}|{photo?.Length}";
+
+                        if (photo != null && !_decorationFrames.TryGetValue(key, out frames))
+                        {
+                            frames = DecorationFrames(photo, Picture(uri.AbsoluteUri.Replace("passthrough=false", "passthrough=true")), Side);
+
+                            if (frames != null)
+                            {
+                                if (_decorationFrames.Count >= 4)
+                                {
+                                    _decorationFrames.Clear();
+                                }
+
+                                _decorationFrames[key] = frames;
+                            }
+                        }
+                    }
+
+                    frames ??= [(new byte[Side * Side * 4], 0)];
+
+                    Logger.Info?.Print(LogClass.Application, $"[Nextendo] friend page: decoration of 0x{pid:X}: {(address.Length == 0 ? "none" : $"{frames.Count} picture(s)")}");
+
+                    // the first one until the applet has made its texture (kept in its memory),
+                    // then the animation straight away
+                    long until = Environment.TickCount64 + 20000;
+
+                    while (true)
+                    {
+                        if (turn != _decorationTurn || device != _device)
+                        {
+                            return;
+                        }
+
+                        int found = await UploadCounted(device, Side, frames[0].Pixels, Side);
+
+                        if (found < 0)
+                        {
+                            return;
+                        }
+
+                        if (found > 0)
+                        {
+                            break;
+                        }
+
+                        if (Environment.TickCount64 >= until)
+                        {
+                            Logger.Warning?.Print(LogClass.Application, $"[Nextendo] friend page: the decoration texture of 0x{pid:X} never appeared");
+                            return;
+                        }
+
+                        await Task.Delay(100);
+                    }
+
+                    for (int at = 0; frames.Count > 1 && turn == _decorationTurn && device == _device; at = (at + 1) % frames.Count)
+                    {
+                        if (!Upload(device, Side, frames[at].Pixels, Side))
+                        {
+                            return;
+                        }
+
+                        await Task.Delay(frames[at].Milliseconds);
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.Warning?.Print(LogClass.Application, $"[Nextendo] friend page: decoration not painted: {e.Message}");
+                }
+                finally
+                {
+                    if (turn == _decorationTurn)
+                    {
+                        Volatile.Write(ref _decorationRunning, 0);
+                    }
+                }
+            });
+        }
+
         // A banner given to the renderer, for the applet to show: false when the applet does not run.
-        private static bool Upload(Switch device, int width, byte[] pixels)
+        private static bool Upload(Switch device, int width, byte[] pixels, int height = NextendoFriendPage.BannerHeight)
         {
             bool running = false;
 
@@ -114,12 +417,113 @@ namespace Ryujinx.HLE.HOS
             {
                 if (process.TitleId == MyPageProgram && process.State != ProcessState.Exited)
                 {
-                    device.Gpu.NextendoUploadTexture(process.Pid, width, NextendoFriendPage.BannerHeight, pixels, 4);
+                    device.Gpu.NextendoUploadTexture(process.Pid, width, height, pixels, 4);
                     running = true;
                 }
             }
 
             return running;
+        }
+
+        // What the friend is doing in the game ("Offline · VS · 150cc"), painted under the game of
+        // their status, in the console's own letters and in the grey of the theme; nothing when
+        // the game says nothing (a transparent picture, given all the same: the page of the
+        // friend before may have left theirs).
+        private static void ShowDetail(Switch device, int turn, string detail)
+        {
+            Task.Run(async () =>
+            {
+                try
+                {
+                    byte[] pixels = PaintDetail(detail);
+                    long until = Environment.TickCount64 + 20000;
+                    int given = 0;
+
+                    while (given < 2 && Environment.TickCount64 < until && turn == _shown && device == _device)
+                    {
+                        int found = await UploadCounted(device, NextendoFriendPage.DetailWidth, pixels, NextendoFriendPage.DetailHeight);
+
+                        if (found < 0)
+                        {
+                            return;
+                        }
+
+                        given += found > 0 ? 1 : 0;
+
+                        await Task.Delay(given == 0 ? 200 : 700);
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.Warning?.Print(LogClass.Application, $"[Nextendo] friend page: detail not painted: {e.Message}");
+                }
+            });
+        }
+
+        private static SKTypeface _console;
+
+        private static byte[] PaintDetail(string detail)
+        {
+            int width = NextendoFriendPage.DetailWidth, height = NextendoFriendPage.DetailHeight;
+
+            using SKBitmap picture = new(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
+            using SKCanvas canvas = new(picture);
+
+            canvas.Clear(SKColors.Transparent);
+
+            if (!string.IsNullOrWhiteSpace(detail))
+            {
+                if (_console == null && Services.Sdb.Pl.SharedFontManager.StandardFont is { } font)
+                {
+                    _console = SKTypeface.FromData(SKData.CreateCopy(font));
+                }
+
+                bool dark = NextendoHomeMenuSettings.Theme == "black" || Themes.NextendoThemes.Chosen != null;
+
+                using SKPaint paint = new()
+                {
+                    IsAntialias = true,
+                    Typeface = _console ?? SKTypeface.Default,
+                    TextSize = 38f,
+                    Color = dark ? new SKColor(0xB4, 0xB4, 0xB4) : new SKColor(0x6E, 0x6E, 0x6E),
+                };
+
+                // under the name of the game: same left edge (124 of the 574 of the row, twice here)
+                const float Left = 248f;
+                string text = detail.Trim();
+
+                while (text.Length > 1 && paint.MeasureText(text) > width - Left - 16)
+                {
+                    text = text[..^2].TrimEnd() + "…";
+                }
+
+                float baseline = height / 2f - (paint.FontMetrics.Ascent + paint.FontMetrics.Descent) / 2f;
+
+                canvas.DrawText(text, Left, baseline, paint);
+            }
+
+            canvas.Flush();
+
+            return picture.Bytes;
+        }
+
+        // A still banner given to the applet and kept in its memory: how many textures took it
+        // (0 while the applet has not made it yet), -1 when the applet does not run.
+        private static Task<int> UploadCounted(Switch device, int width, byte[] pixels, int height = NextendoFriendPage.BannerHeight)
+        {
+            KProcess page = device.System.KernelContext.Processes.Values.FirstOrDefault(p => p.TitleId == MyPageProgram && p.State != ProcessState.Exited);
+
+            if (page == null)
+            {
+                return Task.FromResult(-1);
+            }
+
+            TaskCompletionSource<int> found = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            device.Gpu.NextendoUploadTexture(page.Pid, width, height, pixels, 4, n => found.TrySetResult(n));
+
+            // the renderer gives its answer at its next frame; none within a second: try again
+            return Task.WhenAny(found.Task, Task.Delay(1000)).ContinueWith(t => found.Task.IsCompleted ? found.Task.Result : 0);
         }
 
         // The own banner, when it is an animated one: its pictures in turn while the applet runs
@@ -226,7 +630,7 @@ namespace Ryujinx.HLE.HOS
             using SKCanvas canvas = new(picture);
             using SKPaint smooth = new() { IsAntialias = true, FilterQuality = SKFilterQuality.High };
 
-            canvas.DrawBitmap(ring, SKRect.Create(0, 0, side, side), smooth);
+            canvas.DrawBitmap(ring, RingPlace(side), smooth);
 
             if (mark != 0)
             {
@@ -283,7 +687,7 @@ namespace Ryujinx.HLE.HOS
                     using SKBitmap frame = under.Copy();
                     using SKCanvas canvas = new(frame);
 
-                    canvas.DrawBitmap(ring, SKRect.Create(0, 0, side, side), smooth);
+                    canvas.DrawBitmap(ring, RingPlace(side), smooth);
                     canvas.Flush();
                     frames.Add((frame.Bytes, Math.Max(milliseconds, ShortestFrame)));
                 }
@@ -299,6 +703,223 @@ namespace Ryujinx.HLE.HOS
             }
         }
 
+        /// <summary>
+        /// The pictures of the decoration pane (see NextendoFriendPage.DecorationTexture), RGBA,
+        /// <paramref name="texture"/> pixels a side: the profile picture as the applet shows it
+        /// (round, covering the applet's own), the decoration over it, past its edge, each picture
+        /// of the animation with how long it shows. Null when the decoration cannot be read.
+        /// </summary>
+        public static List<(byte[] Pixels, int Milliseconds)> DecorationFrames(byte[] jpeg, byte[] decoration, int texture)
+        {
+            using SKBitmap photo = SKBitmap.Decode(jpeg);
+
+            if (photo == null || decoration == null)
+            {
+                return null;
+            }
+
+            List<(SKBitmap Picture, int Milliseconds)> rings = NextendoApng.Frames(decoration, MostFrames);
+
+            if (rings == null || rings.Count == 0)
+            {
+                SKBitmap still = SKBitmap.Decode(decoration);
+
+                if (still == null)
+                {
+                    return null;
+                }
+
+                rings = [(still, 0)];
+            }
+
+            try
+            {
+                int side = (int)MathF.Round(texture / NextendoFriendPage.DecorationScale);
+                float at = (texture - side) / 2f;
+
+                using SKBitmap round = new(new SKImageInfo(texture, texture, SKColorType.Rgba8888, SKAlphaType.Premul));
+                using SKPaint smooth = new() { IsAntialias = true, FilterQuality = SKFilterQuality.High };
+
+                // as on Discord: the photo fills the round picture of the applet (a pixel larger,
+                // none of the applet's own shows at its edge), the decoration 1.2 times as large
+                // around it, past its edge
+                using (SKCanvas canvas = new(round))
+                using (SKPath circle = new())
+                {
+                    SKRect place = SKRect.Create(at - 1, at - 1, side + 2, side + 2);
+                    float scale = Math.Max((side + 2f) / photo.Width, (side + 2f) / photo.Height);
+                    SKRect fill = SKRect.Create(place.MidX - photo.Width * scale / 2, place.MidY - photo.Height * scale / 2, photo.Width * scale, photo.Height * scale);
+
+                    canvas.Clear(SKColors.Transparent);
+                    circle.AddOval(place);
+                    canvas.ClipPath(circle, antialias: true);
+                    canvas.DrawBitmap(photo, fill, smooth);
+                    canvas.Flush();
+                }
+
+                float size = side * 1.2f;
+                SKRect ring = SKRect.Create((texture - size) / 2, (texture - size) / 2, size, size);
+
+                List<(byte[] Pixels, int Milliseconds)> frames = [];
+
+                foreach ((SKBitmap picture, int milliseconds) in rings)
+                {
+                    using SKBitmap frame = round.Copy();
+                    using SKCanvas canvas = new(frame);
+
+                    canvas.DrawBitmap(picture, ring, smooth);
+                    canvas.Flush();
+                    frames.Add((frame.Bytes, Math.Max(milliseconds, ShortestFrame)));
+                }
+
+                return frames;
+            }
+            finally
+            {
+                foreach ((SKBitmap picture, _) in rings)
+                {
+                    picture.Dispose();
+                }
+            }
+        }
+
+        /// <summary>
+        /// A small round picture of a friend with their decoration, as Discord draws it: the photo
+        /// in a circle at 1/1.2 of the square, the decoration filling the square around it. The
+        /// still one the applet gets (JPEG, the corners dark), with the mark that finds its
+        /// texture, the pictures then given to that texture having transparent corners.
+        /// </summary>
+        public static byte[] DecorateRound(byte[] jpeg, byte[] decoration, byte mark)
+        {
+            using SKBitmap photo = SKBitmap.Decode(jpeg);
+            using SKBitmap ring = SKBitmap.Decode(decoration);
+
+            if (photo == null || ring == null)
+            {
+                return null;
+            }
+
+            int side = Math.Max(photo.Width, photo.Height);
+
+            using SKBitmap picture = RoundUnder(photo, side, opaque: true);
+            using SKCanvas canvas = new(picture);
+            using SKPaint smooth = new() { IsAntialias = true, FilterQuality = SKFilterQuality.High };
+
+            canvas.DrawBitmap(ring, SKRect.Create(0, 0, side, side), smooth);
+
+            if (mark != 0)
+            {
+                using SKPaint flat = new();
+
+                flat.Color = new SKColor(NextendoFriendListDecoration.Light, NextendoFriendListDecoration.Light, NextendoFriendListDecoration.Light);
+                canvas.DrawRect(SKRect.Create(0, 0, 8, 16), flat);
+                flat.Color = new SKColor(mark, mark, mark);
+                canvas.DrawRect(SKRect.Create(8, 0, 24, 16), flat);
+            }
+
+            canvas.Flush();
+
+            using SKImage image = SKImage.FromBitmap(picture);
+            using SKData data = image.Encode(SKEncodedImageFormat.Jpeg, 95);
+
+            return data?.ToArray();
+        }
+
+        /// <summary>The pictures of DecorateRound as RGBA with transparent corners, each with how long it shows.</summary>
+        public static List<(byte[] Pixels, int Milliseconds)> RoundFrames(byte[] jpeg, byte[] decoration, out int side)
+        {
+            side = 0;
+
+            using SKBitmap photo = SKBitmap.Decode(jpeg);
+
+            if (photo == null || decoration == null)
+            {
+                return null;
+            }
+
+            List<(SKBitmap Picture, int Milliseconds)> rings = NextendoApng.Frames(decoration, MostFrames);
+
+            if (rings == null || rings.Count == 0)
+            {
+                SKBitmap still = SKBitmap.Decode(decoration);
+
+                if (still == null)
+                {
+                    return null;
+                }
+
+                rings = [(still, 0)];
+            }
+
+            try
+            {
+                side = Math.Max(photo.Width, photo.Height);
+
+                using SKBitmap under = RoundUnder(photo, side, opaque: false);
+                using SKPaint smooth = new() { IsAntialias = true, FilterQuality = SKFilterQuality.High };
+                List<(byte[] Pixels, int Milliseconds)> frames = [];
+
+                foreach ((SKBitmap ring, int milliseconds) in rings)
+                {
+                    using SKBitmap frame = under.Copy();
+                    using SKCanvas canvas = new(frame);
+
+                    canvas.DrawBitmap(ring, SKRect.Create(0, 0, side, side), smooth);
+                    canvas.Flush();
+                    frames.Add((frame.Bytes, Math.Max(milliseconds, ShortestFrame)));
+                }
+
+                return frames;
+            }
+            finally
+            {
+                foreach ((SKBitmap ring, _) in rings)
+                {
+                    ring.Dispose();
+                }
+            }
+        }
+
+        // The photo in a circle at 1/1.2 of the square (the decoration fills the square), on
+        // nothing, or on the photo blurred and darker for a JPEG.
+        private static SKBitmap RoundUnder(SKBitmap photo, int side, bool opaque)
+        {
+            float inner = side / 1.2f;
+            SKRect circle = SKRect.Create((side - inner) / 2, (side - inner) / 2, inner, inner);
+
+            SKBitmap picture = new(new SKImageInfo(side, side, SKColorType.Rgba8888, SKAlphaType.Premul));
+            using SKCanvas canvas = new(picture);
+            using SKPaint smooth = new() { IsAntialias = true, FilterQuality = SKFilterQuality.High };
+
+            canvas.Clear(opaque ? SKColors.Black : SKColors.Transparent);
+
+            if (opaque)
+            {
+                using SKPaint backdrop = new()
+                {
+                    ImageFilter = SKImageFilter.CreateBlur(side / 18f, side / 18f),
+                    ColorFilter = SKColorFilter.CreateBlendMode(new SKColor(0, 0, 0, 110), SKBlendMode.SrcOver),
+                    FilterQuality = SKFilterQuality.Medium,
+                };
+
+                canvas.DrawBitmap(photo, SKRect.Create(-side / 10f, -side / 10f, side * 1.2f, side * 1.2f), backdrop);
+            }
+
+            canvas.Save();
+
+            using (SKPath round = new())
+            {
+                round.AddOval(circle);
+                canvas.ClipPath(round, antialias: true);
+            }
+
+            canvas.DrawBitmap(photo, circle, smooth);
+            canvas.Restore();
+            canvas.Flush();
+
+            return picture;
+        }
+
         /// <summary>RGBA pixels of a square picture, at another size.</summary>
         public static byte[] Resize(byte[] pixels, int side, int width, int height)
         {
@@ -310,12 +931,25 @@ namespace Ryujinx.HLE.HOS
             return to?.Bytes;
         }
 
+        // The pictures of people are round in the HOME Menu (a round mask on a square picture):
+        // the photo fills most of that circle, and the decoration keeps Discord's proportion to it
+        // (20 % larger), its outer edge a little past the circle. A photo at 1/1.2 of the square,
+        // the decoration at the square, was too small once the mask made it round.
+        private const float PhotoShrink = 1.12f;
+
+        private static SKRect RingPlace(int side)
+        {
+            float size = side / PhotoShrink * 1.2f;
+
+            return SKRect.Create((side - size) / 2, (side - size) / 2, size, size);
+        }
+
         // The picture under a decoration, as Discord draws it: the photo in a circle, the
         // decoration 20 % larger around it. The corners, outside the circle, take the photo
         // itself, blurred and darker (the HOME Menu shows square pictures).
         private static SKBitmap Backdrop(SKBitmap photo, int side)
         {
-            float inner = side / 1.2f;
+            float inner = side / PhotoShrink;
             SKRect circle = SKRect.Create((side - inner) / 2, (side - inner) / 2, inner, inner);
 
             SKBitmap picture = new(new SKImageInfo(side, side, SKColorType.Rgba8888, SKAlphaType.Premul));
@@ -405,7 +1039,7 @@ namespace Ryujinx.HLE.HOS
 
         // The picture a profile has for its banner (a still one or an animated one, as a file), or
         // null when it has none.
-        private static byte[] Picture(string address)
+        internal static byte[] Picture(string address)
         {
 
             if (string.IsNullOrEmpty(address))
@@ -419,7 +1053,9 @@ namespace Ryujinx.HLE.HOS
             {
                 full = NextendoEndpoint.BaseUrl().TrimEnd('/') + address;
             }
-            else if (Uri.TryCreate(address, UriKind.Absolute, out Uri uri) && uri.Scheme == Uri.UriSchemeHttps && _klipyHosts.Contains(uri.Host))
+            else if (Uri.TryCreate(address, UriKind.Absolute, out Uri uri) && uri.Scheme == Uri.UriSchemeHttps &&
+                     (_klipyHosts.Contains(uri.Host) || (uri.Host == "cdn.discordapp.com" && uri.AbsolutePath.StartsWith("/avatar-decoration-presets/", StringComparison.Ordinal)) ||
+                      (uri.Host == "nextendo.network" && uri.AbsolutePath.StartsWith("/assets/nameplates/", StringComparison.Ordinal))))
             {
                 full = uri.AbsoluteUri;
             }

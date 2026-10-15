@@ -193,6 +193,24 @@ namespace Ryujinx.HLE.HOS.Services
             _wakeEvent?.WritableEvent.Signal();
         }
 
+        private IpcService TryGetSessionObj(int serverSessionHandle)
+        {
+            bool lockTaken = false;
+            try
+            {
+                lockTaken = _handleLock.TryEnterReadLock(Timeout.Infinite);
+
+                return _sessions.TryGetValue(serverSessionHandle, out IpcService obj) ? obj : null;
+            }
+            finally
+            {
+                if (lockTaken)
+                {
+                    _handleLock.ExitReadLock();
+                }
+            }
+        }
+
         private IpcService GetSessionObj(int serverSessionHandle)
         {
             bool lockTaken = false;
@@ -658,6 +676,18 @@ namespace Ryujinx.HLE.HOS.Services
                 {
                     DeferredPoll deferred = _deferredPolls[i];
 
+                    // [Nextendo] The session is gone: the game that polled has ended (closed from the
+                    // HOME Menu while its network was waiting). Nobody waits for this reply any more;
+                    // re-running it took the whole emulator down (KeyNotFoundException).
+                    IpcService sessionObj = TryGetSessionObj(deferred.SessionHandle);
+
+                    if (sessionObj == null)
+                    {
+                        _deferredPolls.RemoveAt(i);
+
+                        continue;
+                    }
+
                     // Re-run the captured Poll request in force-non-blocking mode. This recomputes
                     // outputBufferPosition/events/eventsByPollManager/fdsCount identically from the same
                     // request and writes the revents into GUEST memory itself.
@@ -689,7 +719,7 @@ namespace Ryujinx.HLE.HOS.Services
                         PollInputSnapshot = deferred.InputSnapshot,
                     };
 
-                    GetSessionObj(deferred.SessionHandle).CallCmifMethod(context);
+                    sessionObj.CallCmifMethod(context);
 
                     bool deadlineElapsed = PerformanceCounter.ElapsedMilliseconds >= deferred.DeadlineMs;
 

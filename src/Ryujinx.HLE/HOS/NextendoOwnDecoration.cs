@@ -83,6 +83,11 @@ namespace Ryujinx.HLE.HOS
                     Animate(picture, _animation);
                 }
 
+                if (made != null)
+                {
+                    Overlay(picture, _decoration, _animation);
+                }
+
                 return made ?? picture;
             }
         }
@@ -153,6 +158,7 @@ namespace Ryujinx.HLE.HOS
                         if (still == null)
                         {
                             Interlocked.Increment(ref _turn); // no decoration any more: no animation either
+                            Interlocked.Increment(ref _overlayTurn);
                         }
                     }
 
@@ -249,10 +255,61 @@ namespace Ryujinx.HLE.HOS
             });
         }
 
+        // The decoration on the user's own page, as on Discord: moving, past the edge of the round
+        // picture (a pane of its own, see NextendoFriendPage), given while the page's applet runs.
+        private static int _overlayTurn;
+
+        private static void Overlay(byte[] picture, byte[] still, byte[] animation)
+        {
+            int turn = Interlocked.Increment(ref _overlayTurn);
+
+            Task.Run(async () =>
+            {
+                try
+                {
+                    const int Side = NextendoFriendPage.OwnDecorationSide;
+                    List<(byte[] Pixels, int Milliseconds)> frames = NextendoFriendProfile.DecorationFrames(picture, animation ?? still, Side) ??
+                                                                     NextendoFriendProfile.DecorationFrames(picture, still, Side);
+
+                    if (frames == null)
+                    {
+                        return;
+                    }
+
+                    // a still one: given again now and then, kept in the applet's memory, for the
+                    // page opened later; a moving one: its pictures in turn
+                    for (int at = 0; turn == _overlayTurn; at = (at + 1) % frames.Count)
+                    {
+                        Switch device = _device;
+
+                        if (device != null && !NextendoHomeMenuVanilla.Enabled)
+                        {
+                            foreach (KProcess process in device.System.KernelContext.Processes.Values)
+                            {
+                                if (process.TitleId == _programs[1] && process.State != ProcessState.Exited)
+                                {
+                                    device.Gpu.NextendoUploadTexture(process.Pid, Side, Side, frames[at].Pixels, 4);
+                                }
+                            }
+                        }
+
+                        await Task.Delay(frames.Count > 1 ? frames[at].Milliseconds : 500);
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.Warning?.Print(LogClass.Application, $"[Nextendo] own picture: decoration of the page not painted: {e.Message}");
+                }
+            });
+        }
+
         // The mark, in the first 16 pixels of the texture (its first row in any layout): a dark
         // grey stripe 8 pixels wide, then 24 of the grey of the mark, both made smaller when the
         // program keeps the picture smaller (64 x 64: 2 then 6). JPEG keeps flat grey almost exactly.
-        private static bool Marked(byte[] first)
+        private static bool Marked(byte[] first) => IsMarked(first, Mark);
+
+        /// <summary>Whether the first 16 pixels of a texture carry the mark of this grey (see Marked).</summary>
+        public static bool IsMarked(byte[] first, int mark)
         {
             int dark = 0;
 
@@ -267,7 +324,7 @@ namespace Ryujinx.HLE.HOS
             }
 
             // the edge between the two greys may be a blend of them, when the picture was made smaller
-            int light = Grey(first, dark, Mark) ? dark : dark + 1;
+            int light = Grey(first, dark, mark) ? dark : dark + 1;
             int end = Math.Min(16, dark * 4 - 1);
 
             if (end - light < 1)
@@ -277,7 +334,7 @@ namespace Ryujinx.HLE.HOS
 
             for (int pixel = light; pixel < end; pixel++)
             {
-                if (!Grey(first, pixel, Mark))
+                if (!Grey(first, pixel, mark))
                 {
                     return false;
                 }

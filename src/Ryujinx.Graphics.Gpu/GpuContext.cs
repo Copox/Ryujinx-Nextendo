@@ -196,17 +196,31 @@ namespace Ryujinx.Graphics.Gpu
         /// </summary>
         /// <param name="pid">ID of the process that owns <paramref name="cpuMemory"/></param>
         /// <param name="cpuMemory">Virtual memory owned by the process</param>
+        /// <param name="titleId">[Nextendo] The program of the process: its own disk shader cache (null: the one of the application)</param>
         /// <exception cref="ArgumentException">Thrown if <paramref name="pid"/> was already registered</exception>
-        public void RegisterProcess(ulong pid, Cpu.IVirtualMemoryManagerTracked cpuMemory)
+        public void RegisterProcess(ulong pid, Cpu.IVirtualMemoryManagerTracked cpuMemory, string titleId = null)
         {
-            PhysicalMemory physicalMemory = new(this, cpuMemory);
+            PhysicalMemory physicalMemory = new(this, cpuMemory, titleId);
             if (!PhysicalMemoryRegistry.TryAdd(pid, physicalMemory))
             {
                 throw new ArgumentException("The PID was already registered", nameof(pid));
             }
 
             physicalMemory.ShaderCache.ShaderCacheStateChanged += ShaderCacheStateUpdate;
+
+            // [Nextendo] A process that starts after the start-up pass (a game launched from the
+            // HOME Menu) gets its disk shader cache loaded on the GPU thread, at the next frame.
+            // Without this, only the HOME Menu's cache was ever loaded, and every game started
+            // from it rebuilt all of its shaders, every time.
+            if (_shaderCacheStarted)
+            {
+                _lateShaderCaches.Enqueue(physicalMemory);
+            }
         }
+
+        private volatile bool _shaderCacheStarted;
+        private CancellationToken _shaderCacheToken;
+        private readonly ConcurrentQueue<PhysicalMemory> _lateShaderCaches = new();
 
         /// <summary>
         /// Unregisters a process, indicating that its memory will no longer be used, and that caches can be freed.
@@ -289,6 +303,9 @@ namespace Ryujinx.Graphics.Gpu
         {
             HostInitalized.WaitOne();
 
+            _shaderCacheToken = cancellationToken;
+            _shaderCacheStarted = true;
+
             foreach (PhysicalMemory physicalMemory in PhysicalMemoryRegistry.Values)
             {
                 physicalMemory.ShaderCache.Initialize(cancellationToken);
@@ -329,6 +346,15 @@ namespace Ryujinx.Graphics.Gpu
         /// </summary>
         public void ProcessShaderCacheQueue()
         {
+            while (_lateShaderCaches.TryDequeue(out PhysicalMemory late))
+            {
+                // still running (a process that already ended is no longer registered)
+                if (!_shaderCacheToken.IsCancellationRequested && PhysicalMemoryRegistry.Values.Contains(late))
+                {
+                    late.ShaderCache.Initialize(_shaderCacheToken);
+                }
+            }
+
             foreach (PhysicalMemory physicalMemory in PhysicalMemoryRegistry.Values)
             {
                 physicalMemory.ShaderCache.ProcessShaderCacheQueue();
@@ -454,14 +480,16 @@ namespace Ryujinx.Graphics.Gpu
         // Asked from other threads than the renderer's (the deferred actions are its own, not shared).
         private readonly ConcurrentQueue<Action> _nextendoUploads = new();
 
-        public void NextendoUploadTexture(ulong pid, int width, int height, byte[] pixels, int bytesPerPixel = 1)
+        /// <param name="done">Gets the number of textures given the pixels.</param>
+        public void NextendoUploadTexture(ulong pid, int width, int height, byte[] pixels, int bytesPerPixel = 1, Action<int> done = null)
         {
             _nextendoUploads.Enqueue(() =>
             {
-                if (PhysicalMemoryRegistry.TryGetValue(pid, out PhysicalMemory memory))
-                {
-                    memory.TextureCache.NextendoUpload(width, height, pixels, bytesPerPixel);
-                }
+                int found = PhysicalMemoryRegistry.TryGetValue(pid, out PhysicalMemory memory)
+                    ? memory.TextureCache.NextendoUpload(width, height, pixels, bytesPerPixel)
+                    : 0;
+
+                done?.Invoke(found);
             });
         }
 
@@ -477,6 +505,37 @@ namespace Ryujinx.Graphics.Gpu
 
                 done?.Invoke(found);
             });
+        }
+
+        /// <summary>
+        /// [Nextendo, HOME Menu work] For the first 64 bytes of a square picture read from the
+        /// memory of a program: the diameter of the circle to keep of it, as a fraction of its
+        /// side (0: kept as it is). Pictures the emulator gave with a mark are made round as they
+        /// are read, before they are ever drawn.
+        /// </summary>
+        public static Func<byte[], float> NextendoRoundOnLoad { get; set; }
+
+        /// <summary>
+        /// [Nextendo, HOME Menu work] The square pictures of a program that carry a mark made round
+        /// (see TextureCache.NextendoRoundMarked); <paramref name="done"/> gets the number made round.
+        /// </summary>
+        public void NextendoRoundMarked(ulong pid, Func<byte[], bool> marked, Action<int> done = null)
+        {
+            _nextendoUploads.Enqueue(() =>
+            {
+                int found = PhysicalMemoryRegistry.TryGetValue(pid, out PhysicalMemory memory) ? memory.TextureCache.NextendoRoundMarked(marked) : 0;
+
+                done?.Invoke(found);
+            });
+        }
+
+        /// <summary>[Nextendo, HOME Menu work] The pixels last given for this size to a program forgotten (see TextureCache.NextendoLatest).</summary>
+        public void NextendoForget(ulong pid, int width, int height, int bytesPerPixel = 4)
+        {
+            if (PhysicalMemoryRegistry.TryGetValue(pid, out PhysicalMemory memory))
+            {
+                memory.TextureCache.NextendoForget(width, height, bytesPerPixel);
+            }
         }
 
         internal void RunDeferredActions()

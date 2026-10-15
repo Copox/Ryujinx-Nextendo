@@ -88,7 +88,7 @@ namespace Ryujinx.HLE.HOS.Services.Ns
 
                 if (name != null)
                 {
-                    title = new Ryujinx.HLE.HOS.HomeMenuTitle { Id = applicationId, Name = name, Icon = picture, Nacp = BuildNacp(name) };
+                    title = new Ryujinx.HLE.HOS.HomeMenuTitle { Id = applicationId, Name = name, Icon = picture, Nacp = BuildNacp(name, applicationId) };
                 }
             }
 
@@ -163,15 +163,24 @@ namespace Ryujinx.HLE.HOS.Services.Ns
             return ResultCode.Success;
         }
         // A control property that only names the title, in every language slot.
-        private static byte[] BuildNacp(string name)
+        // The HOME Menu (the card of a friend on a console without a game) in the console's
+        // languages, in the order of the slots of a control property (Nintendo's own names).
+        private static readonly string[] _homeMenuNames =
+        [
+            "HOME Menu", "HOME Menu", "HOMEメニュー", "Menu HOME", "HOME-Menü", "Menú HOME", "Menú HOME", "Menu HOME",
+            "HOME-menu", "Menu HOME", "Menu HOME", "Меню HOME", "HOME 메뉴", "HOME選單", "HOME菜单", "Menu HOME",
+        ];
+
+        private static byte[] BuildNacp(string name, ulong applicationId = 0)
         {
             byte[] nacp = new byte[0x4000];
-            byte[] text = System.Text.Encoding.UTF8.GetBytes(name);
-            int length = System.Math.Min(text.Length, 0x1FF);
 
             for (int language = 0; language < 16; language++)
             {
-                System.Array.Copy(text, 0, nacp, language * 0x300, length);
+                string named = applicationId == Ryujinx.Common.Configuration.NextendoGames.HomeMenuId ? _homeMenuNames[language] : name;
+                byte[] text = System.Text.Encoding.UTF8.GetBytes(named);
+
+                System.Array.Copy(text, 0, nacp, language * 0x300, System.Math.Min(text.Length, 0x1FF));
             }
 
             // SupportedLanguageFlag: all of them.

@@ -6,6 +6,11 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
 
         public IManagerForApplication(UserId userId)
         {
+            // [Nextendo] Plusieurs comptes : l'utilisateur que le jeu ouvre decide du compte
+            // Nextendo actif, comme une console ou chaque utilisateur porte son propre compte.
+            // Un profil local sans compte ne change rien (il reste hors ligne).
+            Ryujinx.Common.Configuration.NextendoAccount.ActivateForProfile(userId.ToString());
+
             _managerServer = new ManagerServer(userId);
         }
 
@@ -56,6 +61,20 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
         public ResultCode GetNintendoAccountUserResourceCacheForApplication(ServiceCtx context)
         {
             return _managerServer.GetNintendoAccountUserResourceCacheForApplication(context);
+        }
+
+        [CommandCmif(150)] // 6.0.0+
+        // CreateAuthorizationRequest(u32, handle<copy>, buffer<nn::account::NintendoAccountAuthorizationRequestParameters, 0x19>) -> object<nn::account::nas::IAuthorizationRequest>
+        public ResultCode CreateAuthorizationRequest(ServiceCtx context)
+        {
+            ResultCode resultCode = _managerServer.CreateAuthorizationRequest(context, out IAuthorizationRequest authorizationRequest);
+
+            if (resultCode == ResultCode.Success)
+            {
+                MakeObject(context, authorizationRequest);
+            }
+
+            return resultCode;
         }
 
         [CommandCmif(160)] // 5.0.0+

@@ -54,9 +54,7 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
 
         private static void WriteNextendoFriendV2(Span<byte> record, ulong netId, NextendoFriends.Entry entry)
         {
-            PresenceStatus status = entry.Status <= 0
-                ? PresenceStatus.Offline
-                : (entry.AppField is { Length: > 0 } || entry.AppId != 0 ? PresenceStatus.OnlinePlay : PresenceStatus.Online);
+            PresenceStatus status = NextendoPresence(entry);
 
             FriendImpl old = MakeNextendoFriend(netId, entry.Name, status, entry.AppField, sameApp: false);
             ReadOnlySpan<byte> oldBytes = MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref old, 1));
@@ -76,10 +74,32 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
 
             // The game being played, right before the presence (found by probing: the friend
             // page asks the title card of the id at 0xE0 for its top line).
-            if (entry.Status > 0 && entry.AppId != 0)
+            if (entry.Status > 0)
             {
-                BitConverter.TryWriteBytes(record.Slice(0xE0, 8), entry.AppId);
+                // online without a game (the HOME Menu of a console): the HOME Menu's card, not a
+                // card of id 0 ("?", "Loading failed")
+                BitConverter.TryWriteBytes(record.Slice(0xE0, 8), entry.AppId != 0 ? entry.AppId : NextendoGames.HomeMenuId);
             }
+        }
+
+        // [Nextendo] The presence of a friend as the console tells it: playing only when in a game
+        // (its id, or the presence a game left), else just online. A friend on a console without
+        // a game was told "playing" a game of id 0: their page showed a "?" card, "Loading failed".
+        private static PresenceStatus NextendoPresence(NextendoFriends.Entry entry)
+        {
+            if (entry.Status <= 0)
+            {
+                return PresenceStatus.Offline;
+            }
+
+            // on the Nextendo App: online, with the app's card (the server gives it a title id of
+            // its own), not "playing"
+            if (entry.Platform == "app")
+            {
+                return PresenceStatus.Online;
+            }
+
+            return entry.AppField is { Length: > 0 } || entry.AppId != 0 ? PresenceStatus.OnlinePlay : PresenceStatus.Online;
         }
 
         private static FriendImpl MakeNextendoFriend(ulong netId, string nick, PresenceStatus status, byte[] appField = null, bool sameApp = true)
@@ -229,7 +249,7 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                     // TOUT LE MONDE « en train de jouer a ce jeu » est un mensonge que le jeu
                     // peut verifier : il demande ensuite au serveur la session de chacun de ces
                     // pretendus joueurs, n'en retrouve aucune, et ecarte l'entree.
-                    PresenceStatus st = entry.Status > 0 ? PresenceStatus.OnlinePlay : PresenceStatus.Offline;
+                    PresenceStatus st = NextendoPresence(entry);
                     friendList[i] = MakeNextendoFriend(lid, entry.Name, st, entry.AppField,
                         sameApp: entry.Status > 0);
                 }
@@ -291,7 +311,7 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                         // Presence REELLE : un ami hors ligne doit apparaitre grise, pas « en train
                         // de jouer ». Annoncer OnlinePlay pour tout le monde pousse le jeu a proposer
                         // de rejoindre des parties qui n'existent pas.
-                        PresenceStatus st = e.Status > 0 ? PresenceStatus.OnlinePlay : PresenceStatus.Offline;
+                        PresenceStatus st = NextendoPresence(e);
                         info[i] = MakeNextendoFriend(wanted, e.Name, st, e.AppField, sameApp: e.Status > 0);
 
                         // [Nextendo, HOME Menu work] As on a console, the record names the user of
@@ -854,6 +874,14 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                         BitConverter.TryWriteBytes(info.Slice(0x578, 8), entry.AppId);
                         Logger.Info?.Print(LogClass.ServiceFriend, $"[Nextendo] friend 0x{friendId.Id:X} plays {entry.AppId:X16} ({entry.Game}) on {entry.Platform}");
                     }
+                    else if (entry.Status > 0)
+                    {
+                        // online without a game (the HOME Menu of a console): the page shows a card
+                        // for the game all the same, a "?" "Loading failed" for an id of 0; the
+                        // HOME Menu's card instead, as on the user's own page
+                        BitConverter.TryWriteBytes(info.Slice(0x570, 8), NextendoGames.HomeMenuId);
+                        BitConverter.TryWriteBytes(info.Slice(0x578, 8), NextendoGames.HomeMenuId);
+                    }
 
                     // "Friends since", in Unix seconds (found at 0x5D0 by probing).
                     if (entry.Since > 0)
@@ -866,6 +894,11 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             }
 
             Logger.Info?.Print(LogClass.ServiceFriend, $"[Nextendo] GetFriendDetailedInfoV2 friend 0x{friendId.Id:X}");
+
+            if (friendId.Id != 0)
+            {
+                NextendoFriends.TellFriendDetailsAsked(friendId.Id);
+            }
 
             return Result.Success;
         }

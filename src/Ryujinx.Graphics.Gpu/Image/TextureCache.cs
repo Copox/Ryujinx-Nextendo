@@ -18,9 +18,23 @@ namespace Ryujinx.Graphics.Gpu.Image
     /// </summary>
     class TextureCache : IDisposable
     {
+        // [Nextendo] The last pixels given for each size (see GpuContext.NextendoUploadTexture):
+        // a texture of that size read again from the program's memory gets them back, instead of
+        // the program's empty one. Nothing is ever written in the program's memory: the program
+        // may have freed it and given it to something else meanwhile (written there, a picture
+        // showed up in another place, and the overlay applet crashed).
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<(int Width, int Height, int BytesPerPixel), byte[]> _nextendoLatest = new();
+
         /// <summary>[Nextendo] See GpuContext.NextendoUploadTexture.</summary>
-        public void NextendoUpload(int width, int height, byte[] pixels, int bytesPerPixel)
+        public int NextendoUpload(int width, int height, byte[] pixels, int bytesPerPixel)
         {
+            int found = 0;
+
+            if (pixels.Length == width * height * bytesPerPixel)
+            {
+                _nextendoLatest[(width, height, bytesPerPixel)] = pixels;
+            }
+
             foreach (Texture texture in _textures)
             {
                 if (texture.Info.Width == width && texture.Info.Height == height && texture.Info.FormatInfo.BytesPerPixel == bytesPerPixel &&
@@ -28,8 +42,26 @@ namespace Ryujinx.Graphics.Gpu.Image
                     texture.Info.Levels == 1 && texture.Info.GetLayers() == 1 && pixels.Length == width * height * bytesPerPixel)
                 {
                     texture.SetData(Ryujinx.Common.Memory.MemoryOwner<byte>.RentCopy(pixels));
+                    found++;
                 }
             }
+
+            return found;
+        }
+
+        /// <summary>[Nextendo] The pixels given for this size forgotten (the page of another friend).</summary>
+        public void NextendoForget(int width, int height, int bytesPerPixel) => _nextendoLatest.TryRemove((width, height, bytesPerPixel), out _);
+
+        /// <summary>[Nextendo] The pixels last given for a texture of this size, copied over the ones read from the program's memory.</summary>
+        internal bool NextendoLatest(int width, int height, int bytesPerPixel, Span<byte> pixels)
+        {
+            if (_nextendoLatest.TryGetValue((width, height, bytesPerPixel), out byte[] latest) && pixels.Length >= latest.Length)
+            {
+                latest.CopyTo(pixels);
+                return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -79,6 +111,76 @@ namespace Ryujinx.Graphics.Gpu.Image
                 {
                     texture.SetData(Ryujinx.Common.Memory.MemoryOwner<byte>.RentCopy(pixels), 0, 0);
                     found++;
+                }
+            }
+
+            return found;
+        }
+
+        /// <summary>
+        /// [Nextendo] The textures of 4 bytes a pixel whose first 64 bytes in the memory of the
+        /// program satisfy <paramref name="marked"/> made round: transparent outside the circle
+        /// they fill (edge smoothed over a pixel), on the graphics processor and in the memory of
+        /// the program (the mark goes with the corner: done once). The number made round.
+        /// </summary>
+        public int NextendoRoundMarked(Func<byte[], bool> marked)
+        {
+            int found = 0;
+
+            foreach (Texture texture in _textures)
+            {
+                if (texture.Info.FormatInfo.BytesPerPixel != 4 || texture.Info.FormatInfo.IsCompressed || texture.Info.GetLayers() != 1 ||
+                    texture.Info.Levels != 1 || texture.Info.Width < 16 || texture.Info.Width != texture.Info.Height)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    MemoryRange first = texture.Range.GetSubRange(0);
+
+                    if (first.Size < 64 || first.Address == MemoryManager.PteUnmapped || !marked(_physicalMemory.GetSpan(first.Address, 64).ToArray()))
+                    {
+                        continue;
+                    }
+
+                    int side = texture.Info.Width;
+                    byte[] pixels;
+
+                    using (Ryujinx.Common.Memory.MemoryOwner<byte> linear = texture.ConvertToHostCompatibleFormat(_physicalMemory.GetSpan(texture.Range)))
+                    {
+                        if (linear.Length < side * side * 4)
+                        {
+                            continue;
+                        }
+
+                        pixels = linear.Span[..(side * side * 4)].ToArray();
+                    }
+
+                    float centre = side / 2f;
+
+                    for (int y = 0; y < side; y++)
+                    {
+                        for (int x = 0; x < side; x++)
+                        {
+                            float d = MathF.Sqrt((x + 0.5f - centre) * (x + 0.5f - centre) + (y + 0.5f - centre) * (y + 0.5f - centre));
+                            float keep = Math.Clamp(centre - d + 0.5f, 0f, 1f);
+
+                            if (keep < 1f)
+                            {
+                                int at = (y * side + x) * 4;
+
+                                pixels[at + 3] = (byte)(pixels[at + 3] * keep);
+                            }
+                        }
+                    }
+
+                    texture.SetData(Ryujinx.Common.Memory.MemoryOwner<byte>.RentCopy(pixels));
+                    found++;
+                }
+                catch (Exception)
+                {
+                    // left as it is
                 }
             }
 

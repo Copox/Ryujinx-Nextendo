@@ -34,14 +34,15 @@ namespace Ryujinx.HLE.HOS
             GpuContext gpuContext,
             T memoryManager,
             ulong addressSpaceSize,
-            bool for64Bit)
+            bool for64Bit,
+            string titleId = null)
         {
             if (memoryManager is IRefCounted rc)
             {
                 rc.IncrementReferenceCount();
             }
 
-            gpuContext.RegisterProcess(pid, memoryManager);
+            gpuContext.RegisterProcess(pid, memoryManager, titleId);
 
             _pid = pid;
             _gpuContext = gpuContext;

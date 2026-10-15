@@ -20,6 +20,9 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
 {
     class SharedFontManager
     {
+        /// <summary>[Nextendo] The standard font of the console (TTF), once read; null before.</summary>
+        public static byte[] StandardFont { get; private set; }
+
         private const uint FontKey = 0x06186249;
         private const uint BFTTFMagic = 0x18029a7f;
 
@@ -87,6 +90,13 @@ namespace Ryujinx.HLE.HOS.Services.Sdb.Pl
                                 if (name == "FontNintendoExtended")
                                 {
                                     data = ControllerButtonFont.Apply(data);
+                                }
+
+                                // [Nextendo] The console's own letters, for the texts the emulator
+                                // paints into the HOME Menu (the detail of a friend's game).
+                                if (name == "FontStandard")
+                                {
+                                    StandardFont = data;
                                 }
                             }
 

@@ -167,6 +167,11 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Sfdnsres.Proxy
             // MatchesSimpleExpression won't match the bare domain against the wildcard, hence both.
             ("demonware.net",      ResolveConfiguredIp("NEXTENDO_SERVER_IP")),
             ("*.demonware.net",    ResolveConfiguredIp("NEXTENDO_SERVER_IP")),
+            // Friday the 13th logs in to IllFonic's own REST backend right after NEX Register.
+            ("nswitch.f13.illfonic.com", ResolveConfiguredIp("NEXTENDO_SERVER_IP")),
+            // Plants vs. Zombies: Battle for Neighborville: only its Blaze redirector and gateways.
+            ("spring18.gosredirector.ea.com", ResolveConfiguredIp("NEXTENDO_SERVER_IP")),
+            ("pvzgw3prodapp-*.ea.com", ResolveConfiguredIp("NEXTENDO_SERVER_IP")),
         };
 
         // Reads a server address from an environment variable; falls back to loopback so no

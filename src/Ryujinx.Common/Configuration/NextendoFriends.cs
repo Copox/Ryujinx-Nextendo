@@ -38,6 +38,9 @@ namespace Ryujinx.Common.Configuration
             // (Unix seconds) the two accounts are friends.
             public ulong AppId { get; init; }
             public string Game { get; init; }
+            // What the friend is doing in that game, from its play report ("Offline · VS · 150cc"),
+            // as Discord shows it; empty for most games.
+            public string Detail { get; init; }
             public string Platform { get; init; }
             public bool Favorite { get; init; }
             public long Since { get; init; }
@@ -57,6 +60,11 @@ namespace Ryujinx.Common.Configuration
             // The Discord avatar decoration of a staff member or a donor (address of its picture
             // at Discord), or "": drawn over the friend's picture in the HOME Menu.
             public string Decoration { get; init; }
+            // The Discord nameplate of a staff member or a donor (address of its animated picture,
+            // served by nextendo.network), or "": drawn behind their "online" notification.
+            public string Nameplate { get; init; }
+            // The colour of the gradient Discord draws behind that nameplate ("#893a99"), or "".
+            public string NameplateColor { get; init; }
             public float[] BannerCrop { get; init; }
             public long RequestedAt { get; init; }
             public bool HasPicture { get; init; }
@@ -320,7 +328,13 @@ namespace Ryujinx.Common.Configuration
                         data = NextendoImages.Default(pid, 256) ?? data;
                     }
 
-                    data = Decorated(pid, data);
+                    byte[] decorated = Decorated(pid, data);
+
+                    // [Nextendo] without a decoration: made round by the emulator (the friend
+                    // list has no round mask, for the decorations to go past the circle)
+                    data = ReferenceEquals(decorated, data) && data.Length > 0 && NextendoImages.MarkRound != null && !NextendoHomeMenuVanilla.Enabled
+                        ? NextendoImages.MarkRound(data) ?? data
+                        : decorated;
                 }
                 catch
                 {
@@ -337,6 +351,13 @@ namespace Ryujinx.Common.Configuration
             return null;
         }
 
+        // [Nextendo] The friends' pictures without their decoration (the page of a friend draws
+        // the decoration on its own, moving and past the edge of the picture).
+        private static readonly System.Collections.Concurrent.ConcurrentDictionary<ulong, byte[]> _plainImages = new();
+
+        /// <summary>The picture of a friend without its decoration (JPEG), or null while it has not come.</summary>
+        public static byte[] PlainImage(ulong pid) => _plainImages.TryGetValue(pid, out byte[] picture) ? picture : null;
+
         // [Nextendo] The friend's Discord avatar decoration over their picture, when they have one
         // (staff and donors: the server only gives it to them). The still picture of the decoration.
         private static byte[] Decorated(ulong pid, byte[] picture)
@@ -345,6 +366,8 @@ namespace Ryujinx.Common.Configuration
             {
                 return picture;
             }
+
+            _plainImages[pid] = picture;
 
             string address = "";
 
@@ -376,7 +399,7 @@ namespace Ryujinx.Common.Configuration
 
                 byte[] decoration = resp.Content.ReadAsByteArrayAsync().GetAwaiter().GetResult();
 
-                return NextendoImages.Decorate(picture, decoration) ?? picture;
+                return NextendoImages.Decorate(pid, picture, decoration) ?? picture;
             }
             catch (Exception)
             {
@@ -529,7 +552,30 @@ namespace Ryujinx.Common.Configuration
         /// </summary>
         public static event Action<ulong> FriendPageShown;
 
+        /// <summary>[Nextendo] A friend's "online" notification about to be shown (its frame can carry their nameplate).</summary>
+        public static event Action<ulong> FriendNotificationShown;
+
+        public static void TellFriendNotificationShown(ulong pid) => FriendNotificationShown?.Invoke(pid);
+
         public static void TellFriendPageShown(ulong pid) => FriendPageShown?.Invoke(pid);
+
+        // The details of one friend asked for: the page of that friend, shown again (the applet
+        // keeps the presence it already has and asks only for the details when it comes back to
+        // a friend). Only a lone ask counts: asks for many friends in a row are a list.
+        private static int _detailsAsked;
+
+        public static void TellFriendDetailsAsked(ulong pid)
+        {
+            int turn = System.Threading.Interlocked.Increment(ref _detailsAsked);
+
+            System.Threading.Tasks.Task.Delay(250).ContinueWith(_ =>
+            {
+                if (turn == System.Threading.Volatile.Read(ref _detailsAsked))
+                {
+                    FriendPageShown?.Invoke(pid);
+                }
+            });
+        }
 
         private static List<Played> _own = new();
         private static long _ownAt;
@@ -627,6 +673,7 @@ namespace Ryujinx.Common.Configuration
                         ulong appId = 0;
                         string game = "";
                         string platform = "";
+                        string detail = "";
 
                         if (f.TryGetProperty("presence", out JsonElement played) && played.ValueKind == JsonValueKind.Object)
                         {
@@ -638,6 +685,7 @@ namespace Ryujinx.Common.Configuration
 
                             game = played.TryGetProperty("jeu", out JsonElement gameEl) && gameEl.ValueKind == JsonValueKind.String ? gameEl.GetString() ?? "" : "";
                             platform = played.TryGetProperty("plateforme", out JsonElement pfEl) && pfEl.ValueKind == JsonValueKind.String ? pfEl.GetString() ?? "" : "";
+                            detail = played.TryGetProperty("app_detail", out JsonElement detailEl) && detailEl.ValueKind == JsonValueKind.String ? detailEl.GetString() ?? "" : "";
 
                             byte[] icon = null;
 
@@ -678,6 +726,7 @@ namespace Ryujinx.Common.Configuration
                                 LastSeen = lastSeen,
                                 AppId = appId,
                                 Game = game,
+                                Detail = detail,
                                 Platform = platform,
                                 Favorite = favorite,
                                 Since = since,
@@ -687,6 +736,8 @@ namespace Ryujinx.Common.Configuration
                                 Color = f.TryGetProperty("color", out JsonElement colorEl) && colorEl.ValueKind == JsonValueKind.String ? colorEl.GetString() ?? "" : "",
                                 BannerUrl = BannerOf(f, out float[] bannerCrop),
                                 Decoration = f.TryGetProperty("avatar_decoration", out JsonElement decorationEl) && decorationEl.ValueKind == JsonValueKind.String ? decorationEl.GetString() ?? "" : "",
+                                Nameplate = f.TryGetProperty("nameplate", out JsonElement nameplateEl) && nameplateEl.ValueKind == JsonValueKind.String ? nameplateEl.GetString() ?? "" : "",
+                                NameplateColor = f.TryGetProperty("nameplate_color", out JsonElement nameplateColorEl) && nameplateColorEl.ValueKind == JsonValueKind.String ? nameplateColorEl.GetString() ?? "" : "",
                                 BannerCrop = bannerCrop,
                             });
                         }

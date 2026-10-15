@@ -663,6 +663,8 @@ namespace Ryujinx.Graphics.Gpu.Image
 
             MemoryOwner<byte> result = ConvertToHostCompatibleFormat(data);
 
+            NextendoRound(data, result.Span);
+
             if (ScaleFactor != 1f && AllowScaledSetData())
             {
                 // If needed, create a texture to load from 1x scale.
@@ -678,6 +680,54 @@ namespace Ryujinx.Graphics.Gpu.Image
             }
 
             _hasData = true;
+        }
+
+        // [Nextendo, HOME Menu work] A picture the emulator gave a program with a mark asking for it
+        // to be round (see GpuContext.NextendoRoundOnLoad): made round as it is read, never shown square.
+        private void NextendoRound(ReadOnlySpan<byte> data, Span<byte> pixels)
+        {
+            if (Info.FormatInfo.IsCompressed || Info.Levels != 1 || Info.GetLayers() != 1 ||
+                pixels.Length < Info.Width * Info.Height * Info.FormatInfo.BytesPerPixel)
+            {
+                return;
+            }
+
+            // a picture the emulator gave for this size: given again
+            if (_physicalMemory.TextureCache.NextendoLatest(Info.Width, Info.Height, Info.FormatInfo.BytesPerPixel, pixels))
+            {
+                return;
+            }
+
+            Func<byte[], float> round = GpuContext.NextendoRoundOnLoad;
+
+            if (round == null || Info.FormatInfo.BytesPerPixel != 4 || Info.Width != Info.Height || Info.Width < 16 || data.Length < 64)
+            {
+                return;
+            }
+
+            int side = Info.Width;
+            float diameter = round(data[..64].ToArray()) * side;
+
+            if (diameter <= 0 || pixels.Length < side * side * 4)
+            {
+                return;
+            }
+
+            float centre = side / 2f, radius = diameter / 2f;
+
+            for (int y = 0; y < side; y++)
+            {
+                for (int x = 0; x < side; x++)
+                {
+                    float d = MathF.Sqrt((x + 0.5f - centre) * (x + 0.5f - centre) + (y + 0.5f - centre) * (y + 0.5f - centre));
+                    float keep = Math.Clamp(radius - d + 0.5f, 0f, 1f);
+
+                    if (keep < 1f)
+                    {
+                        pixels[(y * side + x) * 4 + 3] = (byte)(pixels[(y * side + x) * 4 + 3] * keep);
+                    }
+                }
+            }
         }
 
         /// <summary>

@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace Ryujinx.Common.Configuration
 {
@@ -118,27 +120,12 @@ namespace Ryujinx.Common.Configuration
                         return;
                     }
 
-                    foreach (string line in File.ReadAllLines(FilePath))
+                    ReadLocked(FilePath);
+
+                    // Un compte connecte avant le multi-comptes n'a pas encore sa copie dans la liste.
+                    if (_pid != 0 && !File.Exists(StoredPath(_pid)))
                     {
-                        int eq = line.IndexOf('=');
-                        if (eq <= 0)
-                        {
-                            continue;
-                        }
-
-                        string key = line[..eq].Trim();
-                        string val = line[(eq + 1)..].Trim();
-
-                        switch (key)
-                        {
-                            case "pid": ulong.TryParse(val, out ulong p); _pid = p; break;
-                            case "username": Username = val; break;
-                            case "friend_code": FriendCode = val; break;
-                            case "nex_token": _nexToken = val; break;
-                            case "profile_user_id": _profileUserId = val; break;
-                            case "mii_data": _miiData = val; break;
-                            case "is_guest": _isGuest = val == "1" || val.Equals("true", StringComparison.OrdinalIgnoreCase); break;
-                        }
+                        WriteFileLocked();
                     }
                 }
                 catch
@@ -147,6 +134,185 @@ namespace Ryujinx.Common.Configuration
                     _pid = 0;
                 }
             }
+        }
+
+        private static void ReadLocked(string path)
+        {
+            _pid = 0;
+            Username = "";
+            FriendCode = "";
+            _nexToken = "";
+            _profileUserId = "";
+            _miiData = "";
+            _isGuest = false;
+
+            foreach (string line in File.ReadAllLines(path))
+            {
+                int eq = line.IndexOf('=');
+                if (eq <= 0)
+                {
+                    continue;
+                }
+
+                string key = line[..eq].Trim();
+                string val = line[(eq + 1)..].Trim();
+
+                switch (key)
+                {
+                    case "pid": ulong.TryParse(val, out ulong p); _pid = p; break;
+                    case "username": Username = val; break;
+                    case "friend_code": FriendCode = val; break;
+                    case "nex_token": _nexToken = val; break;
+                    case "profile_user_id": _profileUserId = val; break;
+                    case "mii_data": _miiData = val; break;
+                    case "is_guest": _isGuest = val == "1" || val.Equals("true", StringComparison.OrdinalIgnoreCase); break;
+                }
+            }
+        }
+
+        // Plusieurs comptes Nextendo dans un seul emulateur.
+        //
+        // nextendo_account.txt reste LE compte actif : tout l'emulateur (NEX, amis, sauvegardes,
+        // presence) lit le compte actif et rien d'autre. Chaque compte connecte a en plus sa copie
+        // dans nextendo_accounts/<pid>.txt ; changer de compte recopie l'un d'eux a la place du
+        // compte actif. Un meme compte n'a qu'un fichier (la cle est son PID) : se reconnecter
+        // avec lui le met a jour, jamais un second exemplaire.
+
+        /// <summary>Un compte Nextendo connecte sur cet emulateur.</summary>
+        public sealed record Stored(ulong Pid, string Username, string FriendCode, string ProfileUserId, bool IsGuest);
+
+        private static string StoreDir => Path.Combine(AppDataManager.BaseDirPath, "nextendo_accounts");
+
+        private static string StoredPath(ulong pid) => Path.Combine(StoreDir, pid + ".txt");
+
+        /// <summary>Raised after the active account changed (another account chosen, one
+        /// signed out).</summary>
+        public static event Action ActiveChanged;
+
+        /// <summary>Every Nextendo account connected here, the active one first.</summary>
+        public static IReadOnlyList<Stored> All
+        {
+            get
+            {
+                EnsureLoaded();
+
+                List<Stored> list = [];
+
+                lock (_lock)
+                {
+                    try
+                    {
+                        if (Directory.Exists(StoreDir))
+                        {
+                            foreach (string file in Directory.GetFiles(StoreDir, "*.txt"))
+                            {
+                                Dictionary<string, string> v = [];
+
+                                foreach (string line in File.ReadAllLines(file))
+                                {
+                                    int eq = line.IndexOf('=');
+                                    if (eq > 0)
+                                    {
+                                        v.TryAdd(line[..eq].Trim(), line[(eq + 1)..].Trim());
+                                    }
+                                }
+
+                                if (!v.TryGetValue("pid", out string ps) || !ulong.TryParse(ps, out ulong pid) || pid == 0)
+                                {
+                                    continue;
+                                }
+
+                                list.Add(new Stored(pid,
+                                    v.GetValueOrDefault("username", ""),
+                                    v.GetValueOrDefault("friend_code", ""),
+                                    v.GetValueOrDefault("profile_user_id", ""),
+                                    v.GetValueOrDefault("is_guest", "0") == "1"));
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // an unreadable list still leaves the active account
+                    }
+
+                    if (_pid != 0 && list.All(a => a.Pid != _pid))
+                    {
+                        list.Add(new Stored(_pid, Username, FriendCode, _profileUserId, _isGuest));
+                    }
+
+                    ulong active = _pid;
+
+                    return [.. list.OrderByDescending(a => a.Pid == active).ThenBy(a => a.Username, StringComparer.OrdinalIgnoreCase)];
+                }
+            }
+        }
+
+        /// <summary>Number of Nextendo accounts connected (0 in "custom server" mode).</summary>
+        public static int Count => NextendoServerOverride.HorsNextendo ? 0 : All.Count;
+
+        /// <summary>Makes one of the connected accounts the active one. False if it is not here.</summary>
+        public static bool Activate(ulong pid)
+        {
+            lock (_lock)
+            {
+                EnsureLoaded();
+
+                if (pid == _pid)
+                {
+                    return _pid != 0;
+                }
+
+                if (pid == 0 || !File.Exists(StoredPath(pid)))
+                {
+                    return false;
+                }
+
+                try
+                {
+                    if (_pid != 0)
+                    {
+                        WriteFileLocked(); // the account left keeps its copy, up to date
+                    }
+
+                    ReadLocked(StoredPath(pid));
+                    _loaded = true;
+                    WriteFileLocked();
+                }
+                catch
+                {
+                    return false;
+                }
+            }
+
+            try { ActiveChanged?.Invoke(); } catch { /* best effort */ }
+
+            return true;
+        }
+
+        /// <summary>Activates the account bound to this local profile, if one is. Called when a
+        /// game opens a user: the user picked decides the account, as on a console where each
+        /// user carries their own account.</summary>
+        public static bool ActivateForProfile(string userId)
+        {
+            if (string.IsNullOrEmpty(userId) || NextendoServerOverride.HorsNextendo)
+            {
+                return false;
+            }
+
+            Stored match = All.FirstOrDefault(a => string.Equals(a.ProfileUserId, userId, StringComparison.OrdinalIgnoreCase));
+
+            return match != null && Activate(match.Pid);
+        }
+
+        /// <summary>True when this local profile is bound to a connected account other than the
+        /// active one (so it must never be reused or renamed for another account).</summary>
+        public static bool BelongsToOtherAccount(string userId)
+        {
+            EnsureLoaded();
+
+            ulong active = _pid;
+
+            return !string.IsNullOrEmpty(userId) && All.Any(a => a.Pid != active && string.Equals(a.ProfileUserId, userId, StringComparison.OrdinalIgnoreCase));
         }
 
         public static void Save(ulong pid, string username, string friendCode, string nexToken, bool isGuest = false)
@@ -159,9 +325,29 @@ namespace Ryujinx.Common.Configuration
                 // le profil local a tort.
                 if (pid != _pid)
                 {
-                    // different account -> unbind the previous local profile + Mii
+                    // Another account signs in: the one active until now stays connected (its
+                    // copy is refreshed), and the new one takes back its own profile + Mii if it
+                    // was already connected here.
+                    if (_pid != 0)
+                    {
+                        WriteFileLocked();
+                    }
+
                     _profileUserId = "";
                     _miiData = "";
+
+                    if (pid != 0 && File.Exists(StoredPath(pid)))
+                    {
+                        try
+                        {
+                            ReadLocked(StoredPath(pid));
+                        }
+                        catch
+                        {
+                            _profileUserId = "";
+                            _miiData = "";
+                        }
+                    }
                 }
                 // The local profile this account used before (a session that expired, a
                 // logout): signing in again takes it back, with its saves, as a console asks
@@ -262,8 +448,15 @@ namespace Ryujinx.Common.Configuration
                 // jeton vide, c'est-à-dire DÉTRUIRAIT le compte sur le disque — au premier
                 // SetProfileUserId ou SetMiiData venu, alors que l'utilisateur voulait seulement
                 // jouer ailleurs un moment.
-                File.WriteAllText(FilePath,
-                    $"pid={_pid}\nusername={Username}\nfriend_code={FriendCode}\nnex_token={_nexToken}\nprofile_user_id={_profileUserId}\nmii_data={_miiData}\nis_guest={(_isGuest ? "1" : "0")}\n");
+                string text = $"pid={_pid}\nusername={Username}\nfriend_code={FriendCode}\nnex_token={_nexToken}\nprofile_user_id={_profileUserId}\nmii_data={_miiData}\nis_guest={(_isGuest ? "1" : "0")}\n";
+
+                File.WriteAllText(FilePath, text);
+
+                if (_pid != 0)
+                {
+                    Directory.CreateDirectory(StoreDir);
+                    File.WriteAllText(StoredPath(_pid), text);
+                }
             }
             catch
             {
@@ -271,10 +464,31 @@ namespace Ryujinx.Common.Configuration
             }
         }
 
+        /// <summary>Signs out the ACTIVE account: it leaves the list, and another connected
+        /// account, if any, becomes the active one.</summary>
         public static void Clear()
         {
+            ulong next;
+
             lock (_lock)
             {
+                EnsureLoaded();
+
+                try
+                {
+                    if (_pid != 0 && File.Exists(StoredPath(_pid)))
+                    {
+                        File.Delete(StoredPath(_pid));
+                    }
+                }
+                catch
+                {
+                    // ignore
+                }
+
+                ulong gone = _pid;
+                next = All.Select(a => a.Pid).FirstOrDefault(p => p != gone);
+
                 _pid = 0;
                 Username = "";
                 FriendCode = "";
@@ -295,6 +509,11 @@ namespace Ryujinx.Common.Configuration
                 {
                     // ignore
                 }
+            }
+
+            if (next == 0 || !Activate(next))
+            {
+                try { ActiveChanged?.Invoke(); } catch { /* best effort */ }
             }
         }
     }
