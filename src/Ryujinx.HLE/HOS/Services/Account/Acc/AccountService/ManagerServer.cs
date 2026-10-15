@@ -233,9 +233,7 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
         public ResultCode LoadIdTokenCache(ServiceCtx context)
         {
             ulong bufferPosition = context.Request.ReceiveBuff[0].Position;
-#pragma warning disable IDE0059 // Remove unnecessary value assignment
             ulong bufferSize = context.Request.ReceiveBuff[0].Size;
-#pragma warning restore IDE0059
 
             // NOTE: This opens the file at "su/cache/USERID_IN_UUID_STRING.dat" (where USERID_IN_UUID_STRING is formatted as "%08x-%04x-%04x-%02x%02x-%08x%04x")
             //       in the "account:/" savedata and writes some data in the buffer.
@@ -253,13 +251,35 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
             }
             */
 
+            byte[] tokenData = GetIdToken(context);
+
+            // Titles read the token as a C string, so zero the rest of their buffer instead of leaving stale bytes after it.
+            byte[] output = new byte[Math.Max((ulong)tokenData.Length, bufferSize)];
+            tokenData.CopyTo(output, 0);
+
+            context.Memory.Write(bufferPosition, output);
+            context.ResponseData.Write(tokenData.Length);
+
+            return ResultCode.Success;
+        }
+
+        public byte[] GetIdToken(ServiceCtx context)
+        {
             string installedVersion = context.Device.Processes.ActiveApplication?.DisplayVersion;
             ulong programId = context.Device.Processes.ActiveApplication?.ProgramId ?? 0;
 
-            byte[] tokenData = GetIdTokenData(installedVersion, programId);
+            return GetIdTokenData(installedVersion, programId);
+        }
 
-            context.Memory.Write(bufferPosition, tokenData);
-            context.ResponseData.Write(tokenData.Length);
+        public ResultCode CreateAuthorizationRequest(ServiceCtx context, out IAuthorizationRequest authorizationRequest)
+        {
+            // In: u32 transfer-memory size, transfer-memory handle, 0x200-byte parameters buffer.
+            (ulong parametersPosition, ulong parametersSize) = context.Request.GetBufferType0x21();
+
+            byte[] parameters = new byte[parametersSize];
+            context.Memory.Read(parametersPosition, parameters);
+
+            authorizationRequest = new IAuthorizationRequest(this, parameters, parametersPosition);
 
             return ResultCode.Success;
         }
