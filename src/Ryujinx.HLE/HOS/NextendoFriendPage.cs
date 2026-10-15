@@ -54,6 +54,10 @@ namespace Ryujinx.HLE.HOS
         public const int DecorationSide = 432, OwnDecorationSide = 448;
         public const float DecorationScale = 1.25f; // the decoration is 1.2 times the picture, as on Discord
 
+        // The left column of a friend's page: 33 more of room on the left of the picture than on its right.
+        private static readonly string[] _leftColumn = ["L_UserIcon", "T_Name", "T_NnidName", "P_FriendMemoBase", "N_LeftBtnAll"];
+        private const float LeftColumnShift = -26f;
+
         // The layouts whose picture gets round corners (the icons of the games in the rows of a
         // page) or is made round (the profile picture of a friend's page), the material of the
         // picture in each and the mask it gets.
@@ -514,6 +518,13 @@ namespace Ryujinx.HLE.HOS
                 sections[materialsAt] = MaterialSection(materials);
 
                 sections.Insert(inside + 2, BannerPane(picture, _detail, materials.Count - 1, "P_NxDetail"));
+            }
+
+            // the left column (picture, nickname, buttons) centred between the edge of the page and
+            // the line that parts it from the right column: it had more room on its left
+            foreach (byte[] pane in sections.Where(s => Kind(s) is "pan1" or "pic1" or "txt1" or "prt1" && _leftColumn.Contains(PaneName(s))))
+            {
+                BinaryPrimitives.WriteSingleLittleEndian(pane.AsSpan(0x2C), BinaryPrimitives.ReadSingleLittleEndian(pane.AsSpan(0x2C)) + LeftColumnShift);
             }
 
             // the decoration: right after the picture of the friend, drawn over it
