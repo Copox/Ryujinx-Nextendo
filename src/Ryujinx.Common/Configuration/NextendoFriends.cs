@@ -549,6 +549,24 @@ namespace Ryujinx.Common.Configuration
 
         public static void TellFriendPageShown(ulong pid) => FriendPageShown?.Invoke(pid);
 
+        // The details of one friend asked for: the page of that friend, shown again (the applet
+        // keeps the presence it already has and asks only for the details when it comes back to
+        // a friend). Only a lone ask counts: asks for many friends in a row are a list.
+        private static int _detailsAsked;
+
+        public static void TellFriendDetailsAsked(ulong pid)
+        {
+            int turn = System.Threading.Interlocked.Increment(ref _detailsAsked);
+
+            System.Threading.Tasks.Task.Delay(250).ContinueWith(_ =>
+            {
+                if (turn == System.Threading.Volatile.Read(ref _detailsAsked))
+                {
+                    FriendPageShown?.Invoke(pid);
+                }
+            });
+        }
+
         private static List<Played> _own = new();
         private static long _ownAt;
         private static int _ownAsking;

@@ -867,6 +867,11 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
 
             Logger.Info?.Print(LogClass.ServiceFriend, $"[Nextendo] GetFriendDetailedInfoV2 friend 0x{friendId.Id:X}");
 
+            if (friendId.Id != 0)
+            {
+                NextendoFriends.TellFriendDetailsAsked(friendId.Id);
+            }
+
             return Result.Success;
         }
 
