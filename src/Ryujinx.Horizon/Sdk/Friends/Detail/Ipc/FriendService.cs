@@ -54,9 +54,7 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
 
         private static void WriteNextendoFriendV2(Span<byte> record, ulong netId, NextendoFriends.Entry entry)
         {
-            PresenceStatus status = entry.Status <= 0
-                ? PresenceStatus.Offline
-                : (entry.AppField is { Length: > 0 } || entry.AppId != 0 ? PresenceStatus.OnlinePlay : PresenceStatus.Online);
+            PresenceStatus status = NextendoPresence(entry);
 
             FriendImpl old = MakeNextendoFriend(netId, entry.Name, status, entry.AppField, sameApp: false);
             ReadOnlySpan<byte> oldBytes = MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref old, 1));
@@ -80,6 +78,19 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             {
                 BitConverter.TryWriteBytes(record.Slice(0xE0, 8), entry.AppId);
             }
+        }
+
+        // [Nextendo] The presence of a friend as the console tells it: playing only when in a game
+        // (its id, or the presence a game left), else just online. A friend on a console without
+        // a game was told "playing" a game of id 0: their page showed a "?" card, "Loading failed".
+        private static PresenceStatus NextendoPresence(NextendoFriends.Entry entry)
+        {
+            if (entry.Status <= 0)
+            {
+                return PresenceStatus.Offline;
+            }
+
+            return entry.AppField is { Length: > 0 } || entry.AppId != 0 ? PresenceStatus.OnlinePlay : PresenceStatus.Online;
         }
 
         private static FriendImpl MakeNextendoFriend(ulong netId, string nick, PresenceStatus status, byte[] appField = null, bool sameApp = true)
@@ -229,7 +240,7 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                     // TOUT LE MONDE « en train de jouer a ce jeu » est un mensonge que le jeu
                     // peut verifier : il demande ensuite au serveur la session de chacun de ces
                     // pretendus joueurs, n'en retrouve aucune, et ecarte l'entree.
-                    PresenceStatus st = entry.Status > 0 ? PresenceStatus.OnlinePlay : PresenceStatus.Offline;
+                    PresenceStatus st = NextendoPresence(entry);
                     friendList[i] = MakeNextendoFriend(lid, entry.Name, st, entry.AppField,
                         sameApp: entry.Status > 0);
                 }
@@ -291,7 +302,7 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                         // Presence REELLE : un ami hors ligne doit apparaitre grise, pas « en train
                         // de jouer ». Annoncer OnlinePlay pour tout le monde pousse le jeu a proposer
                         // de rejoindre des parties qui n'existent pas.
-                        PresenceStatus st = e.Status > 0 ? PresenceStatus.OnlinePlay : PresenceStatus.Offline;
+                        PresenceStatus st = NextendoPresence(e);
                         info[i] = MakeNextendoFriend(wanted, e.Name, st, e.AppField, sameApp: e.Status > 0);
 
                         // [Nextendo, HOME Menu work] As on a console, the record names the user of
