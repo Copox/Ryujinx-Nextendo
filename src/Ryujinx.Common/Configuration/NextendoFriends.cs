@@ -323,7 +323,13 @@ namespace Ryujinx.Common.Configuration
                         data = NextendoImages.Default(pid, 256) ?? data;
                     }
 
-                    data = Decorated(pid, data);
+                    byte[] decorated = Decorated(pid, data);
+
+                    // [Nextendo] without a decoration: made round by the emulator (the friend
+                    // list has no round mask, for the decorations to go past the circle)
+                    data = ReferenceEquals(decorated, data) && data.Length > 0 && NextendoImages.MarkRound != null && !NextendoHomeMenuVanilla.Enabled
+                        ? NextendoImages.MarkRound(data) ?? data
+                        : decorated;
                 }
                 catch
                 {

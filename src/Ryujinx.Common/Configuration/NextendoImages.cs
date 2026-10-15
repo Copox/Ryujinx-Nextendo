@@ -19,6 +19,12 @@ namespace Ryujinx.Common.Configuration
         public static Func<ulong, byte[], byte[], byte[]> Decorate { get; set; }
 
         /// <summary>
+        /// [Nextendo] A friend's picture (JPEG) with the mark that has the emulator make it round
+        /// in the textures of the HOME Menu, or null. Set by the layer that draws pictures (HLE).
+        /// </summary>
+        public static Func<byte[], byte[]> MarkRound { get; set; }
+
+        /// <summary>
         /// The picture of a player who never chose one: the default avatar of the account
         /// server (head and shoulders on a diagonal gradient), tinted from the PID exactly as
         /// the Nextendo apps and the site do. Takes (pid, side), returns a JPEG.

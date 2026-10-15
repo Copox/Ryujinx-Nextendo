@@ -69,7 +69,9 @@ namespace Ryujinx.HLE.HOS
         // The friend list, as the console's newer HOME Menu draws it: each friend a plain card
         // with a round picture inside its margins, the nickname and the last time online under it.
         private const string FriendTileLayout = "blyt/FrdBtnList.bflyt";
-        private static readonly string[] _friendTilePictures = ["P_Image", "P_NoImage", "P_RecoUser"];
+        // The friends' own pictures ("P_Image") have no mask: the emulator makes them round itself,
+        // for the decorations to go past the circle (see NextendoFriendListDecoration).
+        private static readonly string[] _friendTilePictures = ["P_NoImage", "P_RecoUser"];
         private const float FriendPictureScale = 0.72f;   // 170 -> about 122 pixels
         private const float FriendPictureY = 46f;         // a margin above it, as wide as at its sides
         private const float FriendTextY = -56f;           // the nickname and the status right under it

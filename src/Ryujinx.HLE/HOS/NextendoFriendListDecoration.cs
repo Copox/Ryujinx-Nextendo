@@ -20,6 +20,7 @@ namespace Ryujinx.HLE.HOS
     {
         // The programs that show friends' pictures: the HOME Menu and the user page.
         private static readonly ulong[] _programs = [0x0100000000001000, 0x0100000000001013];
+        private const ulong OverlayProgram = 0x010000000000100C;
 
         // The mark of a friend: a light neutral grey, then the friend's own neutral grey, in whole
         // blocks of JPEG (kept almost exactly), checked closely. Not the user's own mark (dark
@@ -34,7 +35,82 @@ namespace Ryujinx.HLE.HOS
 
         private static Switch _device;
 
-        public static void Attach(Switch device) => _device = device;
+        // The mark of the pictures without a decoration: made round, once.
+        private const byte Round = 64;
+
+        private static int _rounding;
+
+        public static void Attach(Switch device)
+        {
+            _device = device;
+            NextendoImages.MarkRound ??= MarkRound;
+
+            // round as soon as read: the pictures without a decoration whole, the decorated ones
+            // down to their photo (the decoration around it comes with the animation)
+            Ryujinx.Graphics.Gpu.GpuContext.NextendoRoundOnLoad ??= first =>
+                IsMarked(first, Round) ? 1f : _greys.Any(grey => IsMarked(first, grey)) ? 1f / 1.2f : 0f;
+
+            if (System.Threading.Interlocked.Exchange(ref _rounding, 1) == 0)
+            {
+                Task.Run(RoundLoop);
+            }
+        }
+
+        // A friend's picture with the mark that has it made round.
+        private static byte[] MarkRound(byte[] jpeg)
+        {
+            using SkiaSharp.SKBitmap picture = SkiaSharp.SKBitmap.Decode(jpeg);
+
+            if (picture == null)
+            {
+                return null;
+            }
+
+            using (SkiaSharp.SKCanvas canvas = new(picture))
+            using (SkiaSharp.SKPaint flat = new())
+            {
+                flat.Color = new SkiaSharp.SKColor(Light, Light, Light);
+                canvas.DrawRect(SkiaSharp.SKRect.Create(0, 0, 8, 16), flat);
+                flat.Color = new SkiaSharp.SKColor(Round, Round, Round);
+                canvas.DrawRect(SkiaSharp.SKRect.Create(8, 0, 24, 16), flat);
+                canvas.Flush();
+            }
+
+            using SkiaSharp.SKImage image = SkiaSharp.SKImage.FromBitmap(picture);
+            using SkiaSharp.SKData data = image.Encode(SkiaSharp.SKEncodedImageFormat.Jpeg, 95);
+
+            return data?.ToArray();
+        }
+
+        // The marked pictures made round as soon as a program has them (a tenth of a second
+        // square at most), in the programs that show friends.
+        private static async Task RoundLoop()
+        {
+            while (true)
+            {
+                try
+                {
+                    Switch device = _device;
+
+                    if (device != null && !NextendoHomeMenuVanilla.Enabled)
+                    {
+                        foreach (KProcess process in device.System.KernelContext.Processes.Values)
+                        {
+                            if ((Array.IndexOf(_programs, process.TitleId) >= 0 || process.TitleId == OverlayProgram) && process.State != ProcessState.Exited)
+                            {
+                                device.Gpu.NextendoRoundMarked(process.Pid, first => IsMarked(first, Round));
+                            }
+                        }
+                    }
+                }
+                catch (Exception)
+                {
+                    // the list of the programs changed meanwhile: next time
+                }
+
+                await Task.Delay(80);
+            }
+        }
 
         /// <summary>The still picture of a decorated friend (see NextendoImages.Decorate), its animation started.</summary>
         public static byte[] Decorate(ulong pid, byte[] picture, byte[] decoration)
@@ -127,7 +203,7 @@ namespace Ryujinx.HLE.HOS
 
                         // a still decoration: given again now and then (the texture may be read
                         // again from the applet's memory, with the dark corners of the JPEG)
-                        await Task.Delay(frames.Count > 1 ? frames[at].Milliseconds : 500);
+                        await Task.Delay(frames.Count > 1 ? frames[at].Milliseconds : 100);
                     }
                 }
                 catch (Exception e)

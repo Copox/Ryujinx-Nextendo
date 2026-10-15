@@ -507,6 +507,28 @@ namespace Ryujinx.Graphics.Gpu
             });
         }
 
+        /// <summary>
+        /// [Nextendo, HOME Menu work] For the first 64 bytes of a square picture read from the
+        /// memory of a program: the diameter of the circle to keep of it, as a fraction of its
+        /// side (0: kept as it is). Pictures the emulator gave with a mark are made round as they
+        /// are read, before they are ever drawn.
+        /// </summary>
+        public static Func<byte[], float> NextendoRoundOnLoad { get; set; }
+
+        /// <summary>
+        /// [Nextendo, HOME Menu work] The square pictures of a program that carry a mark made round
+        /// (see TextureCache.NextendoRoundMarked); <paramref name="done"/> gets the number made round.
+        /// </summary>
+        public void NextendoRoundMarked(ulong pid, Func<byte[], bool> marked, Action<int> done = null)
+        {
+            _nextendoUploads.Enqueue(() =>
+            {
+                int found = PhysicalMemoryRegistry.TryGetValue(pid, out PhysicalMemory memory) ? memory.TextureCache.NextendoRoundMarked(marked) : 0;
+
+                done?.Invoke(found);
+            });
+        }
+
         internal void RunDeferredActions()
         {
             while (_nextendoUploads.TryDequeue(out Action upload))

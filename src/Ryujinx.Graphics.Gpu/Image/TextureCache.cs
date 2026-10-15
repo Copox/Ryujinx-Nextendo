@@ -106,6 +106,77 @@ namespace Ryujinx.Graphics.Gpu.Image
             return found;
         }
 
+        /// <summary>
+        /// [Nextendo] The textures of 4 bytes a pixel whose first 64 bytes in the memory of the
+        /// program satisfy <paramref name="marked"/> made round: transparent outside the circle
+        /// they fill (edge smoothed over a pixel), on the graphics processor and in the memory of
+        /// the program (the mark goes with the corner: done once). The number made round.
+        /// </summary>
+        public int NextendoRoundMarked(Func<byte[], bool> marked)
+        {
+            int found = 0;
+
+            foreach (Texture texture in _textures)
+            {
+                if (texture.Info.FormatInfo.BytesPerPixel != 4 || texture.Info.FormatInfo.IsCompressed || texture.Info.GetLayers() != 1 ||
+                    texture.Info.Levels != 1 || texture.Info.Width < 16 || texture.Info.Width != texture.Info.Height)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    MemoryRange first = texture.Range.GetSubRange(0);
+
+                    if (first.Size < 64 || first.Address == MemoryManager.PteUnmapped || !marked(_physicalMemory.GetSpan(first.Address, 64).ToArray()))
+                    {
+                        continue;
+                    }
+
+                    int side = texture.Info.Width;
+                    byte[] pixels;
+
+                    using (Ryujinx.Common.Memory.MemoryOwner<byte> linear = texture.ConvertToHostCompatibleFormat(_physicalMemory.GetSpan(texture.Range)))
+                    {
+                        if (linear.Length < side * side * 4)
+                        {
+                            continue;
+                        }
+
+                        pixels = linear.Span[..(side * side * 4)].ToArray();
+                    }
+
+                    float centre = side / 2f;
+
+                    for (int y = 0; y < side; y++)
+                    {
+                        for (int x = 0; x < side; x++)
+                        {
+                            float d = MathF.Sqrt((x + 0.5f - centre) * (x + 0.5f - centre) + (y + 0.5f - centre) * (y + 0.5f - centre));
+                            float keep = Math.Clamp(centre - d + 0.5f, 0f, 1f);
+
+                            if (keep < 1f)
+                            {
+                                int at = (y * side + x) * 4;
+
+                                pixels[at + 3] = (byte)(pixels[at + 3] * keep);
+                            }
+                        }
+                    }
+
+                    texture.SetData(Ryujinx.Common.Memory.MemoryOwner<byte>.RentCopy(pixels));
+                    _physicalMemory.Write(texture.Range, texture.ConvertFromHostCompatibleFormat(Span<byte>.Empty, pixels));
+                    found++;
+                }
+                catch (Exception)
+                {
+                    // left as it is
+                }
+            }
+
+            return found;
+        }
+
         private readonly struct OverlapInfo
         {
             public TextureViewCompatibility Compatibility { get; }
