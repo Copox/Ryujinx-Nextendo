@@ -70,6 +70,8 @@ namespace Ryujinx.HLE.HOS
                     NextendoFriends.Entry friend = NextendoFriends.Get().FirstOrDefault(f => f.Pid == pid);
                     List<(byte[] Pixels, int Milliseconds)> banner = Banner(pid, friend.Color, friend.Badges ?? [], NextendoFriendPage.BannerWidth, friend.BannerUrl, friend.BannerCrop);
 
+                    ShowDetail(device, turn, friend.Status > 0 ? friend.Detail : "");
+
                     Logger.Info?.Print(LogClass.Application, $"[Nextendo] friend page: banner of 0x{pid:X} ({friend.Badges?.Length ?? 0} badge(s), colour \"{friend.Color}\", {banner.Count} picture(s))");
 
                     // A still one: given until the applet has made its texture (it makes it only
@@ -143,9 +145,91 @@ namespace Ryujinx.HLE.HOS
             return running;
         }
 
+        // What the friend is doing in the game ("Offline · VS · 150cc"), painted under the game of
+        // their status, in the console's own letters and in the grey of the theme; nothing when
+        // the game says nothing (a transparent picture, given all the same: the page of the
+        // friend before may have left theirs).
+        private static void ShowDetail(Switch device, int turn, string detail)
+        {
+            Task.Run(async () =>
+            {
+                try
+                {
+                    byte[] pixels = PaintDetail(detail);
+                    long until = Environment.TickCount64 + 20000;
+                    int given = 0;
+
+                    while (given < 2 && Environment.TickCount64 < until && turn == _shown && device == _device)
+                    {
+                        int found = await UploadCounted(device, NextendoFriendPage.DetailWidth, pixels, NextendoFriendPage.DetailHeight);
+
+                        if (found < 0)
+                        {
+                            return;
+                        }
+
+                        given += found > 0 ? 1 : 0;
+
+                        await Task.Delay(given == 0 ? 200 : 700);
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.Warning?.Print(LogClass.Application, $"[Nextendo] friend page: detail not painted: {e.Message}");
+                }
+            });
+        }
+
+        private static SKTypeface _console;
+
+        private static byte[] PaintDetail(string detail)
+        {
+            int width = NextendoFriendPage.DetailWidth, height = NextendoFriendPage.DetailHeight;
+
+            using SKBitmap picture = new(new SKImageInfo(width, height, SKColorType.Rgba8888, SKAlphaType.Premul));
+            using SKCanvas canvas = new(picture);
+
+            canvas.Clear(SKColors.Transparent);
+
+            if (!string.IsNullOrWhiteSpace(detail))
+            {
+                if (_console == null && Services.Sdb.Pl.SharedFontManager.StandardFont is { } font)
+                {
+                    _console = SKTypeface.FromData(SKData.CreateCopy(font));
+                }
+
+                bool dark = NextendoHomeMenuSettings.Theme == "black" || Themes.NextendoThemes.Chosen != null;
+
+                using SKPaint paint = new()
+                {
+                    IsAntialias = true,
+                    Typeface = _console ?? SKTypeface.Default,
+                    TextSize = 38f,
+                    Color = dark ? new SKColor(0xB4, 0xB4, 0xB4) : new SKColor(0x6E, 0x6E, 0x6E),
+                };
+
+                // under the name of the game: same left edge (124 of the 574 of the row, twice here)
+                const float Left = 248f;
+                string text = detail.Trim();
+
+                while (text.Length > 1 && paint.MeasureText(text) > width - Left - 16)
+                {
+                    text = text[..^2].TrimEnd() + "…";
+                }
+
+                float baseline = height / 2f - (paint.FontMetrics.Ascent + paint.FontMetrics.Descent) / 2f;
+
+                canvas.DrawText(text, Left, baseline, paint);
+            }
+
+            canvas.Flush();
+
+            return picture.Bytes;
+        }
+
         // A still banner given to the applet and kept in its memory: how many textures took it
         // (0 while the applet has not made it yet), -1 when the applet does not run.
-        private static Task<int> UploadCounted(Switch device, int width, byte[] pixels)
+        private static Task<int> UploadCounted(Switch device, int width, byte[] pixels, int height = NextendoFriendPage.BannerHeight)
         {
             KProcess page = device.System.KernelContext.Processes.Values.FirstOrDefault(p => p.TitleId == MyPageProgram && p.State != ProcessState.Exited);
 
@@ -156,7 +240,7 @@ namespace Ryujinx.HLE.HOS
 
             TaskCompletionSource<int> found = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-            device.Gpu.NextendoUploadTexture(page.Pid, width, NextendoFriendPage.BannerHeight, pixels, 4, n => found.TrySetResult(n), persist: true);
+            device.Gpu.NextendoUploadTexture(page.Pid, width, height, pixels, 4, n => found.TrySetResult(n), persist: true);
 
             // the renderer gives its answer at its next frame; none within a second: try again
             return Task.WhenAny(found.Task, Task.Delay(1000)).ContinueWith(t => found.Task.IsCompleted ? found.Task.Result : 0);

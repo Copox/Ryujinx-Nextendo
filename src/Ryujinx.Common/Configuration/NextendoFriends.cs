@@ -38,6 +38,9 @@ namespace Ryujinx.Common.Configuration
             // (Unix seconds) the two accounts are friends.
             public ulong AppId { get; init; }
             public string Game { get; init; }
+            // What the friend is doing in that game, from its play report ("Offline · VS · 150cc"),
+            // as Discord shows it; empty for most games.
+            public string Detail { get; init; }
             public string Platform { get; init; }
             public bool Favorite { get; init; }
             public long Since { get; init; }
@@ -627,6 +630,7 @@ namespace Ryujinx.Common.Configuration
                         ulong appId = 0;
                         string game = "";
                         string platform = "";
+                        string detail = "";
 
                         if (f.TryGetProperty("presence", out JsonElement played) && played.ValueKind == JsonValueKind.Object)
                         {
@@ -638,6 +642,7 @@ namespace Ryujinx.Common.Configuration
 
                             game = played.TryGetProperty("jeu", out JsonElement gameEl) && gameEl.ValueKind == JsonValueKind.String ? gameEl.GetString() ?? "" : "";
                             platform = played.TryGetProperty("plateforme", out JsonElement pfEl) && pfEl.ValueKind == JsonValueKind.String ? pfEl.GetString() ?? "" : "";
+                            detail = played.TryGetProperty("app_detail", out JsonElement detailEl) && detailEl.ValueKind == JsonValueKind.String ? detailEl.GetString() ?? "" : "";
 
                             byte[] icon = null;
 
@@ -678,6 +683,7 @@ namespace Ryujinx.Common.Configuration
                                 LastSeen = lastSeen,
                                 AppId = appId,
                                 Game = game,
+                                Detail = detail,
                                 Platform = platform,
                                 Favorite = favorite,
                                 Since = since,

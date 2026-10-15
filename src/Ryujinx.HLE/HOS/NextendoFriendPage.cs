@@ -38,6 +38,13 @@ namespace Ryujinx.HLE.HOS
         // A round mask, for the pictures of people (round as on the console).
         private const string CircleTexture = "IcoFrdAddPanel_02_64^t";
 
+        // What the friend is doing in the game (from its play report, as Discord shows it: "Offline
+        // · VS · 150cc"), painted by the emulator under the game of the friend's status. A size
+        // no other texture has (the emulator finds it by it), twice the size it shows at.
+        private const string DetailTexture = "IcoFrdAddPanel_02_32^t";
+        public const int DetailWidth = 1148, DetailHeight = 80;
+        private static readonly (float X, float Y, float W, float H) _detail = (0f, -141f, 574f, 40f);
+
         // The layouts whose picture gets round corners (the icons of the games in the rows of a
         // page) or is made round (the profile picture of a friend's page), the material of the
         // picture in each and the mask it gets.
@@ -485,16 +492,29 @@ namespace Ryujinx.HLE.HOS
             BinaryPrimitives.WriteSingleLittleEndian(banner.AsSpan(0x30), TopHeight + _banner.Y);
             sections.Insert(inside + 1, banner);
 
+            // the detail of what the friend is doing: under the card of the game, in the room the
+            // row already has there
+            int detailTexture = AddTexture(sections, DetailTexture);
+
+            if (detailTexture >= 0)
+            {
+                materials = Materials(sections, out materialsAt);
+                materials.Add(BannerMaterial(model, detailTexture, "P_NxDetail"));
+                sections[materialsAt] = MaterialSection(materials);
+
+                sections.Insert(inside + 2, BannerPane(picture, _detail, materials.Count - 1, "P_NxDetail"));
+            }
+
             return Layout_(layout, header, sections);
         }
 
         // The material of a banner: the one of a plain picture of the page of a friend, with its texture.
-        private static byte[] BannerMaterial(byte[] model, int texture)
+        private static byte[] BannerMaterial(byte[] model, int texture, string name = "P_NxBanner")
         {
             byte[] material = (byte[])model.Clone();
 
             Array.Clear(material, 0, 0x1C);
-            Encoding.ASCII.GetBytes("P_NxBanner").CopyTo(material, 0);
+            Encoding.ASCII.GetBytes(name).CopyTo(material, 0);
             BinaryPrimitives.WriteUInt32LittleEndian(material.AsSpan(0x24), 0x00000000); // no colour added
             BinaryPrimitives.WriteUInt32LittleEndian(material.AsSpan(0x28), 0xFFFFFFFF); // the texture as it is
             BinaryPrimitives.WriteUInt16LittleEndian(material.AsSpan(0x2C), (ushort)texture);
@@ -502,7 +522,7 @@ namespace Ryujinx.HLE.HOS
             return material;
         }
 
-        private static byte[] BannerPane(byte[] picture, (float X, float Y, float W, float H) place, int material)
+        private static byte[] BannerPane(byte[] picture, (float X, float Y, float W, float H) place, int material, string name = "P_NxBanner")
         {
             byte[] banner = (byte[])picture.Clone();
 
@@ -510,7 +530,7 @@ namespace Ryujinx.HLE.HOS
             banner[9] = 0;    // placed by its centre
             banner[10] = 255; // opaque
             Array.Clear(banner, 0xC, 0x18);
-            Encoding.ASCII.GetBytes("P_NxBanner").CopyTo(banner, 0xC);
+            Encoding.ASCII.GetBytes(name).CopyTo(banner, 0xC);
             BinaryPrimitives.WriteSingleLittleEndian(banner.AsSpan(0x2C), place.X);
             BinaryPrimitives.WriteSingleLittleEndian(banner.AsSpan(0x30), place.Y);
             BinaryPrimitives.WriteSingleLittleEndian(banner.AsSpan(0x4C), place.W);
@@ -858,6 +878,10 @@ namespace Ryujinx.HLE.HOS
                 BannerMark.CopyTo(bannerData);
 
                 added.Add((BannerTexture, BannerWidth, BannerHeight, 0x0B01u, 0x05040302u, BlockHeightLog2, bannerData));
+
+                // the detail before it is painted: nothing (transparent)
+                added.Add((DetailTexture, DetailWidth, DetailHeight, 0x0B01u, 0x05040302u, BlockHeightLog2,
+                    new byte[(DetailWidth * 4 + 63) / 64 * 64 * ((DetailHeight + 127) / 128 * 128)]));
             }
 
             return AddData(bntx, [.. added]);
