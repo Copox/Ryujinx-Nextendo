@@ -206,7 +206,20 @@ namespace Ryujinx.Graphics.Gpu
             }
 
             physicalMemory.ShaderCache.ShaderCacheStateChanged += ShaderCacheStateUpdate;
+
+            // [Nextendo] A process that starts after the start-up pass (a game launched from the
+            // HOME Menu) gets its disk shader cache loaded on the GPU thread, at the next frame.
+            // Without this, only the HOME Menu's cache was ever loaded, and every game started
+            // from it rebuilt all of its shaders, every time.
+            if (_shaderCacheStarted)
+            {
+                _lateShaderCaches.Enqueue(physicalMemory);
+            }
         }
+
+        private volatile bool _shaderCacheStarted;
+        private CancellationToken _shaderCacheToken;
+        private readonly ConcurrentQueue<PhysicalMemory> _lateShaderCaches = new();
 
         /// <summary>
         /// Unregisters a process, indicating that its memory will no longer be used, and that caches can be freed.
@@ -289,6 +302,9 @@ namespace Ryujinx.Graphics.Gpu
         {
             HostInitalized.WaitOne();
 
+            _shaderCacheToken = cancellationToken;
+            _shaderCacheStarted = true;
+
             foreach (PhysicalMemory physicalMemory in PhysicalMemoryRegistry.Values)
             {
                 physicalMemory.ShaderCache.Initialize(cancellationToken);
@@ -329,6 +345,15 @@ namespace Ryujinx.Graphics.Gpu
         /// </summary>
         public void ProcessShaderCacheQueue()
         {
+            while (_lateShaderCaches.TryDequeue(out PhysicalMemory late))
+            {
+                // still running (a process that already ended is no longer registered)
+                if (!_shaderCacheToken.IsCancellationRequested && PhysicalMemoryRegistry.Values.Contains(late))
+                {
+                    late.ShaderCache.Initialize(_shaderCacheToken);
+                }
+            }
+
             foreach (PhysicalMemory physicalMemory in PhysicalMemoryRegistry.Values)
             {
                 physicalMemory.ShaderCache.ProcessShaderCacheQueue();

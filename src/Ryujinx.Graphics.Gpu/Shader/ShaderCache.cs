@@ -89,6 +89,8 @@ namespace Ryujinx.Graphics.Gpu.Shader
         /// Creates a new instance of the shader cache.
         /// </summary>
         /// <param name="context">GPU context that the shader cache belongs to</param>
+        private int _initialized;
+
         public ShaderCache(GpuContext context)
         {
             _context = context;
@@ -155,6 +157,13 @@ namespace Ryujinx.Graphics.Gpu.Shader
         /// <param name="cancellationToken">Cancellation token to cancel the shader cache initialization process</param>
         internal void Initialize(CancellationToken cancellationToken)
         {
+            // [Nextendo] once per process: a game started from the HOME Menu is initialized after
+            // the start-up pass, and must never load its cache twice
+            if (Interlocked.Exchange(ref _initialized, 1) != 0)
+            {
+                return;
+            }
+
             if (_diskCacheHostStorage.CacheEnabled)
             {
                 ParallelDiskCacheLoader loader = new(
