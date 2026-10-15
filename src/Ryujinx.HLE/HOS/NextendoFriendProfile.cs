@@ -51,6 +51,7 @@ namespace Ryujinx.HLE.HOS
             {
                 _listening = true;
                 NextendoFriends.FriendPageShown += Shown;
+                NextendoFriends.FriendNotificationShown += NotificationShown;
             }
         }
 
@@ -148,6 +149,125 @@ namespace Ryujinx.HLE.HOS
 
         // The decoration of the friend over their picture, moving and past its edge (nothing when
         // they have none: the one of the last page must go), as long as this page is the one shown.
+        // The "online" notification of a friend with a Discord nameplate: the nameplate, moving,
+        // in the frame of the notification while it shows, then the plain frame again.
+        private const ulong OverlayProgram = 0x010000000000100C;
+        private const int NotificationMilliseconds = 12000; // at most: the next notification ends it
+        private static int _notificationTurn;
+        private static readonly ConcurrentDictionary<string, List<byte[]>> _nameplates = new();
+
+        private static void NotificationShown(ulong pid)
+        {
+            Switch device = _device;
+            string address = NextendoFriends.Get().FirstOrDefault(f => f.Pid == pid).Nameplate ?? "";
+
+            // tests: NEXTENDO_TEST_NAMEPLATE = the address of a nameplate shown for every friend
+            address = Environment.GetEnvironmentVariable("NEXTENDO_TEST_NAMEPLATE") is { Length: > 0 } test ? test : address;
+
+            if (device == null || NextendoHomeMenuVanilla.Enabled)
+            {
+                return;
+            }
+
+            int turn = Interlocked.Increment(ref _notificationTurn);
+
+            // a friend without one: the plain frame at once (the last nameplate may still be on it)
+            if (address.Length == 0)
+            {
+                UploadOverlay(device, NextendoFriendPage.NotificationBasePixels());
+                return;
+            }
+
+            Task.Run(async () =>
+            {
+                try
+                {
+                    if (!_nameplates.TryGetValue(address, out List<byte[]> frames))
+                    {
+                        frames = NameplateFrames(Picture(address), out List<int> times);
+
+                        if (frames == null)
+                        {
+                            return;
+                        }
+
+                        _nameplates[address] = frames;
+                        _nameplateTimes[address] = times;
+                    }
+
+                    List<int> durations = _nameplateTimes.TryGetValue(address, out List<int> t) ? t : [];
+                    long until = Environment.TickCount64 + NotificationMilliseconds;
+
+                    for (int at = 0; turn == _notificationTurn && Environment.TickCount64 < until; at = (at + 1) % frames.Count)
+                    {
+                        UploadOverlay(device, frames[at]);
+                        await Task.Delay(at < durations.Count ? durations[at] : 80);
+                    }
+
+                    if (turn == _notificationTurn)
+                    {
+                        UploadOverlay(device, NextendoFriendPage.NotificationBasePixels());
+                    }
+                }
+                catch (Exception e)
+                {
+                    Logger.Warning?.Print(LogClass.Application, $"[Nextendo] notification: nameplate of 0x{pid:X} not shown: {e.Message}");
+                }
+            });
+        }
+
+        private static readonly ConcurrentDictionary<string, List<int>> _nameplateTimes = new();
+
+        // The pictures of a nameplate (animated PNG) in the frame of the notification.
+        private static List<byte[]> NameplateFrames(byte[] png, out List<int> times)
+        {
+            times = [];
+            List<(SKBitmap Picture, int Milliseconds)> pictures = NextendoApng.Frames(png, 90);
+
+            if (pictures == null || pictures.Count == 0)
+            {
+                SKBitmap still = png == null ? null : SKBitmap.Decode(png);
+
+                if (still == null)
+                {
+                    return null;
+                }
+
+                pictures = [(still, 0)];
+            }
+
+            try
+            {
+                List<byte[]> frames = [];
+
+                foreach ((SKBitmap picture, int milliseconds) in pictures)
+                {
+                    frames.Add(NextendoFriendPage.NotificationBasePixels(picture));
+                    times.Add(Math.Max(milliseconds, ShortestFrame));
+                }
+
+                return frames;
+            }
+            finally
+            {
+                foreach ((SKBitmap picture, _) in pictures)
+                {
+                    picture.Dispose();
+                }
+            }
+        }
+
+        private static void UploadOverlay(Switch device, byte[] pixels)
+        {
+            foreach (KProcess process in device.System.KernelContext.Processes.Values)
+            {
+                if (process.TitleId == OverlayProgram && process.State != ProcessState.Exited)
+                {
+                    device.Gpu.NextendoUploadTexture(process.Pid, NextendoFriendPage.NotificationBaseWidth, NextendoFriendPage.NotificationBaseHeight, pixels, 4);
+                }
+            }
+        }
+
         // The decoration shown, and its pictures (made once: the applet asks for the friend's
         // status every few seconds while the page shows, the decoration keeps going meanwhile).
         private static ulong _decorationPid;
@@ -914,7 +1034,8 @@ namespace Ryujinx.HLE.HOS
                 full = NextendoEndpoint.BaseUrl().TrimEnd('/') + address;
             }
             else if (Uri.TryCreate(address, UriKind.Absolute, out Uri uri) && uri.Scheme == Uri.UriSchemeHttps &&
-                     (_klipyHosts.Contains(uri.Host) || (uri.Host == "cdn.discordapp.com" && uri.AbsolutePath.StartsWith("/avatar-decoration-presets/", StringComparison.Ordinal))))
+                     (_klipyHosts.Contains(uri.Host) || (uri.Host == "cdn.discordapp.com" && uri.AbsolutePath.StartsWith("/avatar-decoration-presets/", StringComparison.Ordinal)) ||
+                      (uri.Host == "nextendo.network" && uri.AbsolutePath.StartsWith("/assets/nameplates/", StringComparison.Ordinal))))
             {
                 full = uri.AbsoluteUri;
             }

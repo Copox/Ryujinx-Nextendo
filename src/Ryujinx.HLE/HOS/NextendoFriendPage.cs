@@ -274,11 +274,10 @@ namespace Ryujinx.HLE.HOS
             float x = BinaryPrimitives.ReadSingleLittleEndian(system.AsSpan(0x2C)), y = BinaryPrimitives.ReadSingleLittleEndian(system.AsSpan(0x30));
             float w = BinaryPrimitives.ReadSingleLittleEndian(system.AsSpan(0x4C)), h = BinaryPrimitives.ReadSingleLittleEndian(system.AsSpan(0x50));
 
-            // (the system draws this shape with the colours of its corners: their opacity to 0)
-            for (int corner = 0; corner < 4; corner++)
-            {
-                system[0x54 + corner * 4 + 3] = 0;
-            }
+            // (the system draws this shape itself, whatever the opacity of the pane or of its
+            // corners: with no size, there is nothing left to draw)
+            BinaryPrimitives.WriteSingleLittleEndian(system.AsSpan(0x4C), 0f);
+            BinaryPrimitives.WriteSingleLittleEndian(system.AsSpan(0x50), 0f);
 
             // ours, right before it: the same place (placed from the same point of it), drawn under the content
             byte[] ours = BannerPane(picture, (x, y, w, h), materials.Count - 1, "P_NxBase");
@@ -302,11 +301,13 @@ namespace Ryujinx.HLE.HOS
 
             if (inside != null)
             {
-                // a picture (a nameplate) filling the frame, inside its round corners
+                // a picture (a nameplate) over the frame, inside its round corners: as tall as the
+                // frame and against its right edge, as Discord draws it behind a name
                 using SkiaSharp.SKPaint smooth = new() { IsAntialias = true, FilterQuality = SkiaSharp.SKFilterQuality.High };
+                float width = (float)inside.Width * NotificationBaseHeight / inside.Height;
 
                 canvas.ClipRoundRect(shape, antialias: true);
-                canvas.DrawBitmap(inside, SkiaSharp.SKRect.Create(0, 0, NotificationBaseWidth, NotificationBaseHeight), smooth);
+                canvas.DrawBitmap(inside, SkiaSharp.SKRect.Create(NotificationBaseWidth - width, 0, width, NotificationBaseHeight), smooth);
             }
 
             canvas.Flush();

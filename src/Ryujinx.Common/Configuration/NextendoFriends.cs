@@ -60,6 +60,9 @@ namespace Ryujinx.Common.Configuration
             // The Discord avatar decoration of a staff member or a donor (address of its picture
             // at Discord), or "": drawn over the friend's picture in the HOME Menu.
             public string Decoration { get; init; }
+            // The Discord nameplate of a staff member or a donor (address of its animated picture,
+            // served by nextendo.network), or "": drawn behind their "online" notification.
+            public string Nameplate { get; init; }
             public float[] BannerCrop { get; init; }
             public long RequestedAt { get; init; }
             public bool HasPicture { get; init; }
@@ -547,6 +550,11 @@ namespace Ryujinx.Common.Configuration
         /// </summary>
         public static event Action<ulong> FriendPageShown;
 
+        /// <summary>[Nextendo] A friend's "online" notification about to be shown (its frame can carry their nameplate).</summary>
+        public static event Action<ulong> FriendNotificationShown;
+
+        public static void TellFriendNotificationShown(ulong pid) => FriendNotificationShown?.Invoke(pid);
+
         public static void TellFriendPageShown(ulong pid) => FriendPageShown?.Invoke(pid);
 
         // The details of one friend asked for: the page of that friend, shown again (the applet
@@ -726,6 +734,7 @@ namespace Ryujinx.Common.Configuration
                                 Color = f.TryGetProperty("color", out JsonElement colorEl) && colorEl.ValueKind == JsonValueKind.String ? colorEl.GetString() ?? "" : "",
                                 BannerUrl = BannerOf(f, out float[] bannerCrop),
                                 Decoration = f.TryGetProperty("avatar_decoration", out JsonElement decorationEl) && decorationEl.ValueKind == JsonValueKind.String ? decorationEl.GetString() ?? "" : "",
+                                Nameplate = f.TryGetProperty("nameplate", out JsonElement nameplateEl) && nameplateEl.ValueKind == JsonValueKind.String ? nameplateEl.GetString() ?? "" : "",
                                 BannerCrop = bannerCrop,
                             });
                         }
