@@ -186,6 +186,19 @@ namespace Ryujinx.HLE.HOS
                 using SKBitmap icon = gameIcon == null ? null : SKBitmap.Decode(gameIcon);
 
                 UploadOverlay(device, NextendoFriendPage.NotificationBasePixels(game: icon));
+
+                // the plain frame again once it has gone (for the notifications that come next)
+                if (icon != null)
+                {
+                    Task.Delay(NotificationMilliseconds).ContinueWith(_ =>
+                    {
+                        if (turn == _notificationTurn)
+                        {
+                            UploadOverlay(device, NextendoFriendPage.NotificationBasePixels());
+                        }
+                    });
+                }
+
                 return;
             }
 

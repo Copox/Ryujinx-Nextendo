@@ -14,6 +14,9 @@ namespace Ryujinx.Horizon.Ovln
         private static readonly object _lock = new();
         private static readonly List<Receiver> _receivers = [];
 
+        // "A friend is online" (the user, the friend, the time away): its frame is painted for that friend.
+        private const uint FriendOnlineTag = 0x1B5A;
+
         /// <summary>
         /// The system starts (again, after a restart of the emulation): the receivers of the one
         /// before are gone, their events with them.
@@ -39,6 +42,14 @@ namespace Ryujinx.Horizon.Ovln
             byte[] copy = message.ToArray();
 
             Logger.Info?.Print(LogClass.Service, $"[ovln] message tag 0x{BitConverter.ToUInt32(copy, 0):X} size {BitConverter.ToUInt32(copy, 4)} : {Convert.ToHexString(copy, 8, Math.Min(0x40, copy.Length - 8))}");
+
+            // [Nextendo] Every notification shares one frame, that the emulator paints for a friend
+            // coming online (their nameplate, the icon of their game): any other notification gets
+            // the plain frame back ("Friends online: 7" showed the icon of the friend before).
+            if (BitConverter.ToUInt32(copy, 0) != FriendOnlineTag)
+            {
+                Ryujinx.Common.Configuration.NextendoFriends.TellFriendNotificationShown(0);
+            }
 
             Receiver[] receivers;
 
