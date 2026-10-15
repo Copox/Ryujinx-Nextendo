@@ -166,6 +166,25 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Sfdnsres
             return GetAddrInfoRequestImpl(context, responseBufferPosition, responseBufferSize, false, 0, 0);
         }
 
+        [CommandCmif(7)]
+        // GetNameInfoRequest(u32 flags, u32 cancel_handle, u64 pid_placeholder, pid, buffer<sockaddr, 5, 0>) -> (i32 ret, u32 bsd_errno, buffer<i8, 6, 0> host, buffer<i8, 6, 0> service)
+        public ResultCode GetNameInfoRequest(ServiceCtx context)
+        {
+            GaiError result = GetNameInfoImpl(
+                context,
+                context.Request.SendBuff[0].Position,
+                context.Request.SendBuff[0].Size,
+                context.Request.ReceiveBuff.Count > 0 ? context.Request.ReceiveBuff[0].Position : 0,
+                context.Request.ReceiveBuff.Count > 0 ? context.Request.ReceiveBuff[0].Size : 0,
+                context.Request.ReceiveBuff.Count > 1 ? context.Request.ReceiveBuff[1].Position : 0,
+                context.Request.ReceiveBuff.Count > 1 ? context.Request.ReceiveBuff[1].Size : 0);
+
+            context.ResponseData.Write((int)result);
+            context.ResponseData.Write(result == GaiError.Success ? 0 : (int)Bsd.Types.LinuxError.EINVAL);
+
+            return ResultCode.Success;
+        }
+
         [CommandCmif(8)]
         // GetCancelHandleRequest(u64, pid) -> u32
         public ResultCode GetCancelHandleRequest(ServiceCtx context)
@@ -242,6 +261,69 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Sfdnsres
             (ulong optionsBufferPosition, ulong optionsBufferSize) = context.Request.GetBufferType0x21();
 
             return GetAddrInfoRequestImpl(context, outputBufferPosition, outputBufferSize, true, optionsBufferPosition, optionsBufferSize);
+        }
+
+        [CommandCmif(13)] // 5.0.0+
+        // GetNameInfoRequestWithOptions(u32 flags, bool enable_nsd_resolve, u32 cancel_handle, u64 pid_placeholder, pid, buffer<sockaddr, 21, 0>, buffer<unknown, 21, 0> options) -> (i32 ret, i32 h_errno, u32 bsd_errno, buffer<i8, 22, 0> host, buffer<i8, 22, 0> service)
+        public ResultCode GetNameInfoRequestWithOptions(ServiceCtx context)
+        {
+            (ulong addressPosition, ulong addressSize) = context.Request.GetBufferType0x21(0);
+            (ulong hostPosition, ulong hostSize) = context.Request.GetBufferType0x22(0);
+            (ulong servicePosition, ulong serviceSize) = context.Request.GetBufferType0x22(1);
+
+            GaiError result = GetNameInfoImpl(context, addressPosition, addressSize, hostPosition, hostSize, servicePosition, serviceSize);
+
+            context.ResponseData.Write((int)result);
+            context.ResponseData.Write((int)(result == GaiError.Success ? NetDbError.Success : NetDbError.Internal));
+            context.ResponseData.Write(result == GaiError.Success ? 0 : (int)Bsd.Types.LinuxError.EINVAL);
+
+            return ResultCode.Success;
+        }
+
+        // Numeric getnameinfo: Unreal's FInternetAddr::ToString returns "" when this fails, leaving
+        // P2P joins (Friday the 13th) with no host to connect to.
+        private static GaiError GetNameInfoImpl(
+            ServiceCtx context,
+            ulong addressPosition,
+            ulong addressSize,
+            ulong hostPosition,
+            ulong hostSize,
+            ulong servicePosition,
+            ulong serviceSize)
+        {
+            if (addressSize < 8)
+            {
+                return GaiError.Fail;
+            }
+
+            Span<byte> sockaddr = stackalloc byte[8];
+            context.Memory.Read(addressPosition, sockaddr);
+
+            if (sockaddr[1] != (byte)AddressFamily.InterNetwork)
+            {
+                return GaiError.Family;
+            }
+
+            string host = new IPAddress(sockaddr.Slice(4, 4)).ToString();
+            string service = BinaryPrimitives.ReadUInt16BigEndian(sockaddr.Slice(2, 2)).ToString();
+
+            if ((hostSize != 0 && (ulong)host.Length >= hostSize) ||
+                (serviceSize != 0 && (ulong)service.Length >= serviceSize))
+            {
+                return GaiError.Overflow;
+            }
+
+            if (hostSize != 0)
+            {
+                context.Memory.Write(hostPosition, Encoding.ASCII.GetBytes(host + '\0'));
+            }
+
+            if (serviceSize != 0)
+            {
+                context.Memory.Write(servicePosition, Encoding.ASCII.GetBytes(service + '\0'));
+            }
+
+            return GaiError.Success;
         }
 
         [CommandCmif(14)] // 5.0.0+
