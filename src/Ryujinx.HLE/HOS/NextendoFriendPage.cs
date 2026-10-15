@@ -54,6 +54,12 @@ namespace Ryujinx.HLE.HOS
         public const int DecorationSide = 432, OwnDecorationSide = 448;
         public const float DecorationScale = 1.25f; // the decoration is 1.2 times the picture, as on Discord
 
+        // The user's decoration over the small picture of the header ("Kazuu's Page"), on a console
+        // only (the module of MyPage paints it there). A size no other texture has.
+        private const string HeaderDecorationTexture = "IcoBtnMinusRev_24^s";
+        public const int HeaderDecorationSide = 160;
+        private const string HeaderLayout = "blyt/TextH1.bflyt";
+
         // The left column of a friend's page: 33 more of room on the left of the picture than on its right.
         private static readonly string[] _leftColumn = ["L_UserIcon", "T_Name", "T_NnidName", "P_FriendMemoBase", "N_LeftBtnAll"];
         private const float LeftColumnShift = -26f;
@@ -163,6 +169,10 @@ namespace Ryujinx.HLE.HOS
                 else if (name == OwnLayout && page != null && PatchOwnPage(files[i].Data, page) is { } own)
                 {
                     files[i] = (name, own);
+                }
+                else if (name == HeaderLayout && ForConsole && friendBanner && page != null && PatchHeaderPicture(files[i].Data, page) is { } headerPicture)
+                {
+                    files[i] = (name, headerPicture);
                 }
                 else if (name == Textures && PatchTextures(files[i].Data, ownBanner, friendBanner) is { } textures)
                 {
@@ -810,6 +820,43 @@ namespace Ryujinx.HLE.HOS
             return at;
         }
 
+        // The small picture of the user in the header of the pages: its decoration over it, a child
+        // of the picture (shown, hidden and moved with it; the header of other pages has none).
+        private static byte[] PatchHeaderPicture(byte[] layout, byte[] friendPage)
+        {
+            List<byte[]> sections = Sections(layout, out int header);
+            List<byte[]> models = Sections(friendPage, out _);
+            byte[] model = Materials(models, out _)?.Find(m => MaterialName(m) == "P_Pict");
+            byte[] picture = models.Find(s => Kind(s) == "pic1" && PaneName(s) == "P_LineVertical");
+
+            if (model == null || picture == null || sections.FindIndex(s => Kind(s) == "pic1" && PaneName(s) == "P_Icon") < 0)
+            {
+                return null;
+            }
+
+            int texture = AddTexture(sections, HeaderDecorationTexture);
+            int materialsAt = -1;
+            List<byte[]> materials = texture < 0 ? null : Materials(sections, out materialsAt);
+
+            if (materials == null || materialsAt < 0)
+            {
+                return null;
+            }
+
+            materials.Add(BannerMaterial(model, texture, "P_NxDecoH"));
+            sections[materialsAt] = MaterialSection(materials);
+
+            int icon = sections.FindIndex(s => Kind(s) == "pic1" && PaneName(s) == "P_Icon");
+            float side = BinaryPrimitives.ReadSingleLittleEndian(sections[icon].AsSpan(0x4C)) * DecorationScale;
+            int after = After(sections, icon);
+
+            sections.Insert(after, [(byte)'p', (byte)'a', (byte)'e', (byte)'1', 8, 0, 0, 0]);
+            sections.Insert(after, BannerPane(picture, (0f, 0f, side, side), materials.Count - 1, "P_NxDecoH"));
+            sections.Insert(after, [(byte)'p', (byte)'a', (byte)'s', (byte)'1', 8, 0, 0, 0]);
+
+            return Layout_(layout, header, sections);
+        }
+
         // The own picture of the user: round corners, by the setting of the system, on the
         // picture and on the cursor around it; its decoration over all of it, when
         // <paramref name="friendPage"/> gives the models of a picture.
@@ -1147,6 +1194,12 @@ namespace Ryujinx.HLE.HOS
                 foreach ((string name, int side) in new[] { (DecorationTexture, DecorationSide), (OwnDecorationTexture, OwnDecorationSide) })
                 {
                     added.Add((name, side, side, 0x0B01u, 0x05040302u, BlockHeightLog2, new byte[(side * 4 + 63) / 64 * 64 * ((side + 127) / 128 * 128)]));
+                }
+
+                if (ForConsole)
+                {
+                    const int side = HeaderDecorationSide;
+                    added.Add((HeaderDecorationTexture, side, side, 0x0B01u, 0x05040302u, BlockHeightLog2, new byte[(side * 4 + 63) / 64 * 64 * ((side + 127) / 128 * 128)]));
                 }
             }
 
