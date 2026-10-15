@@ -511,6 +511,21 @@ namespace Ryujinx.Ava.UI.Windows
 
             Ryujinx.Ava.Systems.Updater.HookHomeMenuUpdate();
 
+            // [Nextendo] A game started from the HOME Menu gets its BCAT schedules synced like
+            // one started from the game list.
+            Ryujinx.Common.Configuration.NextendoHomeLaunch.BeforeStart = id => Avalonia.Threading.Dispatcher.UIThread.InvokeAsync(async () =>
+            {
+                DynamicData.Kernel.Optional<Ryujinx.Ava.Systems.AppLibrary.ApplicationData> found = ApplicationLibrary.Applications.Lookup(id);
+                Ryujinx.Ava.Systems.AppLibrary.ApplicationData app = found.HasValue ? found.Value : null;
+
+                if (app is { RequiresNextendoByaml: true })
+                {
+                    Logger.Info?.Print(LogClass.Application, $"[Nextendo] HOME Menu: BCAT of {app.Name} brought up to date before it starts");
+
+                    await Ryujinx.Ava.Common.NextendoByamlSync.EnsureUpToDateAsync(app);
+                }
+            });
+
             Ryujinx.Common.Configuration.NextendoProfileEdits.Push = (userId, name, image) =>
             {
                 if (!Ryujinx.Common.Configuration.NextendoAccount.IsLinked ||

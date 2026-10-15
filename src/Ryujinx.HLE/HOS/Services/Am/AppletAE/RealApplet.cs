@@ -216,6 +216,9 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
                     }
                     else
                     {
+                        // its online data up to date first, as from the game list
+                        Ryujinx.Common.Configuration.NextendoHomeLaunch.Run(title.Id);
+
                         started = isXci ? device.Processes.LoadXci(title.Path, title.Id) : device.Processes.LoadNsp(title.Path, title.Id);
                     }
                 }
