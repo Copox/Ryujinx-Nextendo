@@ -655,7 +655,7 @@ namespace Ryujinx.HLE.HOS
             {
                 using SKPaint flat = new();
 
-                flat.Color = new SKColor(16, 16, 16);
+                flat.Color = new SKColor(NextendoFriendListDecoration.Light, NextendoFriendListDecoration.Light, NextendoFriendListDecoration.Light);
                 canvas.DrawRect(SKRect.Create(0, 0, 8, 16), flat);
                 flat.Color = new SKColor(mark, mark, mark);
                 canvas.DrawRect(SKRect.Create(8, 0, 24, 16), flat);

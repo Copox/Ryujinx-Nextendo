@@ -21,9 +21,13 @@ namespace Ryujinx.HLE.HOS
         // The programs that show friends' pictures: the HOME Menu and the user page.
         private static readonly ulong[] _programs = [0x0100000000001000, 0x0100000000001013];
 
-        // The greys of the marks, one for each decorated friend, far enough from each other and
-        // from the user's own (240) for a JPEG to keep them apart. More friends: still pictures.
-        private static readonly byte[] _greys = [48, 96, 144, 192];
+        // The mark of a friend: a light neutral grey, then the friend's own neutral grey, in whole
+        // blocks of JPEG (kept almost exactly), checked closely. Not the user's own mark (dark
+        // then light): a dark corner of a photo passed for one, and the photo got another friend's
+        // pictures. More decorated friends than greys: still pictures.
+        public const byte Light = 232;
+        private static readonly byte[] _greys = [40, 88, 136, 184];
+        private const int Close = 10;
 
         private static readonly Dictionary<ulong, byte> _marks = [];
         private static readonly Dictionary<ulong, int> _turns = [];
@@ -116,7 +120,7 @@ namespace Ryujinx.HLE.HOS
                                 {
                                     int now = at;
 
-                                    device.Gpu.NextendoUploadMarked(process.Pid, (width, height) => PixelsFor(now, width, height), first => NextendoOwnDecoration.IsMarked(first, mark));
+                                    device.Gpu.NextendoUploadMarked(process.Pid, (width, height) => PixelsFor(now, width, height), first => IsMarked(first, mark));
                                 }
                             }
                         }
@@ -131,6 +135,48 @@ namespace Ryujinx.HLE.HOS
                     Logger.Warning?.Print(LogClass.Application, $"[Nextendo] friend list: decoration of 0x{pid:X} not animated: {e.Message}");
                 }
             });
+        }
+
+        // The mark in the first 16 pixels of a texture (made smaller with the picture: 8 + 24
+        // pixels at 256, 2 + 6 at 64; the edge between the two greys may be a blend of them).
+        private static bool IsMarked(byte[] first, byte mark)
+        {
+            int light = 0;
+
+            while (light < 8 && Neutral(first, light, Light))
+            {
+                light++;
+            }
+
+            if (light == 0)
+            {
+                return false;
+            }
+
+            int from = Neutral(first, light, mark) ? light : light + 1;
+            int end = Math.Min(16, light * 4 - 1);
+
+            if (end - from < 1)
+            {
+                return false;
+            }
+
+            for (int pixel = from; pixel < end; pixel++)
+            {
+                if (!Neutral(first, pixel, mark))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static bool Neutral(byte[] first, int pixel, int want)
+        {
+            int r = first[pixel * 4], g = first[pixel * 4 + 1], b = first[pixel * 4 + 2];
+
+            return Math.Abs(r - want) <= Close && Math.Abs(g - want) <= Close && Math.Abs(b - want) <= Close && first[pixel * 4 + 3] == 255;
         }
 
         private static bool Current(ulong pid, int turn)
