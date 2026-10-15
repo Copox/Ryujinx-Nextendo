@@ -211,7 +211,119 @@ namespace Ryujinx.HLE.HOS
 
             files[at] = (NotificationLayout, Layout_(files[at].Data, header, sections));
 
+            // the frame of every notification: away from the edges of the screen, round corners,
+            // without the straight border lines
+            int frame = files.FindIndex(f => f.Name == NotificationFrameLayout);
+
+            int textures = files.FindIndex(f => f.Name == Textures);
+
+            if (frame >= 0 && textures >= 0 && PatchNotificationFrame(files[frame].Data) is { } patched && PatchNotificationTextures(files[textures].Data) is { } bntx)
+            {
+                files[frame] = (NotificationFrameLayout, patched);
+                files[textures] = (Textures, bntx);
+            }
+
             return WriteArchive(files, multiplier);
+        }
+
+        private const string NotificationFrameLayout = "blyt/OvnBaseNml.bflyt";
+        private const float NotificationMargin = 20f;
+
+        // The frame of the notifications, drawn by the emulator instead of the system's shape
+        // (which cannot have round corners): black, round corners. A texture no layout uses
+        // (checked on 22.5.0), at a size no other has: a nameplate can be given to it later.
+        private const string NotificationBaseTexture = "OvlIcoBtnZoomBan_64^t";
+        public const int NotificationBaseWidth = 424, NotificationBaseHeight = 88;
+        private const float NotificationBaseRadius = 17f; // as on Discord: a fifth of the height (8 for 42)
+
+        private static byte[] PatchNotificationFrame(byte[] layout)
+        {
+            List<byte[]> sections = Sections(layout, out int header);
+            int texture = AddTexture(sections, NotificationBaseTexture);
+            List<byte[]> materials = texture < 0 ? null : Materials(sections, out int materialsAt);
+            byte[] model = materials?.Find(m => MaterialName(m) == "P_LineU");
+            byte[] picture = sections.Find(s => Kind(s) == "pic1" && PaneName(s) == "P_LineU");
+            int baseAt = sections.FindIndex(s => Kind(s) == "pic1" && PaneName(s) == "P_Base");
+
+            if (model == null || picture == null || baseAt < 0)
+            {
+                return null;
+            }
+
+            materials.Add(BannerMaterial(model, texture, "P_NxBase"));
+            Materials(sections, out int at);
+            sections[at] = MaterialSection(materials);
+
+            foreach (byte[] pane in sections.Where(s => Kind(s) is "pan1" or "pic1"))
+            {
+                string name = PaneName(pane);
+
+                if (name == "N_Base")
+                {
+                    BinaryPrimitives.WriteSingleLittleEndian(pane.AsSpan(0x2C), BinaryPrimitives.ReadSingleLittleEndian(pane.AsSpan(0x2C)) + NotificationMargin);
+                    BinaryPrimitives.WriteSingleLittleEndian(pane.AsSpan(0x30), BinaryPrimitives.ReadSingleLittleEndian(pane.AsSpan(0x30)) - NotificationMargin);
+                }
+                else if (name is "P_LineU" or "P_LineD" or "P_LineL" or "P_LineR")
+                {
+                    pane[8] &= 0xFE; // not shown
+                }
+            }
+
+            // the system's frame made invisible (not hidden: the part of invitations hangs on it):
+            byte[] system = sections[baseAt];
+            float x = BinaryPrimitives.ReadSingleLittleEndian(system.AsSpan(0x2C)), y = BinaryPrimitives.ReadSingleLittleEndian(system.AsSpan(0x30));
+            float w = BinaryPrimitives.ReadSingleLittleEndian(system.AsSpan(0x4C)), h = BinaryPrimitives.ReadSingleLittleEndian(system.AsSpan(0x50));
+
+            // (the system draws this shape with the colours of its corners: their opacity to 0)
+            for (int corner = 0; corner < 4; corner++)
+            {
+                system[0x54 + corner * 4 + 3] = 0;
+            }
+
+            // ours, right before it: the same place (placed from the same point of it), drawn under the content
+            byte[] ours = BannerPane(picture, (x, y, w, h), materials.Count - 1, "P_NxBase");
+
+            ours[9] = system[9];
+            sections.Insert(baseAt, ours);
+
+            return Layout_(layout, header, sections);
+        }
+
+        // The pixels of the frame: black, a little see-through, round corners smoothed over a pixel.
+        public static byte[] NotificationBasePixels(SkiaSharp.SKBitmap inside = null)
+        {
+            using SkiaSharp.SKBitmap frame = new(new SkiaSharp.SKImageInfo(NotificationBaseWidth, NotificationBaseHeight, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Premul));
+            using SkiaSharp.SKCanvas canvas = new(frame);
+            using SkiaSharp.SKPaint paint = new() { IsAntialias = true, Color = new SkiaSharp.SKColor(0, 0, 0, 235) };
+            using SkiaSharp.SKRoundRect shape = new(SkiaSharp.SKRect.Create(0, 0, NotificationBaseWidth, NotificationBaseHeight), NotificationBaseRadius);
+
+            canvas.Clear(SkiaSharp.SKColors.Transparent);
+            canvas.DrawRoundRect(shape, paint);
+
+            if (inside != null)
+            {
+                // a picture (a nameplate) filling the frame, inside its round corners
+                using SkiaSharp.SKPaint smooth = new() { IsAntialias = true, FilterQuality = SkiaSharp.SKFilterQuality.High };
+
+                canvas.ClipRoundRect(shape, antialias: true);
+                canvas.DrawBitmap(inside, SkiaSharp.SKRect.Create(0, 0, NotificationBaseWidth, NotificationBaseHeight), smooth);
+            }
+
+            canvas.Flush();
+
+            return frame.Bytes;
+        }
+
+        private static byte[] PatchNotificationTextures(byte[] bntx)
+        {
+            const int BlockHeightLog2 = 4;
+            // at the size it shows at: the overlay applet has little memory (twice the size, its
+            // textures did not load and it stopped)
+            byte[] data = new byte[(NotificationBaseWidth * 4 + 63) / 64 * 64 * ((NotificationBaseHeight + 127) / 128 * 128)];
+
+            LayoutConverter.ConvertLinearToBlockLinear(data, NotificationBaseWidth, NotificationBaseHeight, NotificationBaseWidth * 4, 4, 1 << BlockHeightLog2, NotificationBasePixels());
+
+            return AddData(bntx, [(NotificationBaseTexture, NotificationBaseWidth, NotificationBaseHeight, 0x0B01u, 0x05040302u, BlockHeightLog2, data)]);
         }
 
         // ------------------------------------------------------------------ the archive (SARC)

@@ -84,6 +84,15 @@ namespace Ryujinx.Ava.Common
 
             // Capture the baseline BEFORE arming the poll, so nothing that predates launch is announced.
             _ = PrimeThenArm();
+
+            // Tests: NEXTENDO_TEST_NOTIF="<friend pid in hex>@<seconds>" shows that friend coming
+            // online after that many seconds, on this machine only (nothing is asked of the server).
+            string test = Environment.GetEnvironmentVariable("NEXTENDO_TEST_NOTIF");
+
+            if (test?.Split('@') is [string pid, string after] && ulong.TryParse(pid, System.Globalization.NumberStyles.HexNumber, null, out ulong friend) && int.TryParse(after, out int seconds))
+            {
+                _ = Task.Delay(seconds * 1000).ContinueWith(_ => NextendoSystemNotifications.FriendOnline(friend));
+            }
         }
 
         private static void Stop()
