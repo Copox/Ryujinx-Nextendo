@@ -28,30 +28,47 @@ namespace Ryujinx.HLE.HOS
         private const string Textures = "timg/__Combined.bntx";
 
         private const string OwnLayout = "blyt/MypMyStatus.bflyt";
-        private const string BannerTexture = "MypNoLink3dsNnid^w";
-        private const string OwnBannerTexture = "MypNoRecoWiiU^s";
-        private const string MaskTexture = "MypNoReco3DS^s";
 
-        // The layouts whose picture gets round corners (the profile picture of the page, the icons
-        // of the games in its rows), and the material of the picture in each.
-        private static readonly Dictionary<string, string> _pictures = new()
+        // Textures no layout of the applet uses (checked on 22.5.0). The illustrations of the
+        // friend suggestions (3DS, Wii U) are still shown there: they must stay as they are.
+        private const string BannerTexture = "IcoFrdAddPanel_01_32^t";
+        private const string OwnBannerTexture = "IcoFrdAddPanel_03_64^t";
+        private const string MaskTexture = "IcoFrdAddPanel_01_64^t";
+
+        // A round mask, for the pictures of people (round as on the console).
+        private const string CircleTexture = "IcoFrdAddPanel_02_64^t";
+
+        // The layouts whose picture gets round corners (the icons of the games in the rows of a
+        // page) or is made round (the profile picture of a friend's page), the material of the
+        // picture in each and the mask it gets.
+        private static readonly Dictionary<string, (string Material, string Mask)> _pictures = new()
         {
-            ["blyt/MypUserIcon.bflyt"] = "P_Image",
-            ["blyt/MypBtnPresencePlate.bflyt"] = "P_Icon",
-            ["blyt/MypBtnGamePlate.bflyt"] = "P_Icon",
-            ["blyt/MypBtnPresence.bflyt"] = "P_Icon",
-            ["blyt/MypBtnGame.bflyt"] = "P_Icon",
+            ["blyt/MypUserIcon.bflyt"] = ("P_Image", CircleTexture),
+            ["blyt/MypBtnPresencePlate.bflyt"] = ("P_Icon", MaskTexture),
+            ["blyt/MypBtnGamePlate.bflyt"] = ("P_Icon", MaskTexture),
+            ["blyt/MypBtnPresence.bflyt"] = ("P_Icon", MaskTexture),
+            ["blyt/MypBtnGame.bflyt"] = ("P_Icon", MaskTexture),
         };
+
+        // The friend list, as the console's newer HOME Menu draws it: each friend a plain card
+        // with a round picture inside its margins, the nickname and the last time online under it.
+        private const string FriendTileLayout = "blyt/FrdBtnList.bflyt";
+        private static readonly string[] _friendTilePictures = ["P_Image", "P_NoImage", "P_RecoUser"];
+        private const float FriendPictureScale = 0.72f;   // 170 -> about 122 pixels
+        private const float FriendPictureY = 46f;         // a margin above it, as wide as at its sides
+        private const float FriendTextY = -56f;           // the nickname and the status right under it
+        private const float FriendCardRadius = 18f;
 
         // The square plate behind a profile picture: it would show at the corners.
         private static readonly string[] _platePanes = ["P_CardBase"];
 
         // The user's own picture (a button of their page) is drawn by the system's own shapes
         // (shadow, border): it has a setting of its own for round corners, the one the round
-        // pencil mark on it uses. The picture is 396 wide there, its cursor a little more.
+        // pencil mark on it uses. The picture is 396 wide there, its cursor a little more: half of
+        // it makes it round, as the pictures of people are on the console.
         private const string OwnPictureLayout = "blyt/MypBtnUserIcon.bflyt";
         private const string RoundSetting = "S_RoundRadius";
-        private const float OwnPictureRadius = 50f;
+        private const float OwnPictureRadius = 198f;
 
         // A size no other texture of the applet has: the emulator finds the banner by it. Twice
         // the size it shows at, for the picture to stay sharp when the emulator draws larger.
@@ -109,9 +126,13 @@ namespace Ryujinx.HLE.HOS
                     files[i] = (name, layout);
                     layoutDone = true;
                 }
-                else if (_pictures.TryGetValue(name, out string material) && PatchPicture(files[i].Data, material) is { } picture)
+                else if (_pictures.TryGetValue(name, out (string Material, string Mask) round) && PatchPicture(files[i].Data, [round.Material], round.Mask) is { } picture)
                 {
                     files[i] = (name, picture);
+                }
+                else if (name == FriendTileLayout && PatchFriendTile(files[i].Data) is { } tile)
+                {
+                    files[i] = (name, tile);
                 }
                 else if (name == OwnPictureLayout && PatchOwnPicture(files[i].Data) is { } rounded)
                 {
@@ -654,27 +675,62 @@ namespace Ryujinx.HLE.HOS
             return section.ToArray();
         }
 
-        // A profile picture: a second texture on its material, that cuts the corners round.
-        private static byte[] PatchPicture(byte[] layout, string pictureMaterial)
+        // A profile picture: a second texture on its material, that cuts the corners round (or
+        // all of it round, with the round mask).
+        private static byte[] PatchPicture(byte[] layout, string[] pictureMaterials, string mask)
         {
             List<byte[]> sections = Sections(layout, out int header);
+
+            return PatchPictures(sections, pictureMaterials, mask) ? Layout_(layout, header, sections) : null;
+        }
+
+        private static bool PatchPictures(List<byte[]> sections, string[] pictureMaterials, string mask)
+        {
             List<byte[]> materials = Materials(sections, out int materialsAt);
-            int at = materials?.FindIndex(m => MaterialName(m) == pictureMaterial) ?? -1;
+            int texture = -1;
+            bool done = false;
 
-            // the material as the applet has it: one texture, drawn as it is
-            if (at < 0 || materials[at].Length != 0x54 || BinaryPrimitives.ReadUInt32LittleEndian(materials[at].AsSpan(0x1C)) != 0x15)
+            foreach (string pictureMaterial in pictureMaterials)
             {
-                return null;
+                int at = materials?.FindIndex(m => MaterialName(m) == pictureMaterial) ?? -1;
+
+                // the material as the applet has it: one texture, drawn as it is
+                if (at < 0 || materials[at].Length != 0x54 || BinaryPrimitives.ReadUInt32LittleEndian(materials[at].AsSpan(0x1C)) != 0x15)
+                {
+                    continue;
+                }
+
+                if (texture < 0)
+                {
+                    texture = AddTexture(sections, mask);
+
+                    if (texture < 0)
+                    {
+                        return false;
+                    }
+                }
+
+                materials[at] = MaskedMaterial(materials[at], texture);
+                done = true;
             }
 
-            int texture = AddTexture(sections, MaskTexture);
-
-            if (texture < 0)
+            if (!done)
             {
-                return null;
+                return false;
             }
 
-            byte[] was = materials[at];
+            sections[materialsAt] = MaterialSection(materials);
+
+            foreach (byte[] plate in sections.Where(s => Kind(s) == "pic1" && _platePanes.Contains(PaneName(s))))
+            {
+                plate[8] &= 0xFE; // not shown
+            }
+
+            return true;
+        }
+
+        private static byte[] MaskedMaterial(byte[] was, int texture)
+        {
 
             using MemoryStream material = new();
 
@@ -690,12 +746,46 @@ namespace Ryujinx.HLE.HOS
             material.Write(was, 0x44, 0x10);
             material.Write([1, 1, 0, 0]);                        // colour and opacity: one times the other
 
-            materials[at] = material.ToArray();
-            sections[materialsAt] = MaterialSection(materials);
+            return material.ToArray();
+        }
 
-            foreach (byte[] plate in sections.Where(s => Kind(s) == "pic1" && _platePanes.Contains(PaneName(s))))
+        // A friend of the list: the picture smaller and round, in the card's margins; the
+        // nickname and the status under it; the card and its cursor with rounder corners.
+        private static byte[] PatchFriendTile(byte[] layout)
+        {
+            List<byte[]> sections = Sections(layout, out int header);
+
+            if (!PatchPictures(sections, _friendTilePictures, CircleTexture))
             {
-                plate[8] &= 0xFE; // not shown
+                return null;
+            }
+
+            byte[] Pane(string name) => sections.FirstOrDefault(s => Kind(s) is "pan1" or "pic1" && PaneName(s) == name);
+
+            if (Pane("N_Image") is not { } image || Pane("N_Text") is not { } text)
+            {
+                return null;
+            }
+
+            BinaryPrimitives.WriteSingleLittleEndian(image.AsSpan(0x30), FriendPictureY);
+            BinaryPrimitives.WriteSingleLittleEndian(image.AsSpan(0x44), FriendPictureScale);
+            BinaryPrimitives.WriteSingleLittleEndian(image.AsSpan(0x48), FriendPictureScale);
+            BinaryPrimitives.WriteSingleLittleEndian(text.AsSpan(0x30), FriendTextY);
+
+            // the plate behind the texts: the card is all one colour, as on the console
+            if (Pane("P_BgText") is { } textPlate)
+            {
+                textPlate[8] &= 0xFE;
+            }
+
+            for (int i = 0; i + 1 < sections.Count; i++)
+            {
+                if (Kind(sections[i + 1]) == "usd1" && Kind(sections[i]) is "pic1" or "pan1" &&
+                    PaneName(sections[i]) is "P_BtnCardBase" or "P_BtnCardBaseInv" or "P_BtnDecideKey" or "P_BtnTouch" or "N_BtnFocusKey" or "P_InnerCursor" or "P_BgAll" &&
+                    Round(sections[i + 1], FriendCardRadius) is { } settings)
+                {
+                    sections[i + 1] = settings;
+                }
             }
 
             return Layout_(layout, header, sections);
@@ -725,6 +815,24 @@ namespace Ryujinx.HLE.HOS
 
             LayoutConverter.ConvertLinearToBlockLinear(maskData, MaskSize, MaskSize, MaskSize, 1, 1 << BlockHeightLog2, mask);
 
+            // the round one: a disc, its edge smoothed over a pixel
+            byte[] circle = new byte[MaskSize * MaskSize];
+            float centre = MaskSize / 2f;
+
+            for (int y = 0; y < MaskSize; y++)
+            {
+                for (int x = 0; x < MaskSize; x++)
+                {
+                    float d = MathF.Sqrt((x + 0.5f - centre) * (x + 0.5f - centre) + (y + 0.5f - centre) * (y + 0.5f - centre));
+
+                    circle[y * MaskSize + x] = (byte)(Math.Clamp(centre - d + 0.5f, 0f, 1f) * 255f);
+                }
+            }
+
+            byte[] circleData = new byte[MaskSize * MaskSize];
+
+            LayoutConverter.ConvertLinearToBlockLinear(circleData, MaskSize, MaskSize, MaskSize, 1, 1 << BlockHeightLog2, circle);
+
             // the banner before it is painted: nothing
             byte[] bannerData = new byte[(BannerWidth * 4 + 63) / 64 * 64 * ((BannerHeight + 127) / 128 * 128)];
 
@@ -740,6 +848,7 @@ namespace Ryujinx.HLE.HOS
             List<(string, int, int, uint, uint, int, byte[])> added =
             [
                 (MaskTexture, MaskSize, MaskSize, 0x0201u, 0x02010101u, BlockHeightLog2, maskData),
+                (CircleTexture, MaskSize, MaskSize, 0x0201u, 0x02010101u, BlockHeightLog2, circleData),
                 (OwnBannerTexture, OwnBannerWidth, BannerHeight, 0x0B01u, 0x05040302u, BlockHeightLog2, ownData),
             ];
 

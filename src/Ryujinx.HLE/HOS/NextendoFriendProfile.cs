@@ -226,7 +226,7 @@ namespace Ryujinx.HLE.HOS
             using SKCanvas canvas = new(picture);
             using SKPaint smooth = new() { IsAntialias = true, FilterQuality = SKFilterQuality.High };
 
-            canvas.DrawBitmap(ring, SKRect.Create(0, 0, side, side), smooth);
+            canvas.DrawBitmap(ring, RingPlace(side), smooth);
 
             if (mark != 0)
             {
@@ -283,7 +283,7 @@ namespace Ryujinx.HLE.HOS
                     using SKBitmap frame = under.Copy();
                     using SKCanvas canvas = new(frame);
 
-                    canvas.DrawBitmap(ring, SKRect.Create(0, 0, side, side), smooth);
+                    canvas.DrawBitmap(ring, RingPlace(side), smooth);
                     canvas.Flush();
                     frames.Add((frame.Bytes, Math.Max(milliseconds, ShortestFrame)));
                 }
@@ -310,12 +310,25 @@ namespace Ryujinx.HLE.HOS
             return to?.Bytes;
         }
 
+        // The pictures of people are round in the HOME Menu (a round mask on a square picture):
+        // the photo fills most of that circle, and the decoration keeps Discord's proportion to it
+        // (20 % larger), its outer edge a little past the circle. A photo at 1/1.2 of the square,
+        // the decoration at the square, was too small once the mask made it round.
+        private const float PhotoShrink = 1.12f;
+
+        private static SKRect RingPlace(int side)
+        {
+            float size = side / PhotoShrink * 1.2f;
+
+            return SKRect.Create((side - size) / 2, (side - size) / 2, size, size);
+        }
+
         // The picture under a decoration, as Discord draws it: the photo in a circle, the
         // decoration 20 % larger around it. The corners, outside the circle, take the photo
         // itself, blurred and darker (the HOME Menu shows square pictures).
         private static SKBitmap Backdrop(SKBitmap photo, int side)
         {
-            float inner = side / 1.2f;
+            float inner = side / PhotoShrink;
             SKRect circle = SKRect.Create((side - inner) / 2, (side - inner) / 2, inner, inner);
 
             SKBitmap picture = new(new SKImageInfo(side, side, SKColorType.Rgba8888, SKAlphaType.Premul));
