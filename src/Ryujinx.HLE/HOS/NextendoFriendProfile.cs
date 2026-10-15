@@ -25,7 +25,6 @@ namespace Ryujinx.HLE.HOS
         private const ulong MyPageProgram = 0x0100000000001013;
 
         // The page draws its textures a moment after it asks for the friend: given again meanwhile.
-        private static readonly int[] _delays = [0, 120, 250, 400, 600, 900, 1300, 1800, 2600, 4000];
 
         private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(6) };
         private static readonly ConcurrentDictionary<string, SKBitmap> _badges = new();
@@ -73,18 +72,40 @@ namespace Ryujinx.HLE.HOS
 
                     Logger.Info?.Print(LogClass.Application, $"[Nextendo] friend page: banner of 0x{pid:X} ({friend.Badges?.Length ?? 0} badge(s), colour \"{friend.Color}\", {banner.Count} picture(s))");
 
-                    // a still one: given again for a while (an animated one is given all the time)
-                    foreach (int delay in banner.Count > 1 ? [] : _delays)
+                    // A still one: given until the applet has made its texture (it makes it only
+                    // when it draws the page: later on a slow machine, after the 12 seconds the
+                    // banner used to be given for, which left it empty "sometimes"), then twice
+                    // more. Kept in the applet's memory too: read again from there, the texture
+                    // keeps it. An animated one is given all the time.
+                    if (banner.Count == 1)
                     {
-                        await Task.Delay(delay);
+                        long until = Environment.TickCount64 + 20000;
+                        int given = 0;
 
-                        // the page of another friend meanwhile: theirs is the one to show
-                        if (turn != _shown || device != _device)
+                        while (given < 3 && Environment.TickCount64 < until)
                         {
-                            return;
+                            // the page of another friend meanwhile: theirs is the one to show
+                            if (turn != _shown || device != _device)
+                            {
+                                return;
+                            }
+
+                            int found = await UploadCounted(device, NextendoFriendPage.BannerWidth, banner[0].Pixels);
+
+                            if (found < 0)
+                            {
+                                return; // the applet is closed
+                            }
+
+                            given += found > 0 ? 1 : 0;
+
+                            await Task.Delay(given == 0 ? 200 : 700);
                         }
 
-                        Upload(device, NextendoFriendPage.BannerWidth, banner[0].Pixels);
+                        if (given == 0)
+                        {
+                            Logger.Warning?.Print(LogClass.Application, $"[Nextendo] friend page: the banner texture of 0x{pid:X} never appeared");
+                        }
                     }
 
                     // an animated one: its pictures in turn, as long as this page is the one shown
@@ -120,6 +141,25 @@ namespace Ryujinx.HLE.HOS
             }
 
             return running;
+        }
+
+        // A still banner given to the applet and kept in its memory: how many textures took it
+        // (0 while the applet has not made it yet), -1 when the applet does not run.
+        private static Task<int> UploadCounted(Switch device, int width, byte[] pixels)
+        {
+            KProcess page = device.System.KernelContext.Processes.Values.FirstOrDefault(p => p.TitleId == MyPageProgram && p.State != ProcessState.Exited);
+
+            if (page == null)
+            {
+                return Task.FromResult(-1);
+            }
+
+            TaskCompletionSource<int> found = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            device.Gpu.NextendoUploadTexture(page.Pid, width, NextendoFriendPage.BannerHeight, pixels, 4, n => found.TrySetResult(n), persist: true);
+
+            // the renderer gives its answer at its next frame; none within a second: try again
+            return Task.WhenAny(found.Task, Task.Delay(1000)).ContinueWith(t => found.Task.IsCompleted ? found.Task.Result : 0);
         }
 
         // The own banner, when it is an animated one: its pictures in turn while the applet runs

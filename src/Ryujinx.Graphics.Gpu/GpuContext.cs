@@ -479,14 +479,17 @@ namespace Ryujinx.Graphics.Gpu
         // Asked from other threads than the renderer's (the deferred actions are its own, not shared).
         private readonly ConcurrentQueue<Action> _nextendoUploads = new();
 
-        public void NextendoUploadTexture(ulong pid, int width, int height, byte[] pixels, int bytesPerPixel = 1)
+        /// <param name="done">Gets the number of textures given the pixels.</param>
+        /// <param name="persist">Also writes them in the memory of the program (pictures it never writes itself).</param>
+        public void NextendoUploadTexture(ulong pid, int width, int height, byte[] pixels, int bytesPerPixel = 1, Action<int> done = null, bool persist = false)
         {
             _nextendoUploads.Enqueue(() =>
             {
-                if (PhysicalMemoryRegistry.TryGetValue(pid, out PhysicalMemory memory))
-                {
-                    memory.TextureCache.NextendoUpload(width, height, pixels, bytesPerPixel);
-                }
+                int found = PhysicalMemoryRegistry.TryGetValue(pid, out PhysicalMemory memory)
+                    ? memory.TextureCache.NextendoUpload(width, height, pixels, bytesPerPixel, persist)
+                    : 0;
+
+                done?.Invoke(found);
             });
         }
 

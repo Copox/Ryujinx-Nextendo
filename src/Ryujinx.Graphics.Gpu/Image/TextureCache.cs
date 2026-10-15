@@ -19,8 +19,10 @@ namespace Ryujinx.Graphics.Gpu.Image
     class TextureCache : IDisposable
     {
         /// <summary>[Nextendo] See GpuContext.NextendoUploadTexture.</summary>
-        public void NextendoUpload(int width, int height, byte[] pixels, int bytesPerPixel)
+        public int NextendoUpload(int width, int height, byte[] pixels, int bytesPerPixel, bool persist = false)
         {
+            int found = 0;
+
             foreach (Texture texture in _textures)
             {
                 if (texture.Info.Width == width && texture.Info.Height == height && texture.Info.FormatInfo.BytesPerPixel == bytesPerPixel &&
@@ -28,8 +30,27 @@ namespace Ryujinx.Graphics.Gpu.Image
                     texture.Info.Levels == 1 && texture.Info.GetLayers() == 1 && pixels.Length == width * height * bytesPerPixel)
                 {
                     texture.SetData(Ryujinx.Common.Memory.MemoryOwner<byte>.RentCopy(pixels));
+
+                    // also in the memory of the program, laid out as the graphics processor reads
+                    // it: when the texture is read again from there (the page shown again, the
+                    // memory touched), it keeps the picture instead of the program's empty one
+                    if (persist)
+                    {
+                        try
+                        {
+                            _physicalMemory.Write(texture.Range, texture.ConvertFromHostCompatibleFormat(Span<byte>.Empty, pixels));
+                        }
+                        catch (Exception)
+                        {
+                            // the picture stays on the graphics processor only
+                        }
+                    }
+
+                    found++;
                 }
             }
+
+            return found;
         }
 
         /// <summary>
