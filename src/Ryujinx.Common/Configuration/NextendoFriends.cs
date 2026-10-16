@@ -263,6 +263,41 @@ namespace Ryujinx.Common.Configuration
             }
         }
 
+        /// <summary>
+        /// [Nextendo] The list fetched again NOW (3 s at most), for a caller that may wait: a friend
+        /// coming online is announced from a fresher list than this cache (refreshed every 10 s),
+        /// and the HOME Menu, reading the friend here right after the notification, still saw them
+        /// offline, with no title: the notification said "Online" instead of "HOME Menu".
+        /// </summary>
+        public static void RefreshNow(int timeoutMs = 3000)
+        {
+            if (!NextendoAccount.IsLinked)
+            {
+                return;
+            }
+
+            long deadline = Environment.TickCount64 + timeoutMs;
+
+            while (System.Threading.Interlocked.Exchange(ref _refreshing, 1) != 0)
+            {
+                if (Environment.TickCount64 >= deadline)
+                {
+                    return;
+                }
+
+                System.Threading.Thread.Sleep(50);
+            }
+
+            try
+            {
+                Refresh();
+            }
+            finally
+            {
+                System.Threading.Interlocked.Exchange(ref _refreshing, 0);
+            }
+        }
+
         public static void Invalidate()
         {
             lock (_lock)
