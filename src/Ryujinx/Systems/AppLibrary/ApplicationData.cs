@@ -397,6 +397,8 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             "0100a3d008c5c000" => "4.0.0",  // Pokémon Scarlet
             "010028600ebda000" => "1.2.2",  // Super Mario 3D World + Bowser's Fury
             "0100f43008c44000" => "2.0.2",  // Pokémon Legends: Z-A
+            "0100abf008968000" => "1.3.2",  // Pokémon Sword
+            "01008db008c2c000" => "1.3.2",  // Pokémon Shield
             // [Nextendo 2026-09-08] Super Mario Bros. Wonder. Les correctifs integres (contournement
             // du certificat epingle + deux rejets de nom de pair) sont lies a l'identifiant de build
             // FF773E90972D544EB79406EAA65396D53C43EFB9, propre a cette version exacte : une autre

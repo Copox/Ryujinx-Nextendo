@@ -36,6 +36,9 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd.Impl
         private const ulong VioletUpdateTitleId = 0x01008F6008C5E800;
         private const ulong ScarletTitleId = 0x0100A3D008C5C000;
         private const ulong ScarletUpdateTitleId = 0x0100A3D008C5C800;
+        private const ulong SwordTitleId = 0x0100ABF008968000;
+        private const ulong ShieldTitleId = 0x01008DB008C2C000;
+        private const int SwShLocalListenerPort = 12345;
         private const int VioletOriginalGamesyncPort = 7575;
         private const int VioletDedicatedGamesyncPort = 8463;
 
@@ -364,7 +367,11 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd.Impl
             // same local port moments later for its peer-to-peer traffic, and a fresh socket
             // would get a fresh NAT mapping — leaving the peer probing an endpoint that no
             // longer exists. The keeper owns it from here (and closes it if nobody reclaims it).
-            if (NextendoUdpPortKeeper.TryPark(Socket))
+            // Sword/Shield closes its local Y-Comm listener when going online; parking it would keep
+            // port 12345 bound and stop another instance from starting Y-Comm.
+            bool isSwShLocalListener = (_programId == SwordTitleId || _programId == ShieldTitleId)
+                && LocalEndPoint?.Port == SwShLocalListenerPort;
+            if (!isSwShLocalListener && NextendoUdpPortKeeper.TryPark(Socket))
             {
                 // Drop our reference: the keeper owns it now, and may well hand it to another
                 // ManagedSocket. Two live objects sharing one socket is exactly the kind of bug
