@@ -346,8 +346,14 @@ namespace Ryujinx.HLE.HOS
 
                 int frameAt = sections.FindIndex(s => Kind(s) == "pic1" && PaneName(s) == "P_NxBase");
                 float shownSide = h - 24; // the frame's height less 12 above and below
-                float right = w / 2 - 12 - shownSide / 2;
-                byte[] game = BannerPane(picture, (right, 0f, shownSide, shownSide), gameMaterials.Count - 1, "P_NxGame");
+
+                // a child is placed from its parent's anchor, which for this frame (as the system's)
+                // is its top edge (22.5.0: origin 0x04): from the centre, half the frame lower
+                int origin = ours[9];
+                float fromX = (origin & 3) switch { 1 => w / 2, 2 => -w / 2, _ => 0f };
+                float fromY = ((origin >> 2) & 3) switch { 1 => -h / 2, 2 => h / 2, _ => 0f };
+                float right = fromX + w / 2 - 12 - shownSide / 2;
+                byte[] game = BannerPane(picture, (right, fromY, shownSide, shownSide), gameMaterials.Count - 1, "P_NxGame");
 
                 sections.Insert(frameAt + 1, [(byte)'p', (byte)'a', (byte)'e', (byte)'1', 8, 0, 0, 0]);
                 sections.Insert(frameAt + 1, game);
