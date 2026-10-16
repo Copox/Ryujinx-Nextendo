@@ -29,6 +29,10 @@ namespace Ryujinx.Horizon.Bcat.Ipc
             0x0100A3D008C5C000 => System.IO.Path.Combine(Root, "0100a3d008c5c000"),
             0x0100F43008C44000 => System.IO.Path.Combine(Root, "0100f43008c44000"),
             0x0100D2F00D5C0000 => System.IO.Path.Combine(Root, "0100d2f00d5c0000"),
+            // [Nextendo] Super Smash Bros. Ultimate : le bandeau du menu principal (dossier
+            // line_news) vient de son cache de livraison. Dossier a lui, sinon il verrait les
+            // dossiers de Splatoon 2 poses a la racine commune.
+            0x01006A800016E000 => System.IO.Path.Combine(Root, "01006a800016e000"),
             _ => Root,
         };
 
@@ -37,7 +41,8 @@ namespace Ryujinx.Horizon.Bcat.Ipc
             name.Equals("01008f6008c5e000", StringComparison.OrdinalIgnoreCase) ||
             name.Equals("0100a3d008c5c000", StringComparison.OrdinalIgnoreCase) ||
             name.Equals("0100f43008c44000", StringComparison.OrdinalIgnoreCase) ||
-            name.Equals("0100d2f00d5c0000", StringComparison.OrdinalIgnoreCase);
+            name.Equals("0100d2f00d5c0000", StringComparison.OrdinalIgnoreCase) ||
+            name.Equals("01006a800016e000", StringComparison.OrdinalIgnoreCase);
 
         public static bool PreferServerSeed(string root) =>
             root == System.IO.Path.Combine(Root, Ryujinx.Common.NextendoSplatoon3Bcat.TitleId) &&
