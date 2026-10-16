@@ -29,6 +29,8 @@ namespace Ryujinx.Horizon.Bcat.Ipc
             0x0100A3D008C5C000 => System.IO.Path.Combine(Root, "0100a3d008c5c000"),
             0x0100F43008C44000 => System.IO.Path.Combine(Root, "0100f43008c44000"),
             0x0100D2F00D5C0000 => System.IO.Path.Combine(Root, "0100d2f00d5c0000"),
+            0x0100ABF008968000 => System.IO.Path.Combine(Root, "0100abf008968000"),
+            0x01008DB008C2C000 => System.IO.Path.Combine(Root, "01008db008c2c000"),
             _ => Root,
         };
 
@@ -37,7 +39,9 @@ namespace Ryujinx.Horizon.Bcat.Ipc
             name.Equals("01008f6008c5e000", StringComparison.OrdinalIgnoreCase) ||
             name.Equals("0100a3d008c5c000", StringComparison.OrdinalIgnoreCase) ||
             name.Equals("0100f43008c44000", StringComparison.OrdinalIgnoreCase) ||
-            name.Equals("0100d2f00d5c0000", StringComparison.OrdinalIgnoreCase);
+            name.Equals("0100d2f00d5c0000", StringComparison.OrdinalIgnoreCase) ||
+            name.Equals("0100abf008968000", StringComparison.OrdinalIgnoreCase) ||
+            name.Equals("01008db008c2c000", StringComparison.OrdinalIgnoreCase);
 
         public static bool PreferServerSeed(string root) =>
             root == System.IO.Path.Combine(Root, Ryujinx.Common.NextendoSplatoon3Bcat.TitleId) &&
