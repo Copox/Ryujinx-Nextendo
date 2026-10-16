@@ -253,6 +253,12 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd
             List<IFileDescriptor> writeFds = _context.RetrieveFileDescriptorsFromMask(context.Memory.GetSpan(writeFdsInBufferPosition, (int)writeFdsInBufferSize));
             List<IFileDescriptor> errorFds = _context.RetrieveFileDescriptorsFromMask(context.Memory.GetSpan(errorFdsInBufferPosition, (int)errorFdsInBufferSize));
 
+            // Like FreeBSD, a closed descriptor fails the select (Friday the 13th's receive thread stops on it after the private-lobby socket swap).
+            if (readFds.Contains(null) || writeFds.Contains(null) || errorFds.Contains(null))
+            {
+                return WriteBsdResult(context, -1, LinuxError.EBADF);
+            }
+
             int actualFdsCount = readFds.Count + writeFds.Count + errorFds.Count;
 
             if (fdsCount == 0 || actualFdsCount == 0)
