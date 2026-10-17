@@ -136,9 +136,9 @@ namespace Ryujinx.Graphics.Vulkan
 
             _uniformBufferRefs = new BufferRef[Constants.MaxUniformBufferBindings];
             _storageBufferRefs = new BufferRef[Constants.MaxStorageBufferBindings];
-            _textureRefs = new TextureRef[Constants.MaxTextureBindings * 2];
+            _textureRefs = new TextureRef[Constants.MaxTextureBindings * 2 + Constants.ReservedTextureBindings];
             _imageRefs = new ImageRef[Constants.MaxImageBindings * 2];
-            _bufferTextureRefs = new TextureBuffer[Constants.MaxTextureBindings * 2];
+            _bufferTextureRefs = new TextureBuffer[Constants.MaxTextureBindings * 2 + Constants.ReservedTextureBindings];
             _bufferImageRefs = new TextureBuffer[Constants.MaxImageBindings * 2];
 
             _textureArrayRefs = [];
