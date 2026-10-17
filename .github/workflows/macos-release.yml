@@ -97,3 +97,17 @@ jobs:
         run: |
           gh release upload "${{ steps.ver.outputs.tag }}" "${{ steps.art.outputs.file }}" \
             --clobber --repo "${{ github.repository }}"
+
+      - name: Upload arch-named copies for the built-in updater
+        # Installed builds up to 1.9.5 take a macOS asset only when its name carries x64 or arm64
+        # (Updater.Nextendo.cs FindPlatformAsset), and the universal bundle carries neither: without
+        # these copies a Mac already installed never sees the release. Same file under both names.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          SRC="${{ steps.art.outputs.file }}"
+          BASE="Ryujinx-Nextendo-${{ steps.ver.outputs.version }}-macos"
+          cp "$SRC" "$BASE-arm64.tar.gz"
+          cp "$SRC" "$BASE-x64.tar.gz"
+          gh release upload "${{ steps.ver.outputs.tag }}" "$BASE-arm64.tar.gz" "$BASE-x64.tar.gz" \
+            --clobber --repo "${{ github.repository }}"
