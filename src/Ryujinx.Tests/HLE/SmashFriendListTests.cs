@@ -15,5 +15,14 @@ namespace Ryujinx.Tests.HLE
         {
             Assert.That(NextendoFriends.ReadsListOnlyOnLaunch(titleId), Is.EqualTo(expected));
         }
+
+        [Test]
+        public void TheLaunchWaitIsGivenOnlyOnce()
+        {
+            NextendoFriends.TakeLaunchWait(); // etat laisse par un autre test : sans importance
+
+            Assert.That(NextendoFriends.TakeLaunchWait(), Is.False);
+            Assert.That(NextendoFriends.TakeLaunchWait(), Is.False);
+        }
     }
 }

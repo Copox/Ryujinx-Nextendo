@@ -206,21 +206,31 @@ namespace Ryujinx.Common.Configuration
         private static long _lastFetchMs;
         private static int _refreshing;
 
+        // [Nextendo] Nombre de lectures de la liste terminees (reussies ou non). GetWarm attend la
+        // fin de la lecture en cours en le surveillant, jamais une deuxieme lecture.
+        private static int _attempts;
+
         // [Nextendo] Vrai des que la liste a ete lue au moins une fois aupres du serveur (meme vide).
         // Sans lui, GetWarm attendait tout son delai pour un compte qui n'a reellement aucun ami.
         private static volatile bool _loaded;
+
+        // [Nextendo] 1 des que le jeu en cours a eu son unique attente de la liste (TakeLaunchWait),
+        // remis a 0 a chaque changement de jeu (InitializePresence).
+        private static int _launchWaitTaken;
 
         /// <summary>La liste a-t-elle deja ete lue aupres du serveur depuis le demarrage ?</summary>
         public static bool HasLoaded => _loaded;
 
         /// <summary>
         /// [Nextendo] Super Smash Bros. Ultimate. Mesure dans son main 13.0.5 : sa liste d'amis locale
-        /// (une table indexee par identifiant de compte) n'est remplie que par un seul appel a
-        /// nn::friends::GetFriendList (0x3756bf0, filtre vide, 300 au plus), fait au lancement
-        /// (0x22b7d00) puis seulement quand la file de notifications rend un FriendListUpdate
-        /// (0x22dc484). La recherche d'arenes d'amis (0x370848c) y prend TOUS les identifiants, sans
-        /// filtre, pour FindMatchmakeSessionByParticipant. Une liste encore vide a ce moment-la = zero
-        /// identifiant envoye au serveur pour toute la partie, donc « No arenas found ».
+        /// (une table indexee par identifiant de compte) n'est remplie que par nn::friends::GetFriendList
+        /// (0x3756bf0, filtre vide, 300 au plus), appele au lancement (0x22b7d00) puis seulement quand
+        /// la file de notifications rend un FriendListUpdate (0x22dc484). GetEvent du service de
+        /// notifications en signale un des que le jeu l'ouvre (NotificationService.GetEvent), d'ou deux
+        /// appels au lancement, a 0,6 s d'ecart (journal Ryujinx du 17/10 : 18.866 s puis 19.472 s).
+        /// La recherche d'arenes d'amis (0x370848c) y prend TOUS les identifiants, sans filtre, pour
+        /// FindMatchmakeSessionByParticipant. Une liste encore vide a ce moment-la = zero identifiant
+        /// envoye au serveur pour toute la partie, donc « No arenas found ».
         /// </summary>
         public const string SmashUltimateTitleId = "01006a800016e000";
 
@@ -229,35 +239,50 @@ namespace Ryujinx.Common.Configuration
             => string.Equals(titleId, SmashUltimateTitleId, StringComparison.OrdinalIgnoreCase);
 
         /// <summary>
+        /// [Nextendo] Vrai une seule fois par lancement de jeu : l'appelant qui l'obtient peut attendre
+        /// la liste (GetWarm), les suivants la prennent telle quelle. Sans cela, un serveur lent
+        /// bloquait chacun des deux GetFriendList de Smash jusqu'au bout du delai.
+        /// </summary>
+        public static bool TakeLaunchWait()
+            => System.Threading.Interlocked.Exchange(ref _launchWaitTaken, 1) == 0;
+
+        /// <summary>
         /// [Nextendo] Liste d'amis GARANTIE chaude, avec attente BORNEE.
         ///
-        /// Get() ne bloque jamais et remplit en tache de fond — indispensable pour les jeux NEX, qui
+        /// Get() ne bloque jamais et remplit en tache de fond, indispensable pour les jeux NEX, qui
         /// interrogent en boucle depuis le fil online : un blocage la-bas coupe les acquittements
         /// PRUDP et le serveur declare l'erreur de communication. Mais Splatoon 3, lui, demande sa
         /// liste UNE SEULE FOIS, tot (mesure : a 39 s de boot, cache encore vide) et repart avec
         /// zero ami sans jamais redemander. Pour ce cas precis on accepte une attente COURTE et
         /// plafonnee, jamais sur le chemin des jeux NEX.
+        ///
+        /// On n'attend que la fin de la lecture en cours (ou de celle que Get() vient de lancer),
+        /// reussie ou non, et jamais une deuxieme : un serveur en panne rend la main des que sa
+        /// reponse (ou son delai de 8 s) est la, au lieu de relancer /api/friends a chaque tour.
         /// </summary>
         public static IReadOnlyList<Entry> GetWarm(int timeoutMs)
         {
+            int attempts = System.Threading.Volatile.Read(ref _attempts);
             IReadOnlyList<Entry> list = Get(); // declenche le rafraichissement de fond si besoin
             if (list.Count > 0 || _loaded || !NextendoAccount.IsLinked)
             {
                 return list;
             }
 
+            // _attempts est incremente AVANT que _refreshing retombe a 0 : une lecture finie entre
+            // les deux lectures ci-dessous est donc toujours vue.
             long deadline = Environment.TickCount64 + timeoutMs;
-            while (Environment.TickCount64 < deadline)
+            while (System.Threading.Volatile.Read(ref _refreshing) != 0
+                && System.Threading.Volatile.Read(ref _attempts) == attempts
+                && Environment.TickCount64 < deadline)
             {
                 System.Threading.Thread.Sleep(50);
-                list = Get();
-                if (list.Count > 0 || _loaded)
-                {
-                    break;
-                }
             }
 
-            return list;
+            lock (_lock)
+            {
+                return _cache;
+            }
         }
 
         public static IReadOnlyList<Entry> Get()
@@ -275,7 +300,11 @@ namespace Ryujinx.Common.Configuration
                 System.Threading.Tasks.Task.Run(() =>
                 {
                     try { Refresh(); }
-                    finally { System.Threading.Interlocked.Exchange(ref _refreshing, 0); }
+                    finally
+                    {
+                        System.Threading.Interlocked.Increment(ref _attempts);
+                        System.Threading.Interlocked.Exchange(ref _refreshing, 0);
+                    }
                 });
             }
 
@@ -316,6 +345,7 @@ namespace Ryujinx.Common.Configuration
             }
             finally
             {
+                System.Threading.Interlocked.Increment(ref _attempts);
                 System.Threading.Interlocked.Exchange(ref _refreshing, 0);
             }
         }
@@ -696,6 +726,14 @@ namespace Ryujinx.Common.Configuration
                 using HttpRequestMessage req = new(HttpMethod.Get, baseUrl.TrimEnd('/') + "/api/friends");
                 req.Headers.Add("Authorization", "Bearer " + NextendoAccount.NexToken);
                 using HttpResponseMessage resp = _http.SendAsync(req).GetAwaiter().GetResult();
+
+                // Une reponse d'erreur (503, 401...) est un echec, pas une liste vide : le cache
+                // reste tel quel.
+                if (!resp.IsSuccessStatusCode)
+                {
+                    return;
+                }
+
                 string json = resp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
 
                 List<Entry> list = new();
@@ -810,13 +848,23 @@ namespace Ryujinx.Common.Configuration
                     _cache = list;
                     _requests = requests;
                     _sent = sent;
-                    _lastFetchMs = Environment.TickCount64;
                     _loaded = true;
                 }
             }
             catch
             {
                 // keep the stale cache on any failure
+            }
+            finally
+            {
+                // [Nextendo] Une tentative toutes les 10 s, reussie OU NON (sans jeton, erreur, delai
+                // depasse). Pose seulement en cas de succes, Get() relancait /api/friends et /api/me
+                // a chaque appel tant que le serveur ne repondait pas (258 requetes en 16 s mesurees
+                // sous GetWarm).
+                lock (_lock)
+                {
+                    _lastFetchMs = Environment.TickCount64;
+                }
             }
         }
 
@@ -1101,9 +1149,12 @@ namespace Ryujinx.Common.Configuration
 
                 PublishGame();
 
-                // La liste d'amis lue des le lancement du jeu, pas au premier appel du jeu : Smash
-                // la demande une fois, tot, et la premiere lecture (historique, liaison, puis
-                // /api/friends) n'etait pas finie quand il l'a demandee. Ne bloque jamais.
+                // Le nouveau jeu a droit a sa propre attente de la liste (TakeLaunchWait).
+                System.Threading.Interlocked.Exchange(ref _launchWaitTaken, 0);
+
+                // La liste d'amis lue des le lancement du jeu, pour qu'elle soit deja la au premier
+                // GetFriendList de Smash. Seule /api/friends compte (8 s au plus) : l'historique et
+                // la liaison du compte partent en tache de fond. Ne bloque jamais.
                 if (!string.IsNullOrEmpty(CurrentTitleId))
                 {
                     Get();

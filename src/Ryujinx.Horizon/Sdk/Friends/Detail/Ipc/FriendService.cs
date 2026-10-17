@@ -32,8 +32,8 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
         private const string Splatoon3TitleId = "0100c2500fc20000";
         private const string WonderTitleId = "010015100b514000";
 
-        // Attente maximale de la premiere lecture de la liste pour Smash Bros. Ultimate : historique,
-        // liaison du compte puis /api/friends (8 s au plus chacun), sur un lancement deja en cours.
+        // Attente maximale de la lecture de la liste en cours pour Smash Bros. Ultimate : seule
+        // /api/friends compte (delai HTTP de 8 s), l'historique et la liaison partent en tache de fond.
         private const int SmashListWaitMs = 8000;
 
         private static bool WantsNsaIds()
@@ -238,14 +238,17 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             // NPLN games enumerate the full list using the requested offset.
             if (offset == 0 || WantsNsaIds())
             {
-                // Smash Bros. Ultimate ne lit cette liste qu'au lancement (et sur FriendListUpdate,
-                // que rien ne lui envoie ensuite) : servie vide, il cherche les arenes d'amis avec
-                // zero identifiant pour toute la partie. On l'attend donc, une fois, au lancement ;
-                // une fois lue (meme vide), plus aucune attente. Les jeux NEX qui interrogent en
-                // boucle gardent le chemin non bloquant.
-                bool smashOnce = NextendoFriends.ReadsListOnlyOnLaunch(NextendoFriends.CurrentTitleId);
+                // Smash Bros. Ultimate ne lit cette liste qu'au lancement et sur FriendListUpdate,
+                // que NotificationService.GetEvent lui signale aussitot : deux appels a 0,6 s d'ecart,
+                // puis plus rien. Servie vide, il cherche les arenes d'amis avec zero identifiant pour
+                // toute la partie. Le premier appel du lancement attend donc la fin de la lecture en
+                // cours (reussie ou non, 8 s au plus) ; les suivants, comme les jeux NEX qui
+                // interrogent en boucle, gardent le chemin non bloquant. Cette boucle sert tous les
+                // clients friends (menu HOME compris) : jamais plus d'une attente par lancement.
+                bool smashWaits = NextendoFriends.ReadsListOnlyOnLaunch(NextendoFriends.CurrentTitleId)
+                    && !WantsNsaIds() && NextendoFriends.TakeLaunchWait();
                 IReadOnlyList<NextendoFriends.Entry> friends = WantsNsaIds() ? NextendoFriends.GetWarm(2000)
-                    : smashOnce ? NextendoFriends.GetWarm(SmashListWaitMs)
+                    : smashWaits ? NextendoFriends.GetWarm(SmashListWaitMs)
                     : NextendoFriends.Get();
                 bool wantNsa = WantsNsaIds();
                 int n = Math.Min(Math.Max(0, friends.Count - offset), friendList.Length);
