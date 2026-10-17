@@ -493,11 +493,55 @@ namespace Ryujinx.Ava.Common
                     }
                 }
 
+                MirrorLocalProfile(name, image);
+
                 return (name, image);
             }
             catch
             {
                 return (null, null);
+            }
+        }
+
+        // The account is the source of truth: what it says is copied onto the local profile bound
+        // to it (the one the HOME Menu and its user page show). Only done before on login and in
+        // the Nextendo settings: a picture changed on the website or the app stayed old in the
+        // HOME Menu while the emulator's own windows showed the new one.
+        private static void MirrorLocalProfile(string name, byte[] image)
+        {
+            try
+            {
+                var am = RyujinxApp.MainWindow?.AccountManager;
+                string bound = NextendoAccount.ProfileUserId;
+
+                if (am == null || string.IsNullOrEmpty(bound))
+                {
+                    return;
+                }
+
+                foreach (var profile in am.GetAllUsers())
+                {
+                    if (profile.UserId.ToString() != bound)
+                    {
+                        continue;
+                    }
+
+                    if (image is { Length: > 0 } && (profile.Image == null || !profile.Image.AsSpan().SequenceEqual(image)))
+                    {
+                        am.SetUserImage(profile.UserId, image);
+                    }
+
+                    if (!string.IsNullOrEmpty(name) && profile.Name != name)
+                    {
+                        am.SetUserName(profile.UserId, name);
+                    }
+
+                    break;
+                }
+            }
+            catch
+            {
+                // best effort: the windows show the account's picture anyway
             }
         }
 

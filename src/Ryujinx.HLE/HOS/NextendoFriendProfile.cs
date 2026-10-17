@@ -170,7 +170,30 @@ namespace Ryujinx.HLE.HOS
             }
 
             int turn = Interlocked.Increment(ref _notificationTurn);
-            byte[] gameIcon = friend.AppId != 0 && NextendoGames.TryGet(friend.AppId, out NextendoGames.Game played) ? played.Icon : null;
+            // the title shown: the game, the Nextendo App, or the HOME Menu for a friend online without one
+            ulong title = friend.AppId != 0 ? friend.AppId : friend.Status > 0 ? NextendoGames.HomeMenuId : 0;
+            byte[] gameIcon = title != 0 && NextendoGames.TryGet(title, out NextendoGames.Game played) ? played.Icon : null;
+
+            // the icon of the game and the friend's picture, sharp, in their own textures; cleared
+            // once the notification has gone
+            if (NextendoFriendPage.NotificationGameApart)
+            {
+                using SKBitmap game = gameIcon == null ? null : SKBitmap.Decode(gameIcon);
+                byte[] photo = NextendoFriends.ProfileImage(pid);
+                using SKBitmap face = photo is { Length: > 0 } ? SKBitmap.Decode(photo) : null;
+
+                UploadOverlay(device, NextendoFriendPage.NotificationGameSide, NextendoFriendPage.NotificationGamePixels(game));
+                UploadOverlay(device, NextendoFriendPage.NotificationPictureSide, NextendoFriendPage.NotificationPicturePixels(face));
+
+                Task.Delay(NotificationMilliseconds).ContinueWith(_ =>
+                {
+                    if (turn == _notificationTurn)
+                    {
+                        UploadOverlay(device, NextendoFriendPage.NotificationGameSide, NextendoFriendPage.NotificationGamePixels(null));
+                        UploadOverlay(device, NextendoFriendPage.NotificationPictureSide, NextendoFriendPage.NotificationPicturePixels(null));
+                    }
+                });
+            }
 
             // a friend without a nameplate: the plain frame at once (the last nameplate may still
             // be on it), with the icon of their game
@@ -273,6 +296,18 @@ namespace Ryujinx.HLE.HOS
                 foreach ((SKBitmap picture, _) in pictures)
                 {
                     picture.Dispose();
+                }
+            }
+        }
+
+        // A square texture of the overlay applet (found by its size, which no other texture has).
+        private static void UploadOverlay(Switch device, int side, byte[] pixels)
+        {
+            foreach (KProcess process in device.System.KernelContext.Processes.Values)
+            {
+                if (process.TitleId == OverlayProgram && process.State != ProcessState.Exited)
+                {
+                    device.Gpu.NextendoUploadTexture(process.Pid, side, side, pixels, 4);
                 }
             }
         }

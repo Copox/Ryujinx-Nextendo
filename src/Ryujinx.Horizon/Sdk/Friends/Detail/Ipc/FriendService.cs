@@ -32,6 +32,11 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
         private const string Splatoon3TitleId = "0100c2500fc20000";
         private const string WonderTitleId = "010015100b514000";
 
+        // Attente maximale de la liste au premier GetFriendList de Smash Bros. Ultimate apres son
+        // lancement (NextendoFriends.GetForSmashLaunch) : seule /api/friends compte (delai HTTP de
+        // 8 s), l'historique et la liaison partent en tache de fond.
+        private const int SmashListWaitMs = 8000;
+
         private static bool WantsNsaIds()
             => string.Equals(NextendoFriends.CurrentTitleId, Splatoon3TitleId, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(NextendoFriends.CurrentTitleId, WonderTitleId, StringComparison.OrdinalIgnoreCase);
@@ -92,14 +97,13 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                 return PresenceStatus.Offline;
             }
 
-            // on the Nextendo App: online, with the app's card (the server gives it a title id of
-            // its own), not "playing"
-            if (entry.Platform == "app")
-            {
-                return PresenceStatus.Online;
-            }
-
-            return entry.AppField is { Length: > 0 } || entry.AppId != 0 ? PresenceStatus.OnlinePlay : PresenceStatus.Online;
+            // Online at all: "playing", always with a title (the game, the Nextendo App, or the HOME
+            // Menu, written at 0xE0 by WriteNextendoFriendV2), as the user's own presence is
+            // (GetUserPresenceViewV2). The page still says "Online" with the title's card; the
+            // overlay applet only reads the title of a friend "playing": with "Online" alone, a
+            // friend coming online without a game was announced "Online" instead of "HOME Menu".
+            // ("Playing" with a title of 0 was the "Loading failed" card: never written any more.)
+            return PresenceStatus.OnlinePlay;
         }
 
         private static FriendImpl MakeNextendoFriend(ulong netId, string nick, PresenceStatus status, byte[] appField = null, bool sameApp = true)
@@ -235,7 +239,18 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             // NPLN games enumerate the full list using the requested offset.
             if (offset == 0 || WantsNsaIds())
             {
-                IReadOnlyList<NextendoFriends.Entry> friends = WantsNsaIds() ? NextendoFriends.GetWarm(2000) : NextendoFriends.Get();
+                // Smash Bros. Ultimate ne lit cette liste qu'au lancement et sur FriendListUpdate,
+                // que NotificationService.GetEvent lui signale aussitot : deux appels a 0,6 s d'ecart,
+                // puis plus rien. Servie vide, il cherche les arenes d'amis avec zero identifiant pour
+                // toute la partie. Le premier appel du lancement attend donc la liste (8 s au plus),
+                // en relancant la lecture si celle du lancement a rate ; les suivants, comme les jeux
+                // NEX qui interrogent en boucle, gardent le chemin non bloquant. Cette boucle sert
+                // tous les clients friends (menu HOME compris) : jamais plus d'une attente par
+                // lancement (NextendoFriends.GetForSmashLaunch).
+                bool smash = NextendoFriends.ReadsListOnlyOnLaunch(NextendoFriends.CurrentTitleId) && !WantsNsaIds();
+                IReadOnlyList<NextendoFriends.Entry> friends = WantsNsaIds() ? NextendoFriends.GetWarm(2000)
+                    : smash ? NextendoFriends.GetForSmashLaunch(SmashListWaitMs)
+                    : NextendoFriends.Get();
                 bool wantNsa = WantsNsaIds();
                 int n = Math.Min(Math.Max(0, friends.Count - offset), friendList.Length);
                 for (int i = 0; i < n; i++)
@@ -1417,7 +1432,9 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
 
             if (IsNextendoProfile(userId) && NextendoAccount.IsLinked)
             {
-                NextendoActivity.Set("AddFriend");
+                // the user's own page asks for these settings too (its friend code), not only the
+                // page to add a friend: Discord said "Adding a friend" on the profile
+                NextendoActivity.Set("Profile");
 
                 // The user's own settings: who they are, then their friend code as text.
                 MemoryMarshal.Write(setting, in userId);

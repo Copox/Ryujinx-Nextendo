@@ -50,6 +50,13 @@ namespace Ryujinx.Horizon.Ovln
             {
                 Ryujinx.Common.Configuration.NextendoFriends.TellFriendNotificationShown(0);
             }
+            else if (copy.Length >= 0x20)
+            {
+                // the frame of THIS friend, now that the overlay gets the notification: painted when
+                // it was posted, the second of two friends coming online together got the frame of
+                // the first (seconds before its turn), without the icon of its game
+                Ryujinx.Common.Configuration.NextendoFriends.TellFriendNotificationShown(BitConverter.ToUInt64(copy, 8 + 0x10));
+            }
 
             Receiver[] receivers;
 

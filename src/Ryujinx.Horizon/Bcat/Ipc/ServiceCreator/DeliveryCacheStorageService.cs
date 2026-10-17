@@ -85,6 +85,9 @@ namespace Ryujinx.Horizon.Bcat.Ipc
                 res = LibHac.Result.Success;
             }
 
+            Ryujinx.Common.Logging.Logger.Info?.Print(Ryujinx.Common.Logging.LogClass.ServiceBcat,
+                $"[SEED] EnumerateDeliveryCacheDirectory root='{_seedRoot}' count={count} -> {res}");
+
             return res.Horizon;
         }
 
