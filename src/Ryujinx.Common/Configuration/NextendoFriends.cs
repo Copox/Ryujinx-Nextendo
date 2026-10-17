@@ -240,11 +240,126 @@ namespace Ryujinx.Common.Configuration
 
         /// <summary>
         /// [Nextendo] Vrai une seule fois par lancement de jeu : l'appelant qui l'obtient peut attendre
-        /// la liste (GetWarm), les suivants la prennent telle quelle. Sans cela, un serveur lent
-        /// bloquait chacun des deux GetFriendList de Smash jusqu'au bout du delai.
+        /// la liste (GetForSmashLaunch), les suivants la prennent telle quelle. Sans cela, un serveur
+        /// lent bloquait chacun des deux GetFriendList de Smash jusqu'au bout du delai.
         /// </summary>
         public static bool TakeLaunchWait()
             => System.Threading.Interlocked.Exchange(ref _launchWaitTaken, 1) == 0;
+
+        /// <summary>Une lecture de la liste aupres du serveur est-elle en cours ?</summary>
+        public static bool IsRefreshing => System.Threading.Volatile.Read(ref _refreshing) != 0;
+
+        /// <summary>
+        /// [Nextendo] Lancement (ou fermeture, titre vide) d'un jeu, appele par InitializePresence :
+        /// le nouveau jeu a droit a sa propre attente de la liste (TakeLaunchWait), et la liste est
+        /// lue des maintenant, pour qu'elle soit deja la au premier GetFriendList de Smash. Seule
+        /// /api/friends compte (8 s au plus) : l'historique et la liaison du compte partent en tache
+        /// de fond. Ne bloque jamais.
+        /// </summary>
+        public static void OnGameLaunched(string titleId)
+        {
+            System.Threading.Interlocked.Exchange(ref _launchWaitTaken, 0);
+
+            if (!string.IsNullOrEmpty(titleId))
+            {
+                Get();
+            }
+        }
+
+        // [Nextendo] Les lectures que l'unique attente du lancement de Smash (GetForSmashLaunch) peut
+        // relancer elle-meme, et l'ecart minimal de chacune depuis la fin de la lecture ratee
+        // precedente : 1 s, puis 3 s. Avec celle du lancement, un serveur en panne recoit donc 3
+        // lectures de /api/friends au plus en 10 s.
+        private static readonly int[] _launchRetryGapsMs = [1000, 3000];
+
+        /// <summary>
+        /// [Nextendo] Ce que GetFriendList rend a Super Smash Bros. Ultimate.
+        ///
+        /// Le premier appel apres le lancement (TakeLaunchWait) attend la liste, <paramref name="timeoutMs"/>
+        /// au plus, et la rend des que le serveur l'a donnee. Une lecture ratee juste avant (celle du
+        /// lancement, ou celle qui etait en cours) ne lui coute pas sa liste : il en relance une sans
+        /// attendre les 10 s entre deux lectures de Get(), 1 s apres l'echec, puis une derniere 3 s
+        /// apres le suivant. Il rend la main des qu'aucune lecture ne peut plus commencer avant la fin
+        /// du delai, ou tout de suite si le compte n'a pas de jeton ou n'est pas lie.
+        ///
+        /// Les appels suivants (le second GetFriendList du lancement, 0,6 s plus tard) prennent la
+        /// liste telle quelle (Get()) : jamais deux attentes par lancement.
+        /// </summary>
+        public static IReadOnlyList<Entry> GetForSmashLaunch(int timeoutMs)
+        {
+            if (!TakeLaunchWait())
+            {
+                return Get();
+            }
+
+            long deadline = Environment.TickCount64 + timeoutMs;
+            int retries = 0;
+
+            while (true)
+            {
+                int attempts = System.Threading.Volatile.Read(ref _attempts);
+                IReadOnlyList<Entry> list = Get(); // lance une lecture si les 10 s sont passees
+
+                if (list.Count > 0 || _loaded || !NextendoAccount.IsLinked || string.IsNullOrEmpty(NextendoAccount.NexToken))
+                {
+                    return list;
+                }
+
+                if (!IsRefreshing)
+                {
+                    // La derniere lecture a rate il y a moins de 10 s (sinon Get() en aurait lance
+                    // une) : on en relance une, espacee de la fin de la precedente.
+                    if (retries == _launchRetryGapsMs.Length)
+                    {
+                        return list;
+                    }
+
+                    long start;
+
+                    lock (_lock)
+                    {
+                        start = Math.Max(Environment.TickCount64, _lastFetchMs + _launchRetryGapsMs[retries]);
+                    }
+
+                    if (start >= deadline)
+                    {
+                        return list;
+                    }
+
+                    // Attente decoupee : une lecture lancee ailleurs entre-temps (menu HOME, Post)
+                    // est attendue au lieu d'en lancer une seconde.
+                    while (Environment.TickCount64 < start && !IsRefreshing && !_loaded)
+                    {
+                        System.Threading.Thread.Sleep((int)Math.Clamp(start - Environment.TickCount64, 1, 50));
+                    }
+
+                    retries++;
+                    attempts = System.Threading.Volatile.Read(ref _attempts);
+
+                    if (!_loaded)
+                    {
+                        StartRefresh();
+                    }
+                }
+
+                // Fin de la lecture en cours, reussie ou non. _attempts est incremente AVANT que
+                // _refreshing retombe a 0 : une lecture finie entre les deux lectures est vue.
+                while (IsRefreshing
+                    && System.Threading.Volatile.Read(ref _attempts) == attempts
+                    && Environment.TickCount64 < deadline)
+                {
+                    System.Threading.Thread.Sleep(50);
+                }
+
+                if (Environment.TickCount64 >= deadline)
+                {
+                    lock (_lock)
+                    {
+                        return _cache;
+                    }
+                }
+            }
+        }
 
         /// <summary>
         /// [Nextendo] Liste d'amis GARANTIE chaude, avec attente BORNEE.
@@ -294,24 +409,34 @@ namespace Ryujinx.Common.Configuration
             // in the BACKGROUND when stale. The list populates within ~1s and the game polls
             // repeatedly, so it fills in without ever blocking.
             if (NextendoAccount.IsLinked
-                && (_lastFetchMs == 0 || Environment.TickCount64 - _lastFetchMs > 10_000)
-                && System.Threading.Interlocked.Exchange(ref _refreshing, 1) == 0)
+                && (_lastFetchMs == 0 || Environment.TickCount64 - _lastFetchMs > 10_000))
             {
-                System.Threading.Tasks.Task.Run(() =>
-                {
-                    try { Refresh(); }
-                    finally
-                    {
-                        System.Threading.Interlocked.Increment(ref _attempts);
-                        System.Threading.Interlocked.Exchange(ref _refreshing, 0);
-                    }
-                });
+                StartRefresh();
             }
 
             lock (_lock)
             {
                 return _cache;
             }
+        }
+
+        // Une lecture de fond, s'il n'y en a pas deja une en cours.
+        private static void StartRefresh()
+        {
+            if (System.Threading.Interlocked.Exchange(ref _refreshing, 1) != 0)
+            {
+                return;
+            }
+
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try { Refresh(); }
+                finally
+                {
+                    System.Threading.Interlocked.Increment(ref _attempts);
+                    System.Threading.Interlocked.Exchange(ref _refreshing, 0);
+                }
+            });
         }
 
         /// <summary>
@@ -1149,16 +1274,7 @@ namespace Ryujinx.Common.Configuration
 
                 PublishGame();
 
-                // Le nouveau jeu a droit a sa propre attente de la liste (TakeLaunchWait).
-                System.Threading.Interlocked.Exchange(ref _launchWaitTaken, 0);
-
-                // La liste d'amis lue des le lancement du jeu, pour qu'elle soit deja la au premier
-                // GetFriendList de Smash. Seule /api/friends compte (8 s au plus) : l'historique et
-                // la liaison du compte partent en tache de fond. Ne bloque jamais.
-                if (!string.IsNullOrEmpty(CurrentTitleId))
-                {
-                    Get();
-                }
+                OnGameLaunched(CurrentTitleId);
             };
             _presenceTimer = new System.Threading.Timer(_ => PublishGame(), null, 45000, 45000);
         }
