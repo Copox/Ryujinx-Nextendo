@@ -507,7 +507,7 @@ namespace Ryujinx.Ava.Systems.AppLibrary
                 || !Ryujinx.Common.ReleaseInformation.IsValid);
 
         // Splatoon 2 uses schedule byaml; Scarlet and Violet use event BCAT and Legends: Z-A
-        // uses it for Nextendo's Mystery Gifts. Switch Sports refuses online without its
+        // and Sword/Shield use it for Nextendo's Mystery Gifts. Switch Sports refuses online without its
         // Root00 data tables.
         // Only these titles should show the BCAT download action.
         [JsonIgnore]
@@ -515,7 +515,7 @@ namespace Ryujinx.Ava.Systems.AppLibrary
         {
             "0100f8f0000a2000" or "01003bc0000a0000" or "01003c700009c800" or
             "0100c2500fc20000" or "01008f6008c5e000" or "0100a3d008c5c000" or "0100f43008c44000" or
-            "0100d2f00d5c0000" => true,
+            "0100d2f00d5c0000" or "0100abf008968000" or "01008db008c2c000" => true,
             _ => false,
         };
 
