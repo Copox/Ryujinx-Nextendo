@@ -420,6 +420,7 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             "0100ad9012510000" => "1.1.0", // Pac-Man 99 (the version the Nextendo servers serve)
             "01009b90006dc000" => "3.0.3",  // Super Mario Maker 2
             "0100000000010000" => "1.4.1",  // Super Mario Odyssey
+            "010001701248c000" => "1.0.4",  // Super Monkey Ball Banana Mania
             _ => "",
         };
 
