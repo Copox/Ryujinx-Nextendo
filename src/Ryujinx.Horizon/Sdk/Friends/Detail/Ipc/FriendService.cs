@@ -32,6 +32,10 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
         private const string Splatoon3TitleId = "0100c2500fc20000";
         private const string WonderTitleId = "010015100b514000";
 
+        // Attente maximale de la premiere lecture de la liste pour Smash Bros. Ultimate : historique,
+        // liaison du compte puis /api/friends (8 s au plus chacun), sur un lancement deja en cours.
+        private const int SmashListWaitMs = 8000;
+
         private static bool WantsNsaIds()
             => string.Equals(NextendoFriends.CurrentTitleId, Splatoon3TitleId, StringComparison.OrdinalIgnoreCase)
                 || string.Equals(NextendoFriends.CurrentTitleId, WonderTitleId, StringComparison.OrdinalIgnoreCase);
@@ -234,7 +238,15 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             // NPLN games enumerate the full list using the requested offset.
             if (offset == 0 || WantsNsaIds())
             {
-                IReadOnlyList<NextendoFriends.Entry> friends = WantsNsaIds() ? NextendoFriends.GetWarm(2000) : NextendoFriends.Get();
+                // Smash Bros. Ultimate ne lit cette liste qu'au lancement (et sur FriendListUpdate,
+                // que rien ne lui envoie ensuite) : servie vide, il cherche les arenes d'amis avec
+                // zero identifiant pour toute la partie. On l'attend donc, une fois, au lancement ;
+                // une fois lue (meme vide), plus aucune attente. Les jeux NEX qui interrogent en
+                // boucle gardent le chemin non bloquant.
+                bool smashOnce = NextendoFriends.ReadsListOnlyOnLaunch(NextendoFriends.CurrentTitleId);
+                IReadOnlyList<NextendoFriends.Entry> friends = WantsNsaIds() ? NextendoFriends.GetWarm(2000)
+                    : smashOnce ? NextendoFriends.GetWarm(SmashListWaitMs)
+                    : NextendoFriends.Get();
                 bool wantNsa = WantsNsaIds();
                 int n = Math.Min(Math.Max(0, friends.Count - offset), friendList.Length);
                 for (int i = 0; i < n; i++)

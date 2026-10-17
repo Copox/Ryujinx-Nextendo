@@ -206,6 +206,28 @@ namespace Ryujinx.Common.Configuration
         private static long _lastFetchMs;
         private static int _refreshing;
 
+        // [Nextendo] Vrai des que la liste a ete lue au moins une fois aupres du serveur (meme vide).
+        // Sans lui, GetWarm attendait tout son delai pour un compte qui n'a reellement aucun ami.
+        private static volatile bool _loaded;
+
+        /// <summary>La liste a-t-elle deja ete lue aupres du serveur depuis le demarrage ?</summary>
+        public static bool HasLoaded => _loaded;
+
+        /// <summary>
+        /// [Nextendo] Super Smash Bros. Ultimate. Mesure dans son main 13.0.5 : sa liste d'amis locale
+        /// (une table indexee par identifiant de compte) n'est remplie que par un seul appel a
+        /// nn::friends::GetFriendList (0x3756bf0, filtre vide, 300 au plus), fait au lancement
+        /// (0x22b7d00) puis seulement quand la file de notifications rend un FriendListUpdate
+        /// (0x22dc484). La recherche d'arenes d'amis (0x370848c) y prend TOUS les identifiants, sans
+        /// filtre, pour FindMatchmakeSessionByParticipant. Une liste encore vide a ce moment-la = zero
+        /// identifiant envoye au serveur pour toute la partie, donc « No arenas found ».
+        /// </summary>
+        public const string SmashUltimateTitleId = "01006a800016e000";
+
+        /// <summary>Ce jeu ne lit-il sa liste d'amis qu'au lancement (il faut alors la lui servir chaude) ?</summary>
+        public static bool ReadsListOnlyOnLaunch(string titleId)
+            => string.Equals(titleId, SmashUltimateTitleId, StringComparison.OrdinalIgnoreCase);
+
         /// <summary>
         /// [Nextendo] Liste d'amis GARANTIE chaude, avec attente BORNEE.
         ///
@@ -219,7 +241,7 @@ namespace Ryujinx.Common.Configuration
         public static IReadOnlyList<Entry> GetWarm(int timeoutMs)
         {
             IReadOnlyList<Entry> list = Get(); // declenche le rafraichissement de fond si besoin
-            if (list.Count > 0 || !NextendoAccount.IsLinked)
+            if (list.Count > 0 || _loaded || !NextendoAccount.IsLinked)
             {
                 return list;
             }
@@ -229,7 +251,7 @@ namespace Ryujinx.Common.Configuration
             {
                 System.Threading.Thread.Sleep(50);
                 list = Get();
-                if (list.Count > 0)
+                if (list.Count > 0 || _loaded)
                 {
                     break;
                 }
@@ -304,6 +326,7 @@ namespace Ryujinx.Common.Configuration
             {
                 _cache = new List<Entry>();
                 _lastFetchMs = 0;
+                _loaded = false;
             }
         }
 
@@ -788,6 +811,7 @@ namespace Ryujinx.Common.Configuration
                     _requests = requests;
                     _sent = sent;
                     _lastFetchMs = Environment.TickCount64;
+                    _loaded = true;
                 }
             }
             catch
@@ -1076,6 +1100,14 @@ namespace Ryujinx.Common.Configuration
                 CurrentAppDetail = "";
 
                 PublishGame();
+
+                // La liste d'amis lue des le lancement du jeu, pas au premier appel du jeu : Smash
+                // la demande une fois, tot, et la premiere lecture (historique, liaison, puis
+                // /api/friends) n'etait pas finie quand il l'a demandee. Ne bloque jamais.
+                if (!string.IsNullOrEmpty(CurrentTitleId))
+                {
+                    Get();
+                }
             };
             _presenceTimer = new System.Threading.Timer(_ => PublishGame(), null, 45000, 45000);
         }
