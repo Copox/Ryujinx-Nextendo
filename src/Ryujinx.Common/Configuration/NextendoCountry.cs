@@ -15,9 +15,12 @@ namespace Ryujinx.Common.Configuration
     /// profil de 132 octets (Ranking 4) et l'envoie aux autres joueurs, qui affichent le drapeau.
     /// Sans lui, le profil part avec 00 00 : aucun drapeau (38 % des profils du serveur le 18/10).
     ///
-    /// Source : le pays du compte sur le site (/api/me, champ account.country), la même table que
-    /// nx-account sert aux consoles. NEXTENDO_PAYS_COMPTE=0 coupe tout : le champ redevient vide,
-    /// comme avant.
+    /// Source : le pays du compte Nextendo (Account.Country de nextendo-account), lu sur /api/me
+    /// (champ account.country). Le joueur le choisit à l'inscription et peut le changer ensuite.
+    /// C'est le même champ que nx-account met dans le profil Nintendo Account (users/me) des
+    /// vraies consoles, par /internal/identity : un compte a le même drapeau sur console et sur
+    /// émulateur. Compte sans pays : champ vide, aucun drapeau (comme nx-account, jamais un pays
+    /// inventé). NEXTENDO_PAYS_COMPTE=0 coupe tout : le champ redevient vide, comme avant.
     /// </summary>
     public static class NextendoCountry
     {
