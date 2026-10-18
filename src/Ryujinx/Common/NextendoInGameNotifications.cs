@@ -273,6 +273,13 @@ namespace Ryujinx.Ava.Common
                         NextendoSystemNotifications.FriendsOnline(online);
                     }
 
+                    // the HOME Menu reads these friends from the emulator's list right after the
+                    // notification: fresh first, or it sees them offline and says "Online"
+                    if (toAnnounce.Count > 0)
+                    {
+                        Ryujinx.Common.Configuration.NextendoFriends.RefreshNow();
+                    }
+
                     foreach (ulong pid in toAnnounce)
                     {
                         NextendoSystemNotifications.FriendOnline(pid);

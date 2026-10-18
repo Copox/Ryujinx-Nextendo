@@ -36,7 +36,6 @@ namespace Ryujinx.Ava.Common
             BitConverter.TryWriteBytes(data.AsSpan(0x10, 8), friendId);
             BitConverter.TryWriteBytes(data.AsSpan(0x18, 4), 3600u);
 
-            NextendoFriends.TellFriendNotificationShown(friendId);
             OvlnNotifications.Post(FriendOnlineTag, data);
 
             Logger.Info?.Print(LogClass.Application, $"[Nextendo][notif] console notification: friend {friendId:X} online");

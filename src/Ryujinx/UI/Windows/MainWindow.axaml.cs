@@ -939,6 +939,21 @@ namespace Ryujinx.Ava.UI.Windows
             // The menu draws through the shared frame buffers of the system applets.
             Environment.SetEnvironmentVariable("NEXTENDO_SHARED_FB", "1");
 
+            // The picture and name of the account onto the local profile BEFORE the menu starts:
+            // the menu keeps the first picture it is given for the whole session, so a picture
+            // changed on the website stayed old there (3 s at most, the menu starts anyway).
+            if (Ryujinx.Common.Configuration.NextendoAccount.IsLinked)
+            {
+                try
+                {
+                    System.Threading.Tasks.Task.Run(() => Ryujinx.Ava.Common.NextendoApi.GetProfileSyncAsync()).Wait(3000);
+                }
+                catch
+                {
+                    // out of reach: the local profile as it is
+                }
+            }
+
             Ryujinx.Ava.Utilities.AppletMetadata homeMenu = new(ViewModel.ContentManager, LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_HomeMenuName], 0x0100000000001000);
             Logger.Notice.Print(LogClass.Application, $"[home-menu] resolving qlaunch, content path={homeMenu.GetContentPath(ViewModel.ContentManager)}");
             // No firmware installed (or one without the menu): say so instead of going on.

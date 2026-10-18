@@ -442,6 +442,14 @@ namespace Ryujinx.Ava.Systems
                 _ => [],
             };
 
+            // The macOS release is a single universal bundle (arm64 + x64 in one .app), published
+            // as "...-macos_universal.tar.gz". Its name carries no architecture tag, so without
+            // this a Mac never found its update and reported "no build for this platform".
+            if (OperatingSystem.IsMacOS() && arches.Length > 0)
+            {
+                arches = [.. arches, "universal"];
+            }
+
             if (arches.Length == 0)
             {
                 Logger.Warning?.Print(LogClass.Application,

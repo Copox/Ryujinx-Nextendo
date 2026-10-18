@@ -49,7 +49,9 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             // as the game starts listening so it proceeds to query the (Nextendo) friend list.
             // This runs on the Horizon IPC thread (the game called us), so Os.SignalSystemEvent has
             // its thread context — a background Timer would NOT (NRE), so we hook GetEvent instead.
-            // MK8/SSBU call GetFriendList directly and are unaffected.
+            // MK8 calls GetFriendList directly. Smash Ultimate calls it at launch (0x22b7d00) and again
+            // whenever its notification queue gives a FriendListUpdate (0x22dc484): this signal is
+            // what makes its second GetFriendList, 0.6 s after the first (Ryujinx log of 17/10).
             SignalFriendListUpdate(_userId);
 
             return Result.Success;

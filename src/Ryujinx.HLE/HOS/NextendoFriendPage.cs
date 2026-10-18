@@ -54,6 +54,12 @@ namespace Ryujinx.HLE.HOS
         public const int DecorationSide = 432, OwnDecorationSide = 448;
         public const float DecorationScale = 1.25f; // the decoration is 1.2 times the picture, as on Discord
 
+        // The user's decoration over the small picture of the header ("Kazuu's Page"), on a console
+        // only (the module of MyPage paints it there). A size no other texture has.
+        private const string HeaderDecorationTexture = "IcoBtnMinusRev_24^s";
+        public const int HeaderDecorationSide = 160;
+        private const string HeaderLayout = "blyt/TextH1.bflyt";
+
         // The left column of a friend's page: 33 more of room on the left of the picture than on its right.
         private static readonly string[] _leftColumn = ["L_UserIcon", "T_Name", "T_NnidName", "P_FriendMemoBase", "N_LeftBtnAll"];
         private const float LeftColumnShift = -26f;
@@ -164,6 +170,10 @@ namespace Ryujinx.HLE.HOS
                 {
                     files[i] = (name, own);
                 }
+                else if (name == HeaderLayout && ForConsole && friendBanner && page != null && PatchHeaderPicture(files[i].Data, page) is { } headerPicture)
+                {
+                    files[i] = (name, headerPicture);
+                }
                 else if (name == Textures && PatchTextures(files[i].Data, ownBanner, friendBanner) is { } textures)
                 {
                     files[i] = (name, textures);
@@ -215,11 +225,35 @@ namespace Ryujinx.HLE.HOS
                 BinaryPrimitives.WriteSingleLittleEndian(text.AsSpan(0x2C), BinaryPrimitives.ReadSingleLittleEndian(text.AsSpan(0x2C)) + NotificationTextShift);
             }
 
-            files[at] = (NotificationLayout, Layout_(files[at].Data, header, sections));
-
             // the frame of every notification: away from the edges of the screen, round corners,
             // without the straight border lines
             int frame = files.FindIndex(f => f.Name == NotificationFrameLayout);
+
+            // the friend's picture, sharp: ours right over the applet's (same place, same size, in
+            // N_AvatarS, made larger with it), from the models of the frame's layout
+            if (frame >= 0)
+            {
+                List<byte[]> frameSections = Sections(files[frame].Data, out _);
+                byte[] lineModel = Materials(frameSections, out _)?.Find(m => MaterialName(m) == "P_LineU");
+                byte[] linePicture = frameSections.Find(s => Kind(s) == "pic1" && PaneName(s) == "P_LineU");
+                int dummy = sections.FindIndex(s => Kind(s) == "pic1" && PaneName(s) == "P_DummyAvatarS");
+                int pictureTexture = lineModel == null || linePicture == null || dummy < 0 ? -1 : AddTexture(sections, NotificationPictureTexture);
+                int materialsAt = -1;
+                List<byte[]> materials = pictureTexture < 0 ? null : Materials(sections, out materialsAt);
+
+                if (materials != null && materialsAt >= 0)
+                {
+                    materials.Add(BannerMaterial(lineModel, pictureTexture, "P_NxPicture"));
+                    sections[materialsAt] = MaterialSection(materials);
+
+                    dummy = sections.FindIndex(s => Kind(s) == "pic1" && PaneName(s) == "P_DummyAvatarS");
+                    float side = BinaryPrimitives.ReadSingleLittleEndian(sections[dummy].AsSpan(0x4C));
+
+                    sections.Insert(After(sections, dummy), BannerPane(linePicture, (0f, 0f, side, side), materials.Count - 1, "P_NxPicture"));
+                }
+            }
+
+            files[at] = (NotificationLayout, Layout_(files[at].Data, header, sections));
 
             int textures = files.FindIndex(f => f.Name == Textures);
 
@@ -239,6 +273,14 @@ namespace Ryujinx.HLE.HOS
         // (which cannot have round corners): black, round corners. A texture no layout uses
         // (checked on 22.5.0), at a size no other has: a nameplate can be given to it later.
         private const string NotificationBaseTexture = "OvlIcoBtnZoomBan_64^t";
+
+        // The icon of the friend's game and the friend's picture, each in a texture of its own at
+        // a higher definition than it shows at (drawn in the frame, or the applet's small picture
+        // made 1.7 times as large, they were blurred). Small, for the applet's little memory; two
+        // more textures no layout uses, at sizes no other has.
+        private const string NotificationGameTexture = "OvlIcoParentalControl_64^t";
+        private const string NotificationPictureTexture = "OvlIcoPlayTimerStar_64^w";
+        public const int NotificationGameSide = 112, NotificationPictureSide = 88;
         public const int NotificationBaseWidth = 424, NotificationBaseHeight = 88;
         private const float NotificationBaseRadius = 17f; // as on Discord: a fifth of the height (8 for 42)
 
@@ -291,6 +333,33 @@ namespace Ryujinx.HLE.HOS
             ours[9] = system[9];
             sections.Insert(baseAt, ours);
 
+            // the icon of the friend's game, a child of our frame: against its right edge, 12 from
+            // the edges (placed from the frame's centre)
+            int gameTexture = AddTexture(sections, NotificationGameTexture);
+            int gameMaterialsAt = -1;
+            List<byte[]> gameMaterials = gameTexture < 0 ? null : Materials(sections, out gameMaterialsAt);
+
+            if (gameMaterials != null && gameMaterialsAt >= 0)
+            {
+                gameMaterials.Add(BannerMaterial(model, gameTexture, "P_NxGame"));
+                sections[gameMaterialsAt] = MaterialSection(gameMaterials);
+
+                int frameAt = sections.FindIndex(s => Kind(s) == "pic1" && PaneName(s) == "P_NxBase");
+                float shownSide = h - 24; // the frame's height less 12 above and below
+
+                // a child is placed from its parent's anchor, which for this frame (as the system's)
+                // is its top edge (22.5.0: origin 0x04): from the centre, half the frame lower
+                int origin = ours[9];
+                float fromX = (origin & 3) switch { 1 => w / 2, 2 => -w / 2, _ => 0f };
+                float fromY = ((origin >> 2) & 3) switch { 1 => -h / 2, 2 => h / 2, _ => 0f };
+                float right = fromX + w / 2 - 12 - shownSide / 2;
+                byte[] game = BannerPane(picture, (right, fromY, shownSide, shownSide), gameMaterials.Count - 1, "P_NxGame");
+
+                sections.Insert(frameAt + 1, [(byte)'p', (byte)'a', (byte)'e', (byte)'1', 8, 0, 0, 0]);
+                sections.Insert(frameAt + 1, game);
+                sections.Insert(frameAt + 1, [(byte)'p', (byte)'a', (byte)'s', (byte)'1', 8, 0, 0, 0]);
+            }
+
             return Layout_(layout, header, sections);
         }
 
@@ -298,6 +367,60 @@ namespace Ryujinx.HLE.HOS
         // With a nameplate, as Discord draws it behind a name: a gradient of the colour of its
         // palette (none on the left, 8 % from a fifth to the middle, 20 % on the right), then the
         // nameplate against the right edge, at 30 % up to the last part, where it comes back to full.
+        /// <summary>The icon of the game has its own texture (set once the archive is patched with it).</summary>
+        public static bool NotificationGameApart { get; private set; }
+
+        /// <summary>The icon of a game for its texture: round corners, transparent around (premultiplied).</summary>
+        public static byte[] NotificationGamePixels(SkiaSharp.SKBitmap game)
+        {
+            const int S = NotificationGameSide;
+            using SkiaSharp.SKBitmap bitmap = new(new SkiaSharp.SKImageInfo(S, S, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Premul));
+            using SkiaSharp.SKCanvas canvas = new(bitmap);
+
+            canvas.Clear(SkiaSharp.SKColors.Transparent);
+
+            if (game != null)
+            {
+                using SkiaSharp.SKPaint smooth = new() { IsAntialias = true, FilterQuality = SkiaSharp.SKFilterQuality.High };
+                using SkiaSharp.SKRoundRect corners = new(SkiaSharp.SKRect.Create(0, 0, S, S), S * 0.18f);
+
+                canvas.ClipRoundRect(corners, antialias: true);
+                canvas.DrawBitmap(game, SkiaSharp.SKRect.Create(0, 0, S, S), smooth);
+            }
+
+            canvas.Flush();
+
+            return bitmap.Bytes;
+        }
+
+        /// <summary>The picture of a friend for its texture: round, transparent around (premultiplied).</summary>
+        public static byte[] NotificationPicturePixels(SkiaSharp.SKBitmap picture)
+        {
+            const int S = NotificationPictureSide;
+            using SkiaSharp.SKBitmap bitmap = new(new SkiaSharp.SKImageInfo(S, S, SkiaSharp.SKColorType.Rgba8888, SkiaSharp.SKAlphaType.Premul));
+            using SkiaSharp.SKCanvas canvas = new(bitmap);
+
+            canvas.Clear(SkiaSharp.SKColors.Transparent);
+
+            if (picture != null)
+            {
+                using SkiaSharp.SKPaint smooth = new() { IsAntialias = true, FilterQuality = SkiaSharp.SKFilterQuality.High };
+                using SkiaSharp.SKPath circle = new();
+
+                circle.AddOval(SkiaSharp.SKRect.Create(0, 0, S, S));
+                canvas.ClipPath(circle, antialias: true);
+
+                float scale = Math.Max((float)S / picture.Width, (float)S / picture.Height);
+                float w = picture.Width * scale, h = picture.Height * scale;
+
+                canvas.DrawBitmap(picture, SkiaSharp.SKRect.Create((S - w) / 2, (S - h) / 2, w, h), smooth);
+            }
+
+            canvas.Flush();
+
+            return bitmap.Bytes;
+        }
+
         public static byte[] NotificationBasePixels(SkiaSharp.SKBitmap inside = null, SkiaSharp.SKColor? colour = null, SkiaSharp.SKBitmap game = null)
         {
             const float W = NotificationBaseWidth, H = NotificationBaseHeight;
@@ -344,7 +467,7 @@ namespace Ryujinx.HLE.HOS
                 canvas.Restore();
             }
 
-            if (game != null)
+            if (game != null && !NotificationGameApart)
             {
                 // the icon of the game (or application) the friend is in, against the right edge
                 const float Inset = 12;
@@ -373,7 +496,18 @@ namespace Ryujinx.HLE.HOS
 
             LayoutConverter.ConvertLinearToBlockLinear(data, NotificationBaseWidth, NotificationBaseHeight, NotificationBaseWidth * 4, 4, 1 << BlockHeightLog2, NotificationBasePixels());
 
-            return AddData(bntx, [(NotificationBaseTexture, NotificationBaseWidth, NotificationBaseHeight, 0x0B01u, 0x05040302u, BlockHeightLog2, data)]);
+            byte[] made = AddData(bntx,
+            [
+                (NotificationBaseTexture, NotificationBaseWidth, NotificationBaseHeight, 0x0B01u, 0x05040302u, BlockHeightLog2, data),
+                (NotificationGameTexture, NotificationGameSide, NotificationGameSide, 0x0B01u, 0x05040302u, BlockHeightLog2,
+                    new byte[(NotificationGameSide * 4 + 63) / 64 * 64 * ((NotificationGameSide + 127) / 128 * 128)]),
+                (NotificationPictureTexture, NotificationPictureSide, NotificationPictureSide, 0x0B01u, 0x05040302u, BlockHeightLog2,
+                    new byte[(NotificationPictureSide * 4 + 63) / 64 * 64 * ((NotificationPictureSide + 127) / 128 * 128)]),
+            ]);
+
+            NotificationGameApart = made != null;
+
+            return made;
         }
 
         // ------------------------------------------------------------------ the archive (SARC)
@@ -810,6 +944,43 @@ namespace Ryujinx.HLE.HOS
             return at;
         }
 
+        // The small picture of the user in the header of the pages: its decoration over it, a child
+        // of the picture (shown, hidden and moved with it; the header of other pages has none).
+        private static byte[] PatchHeaderPicture(byte[] layout, byte[] friendPage)
+        {
+            List<byte[]> sections = Sections(layout, out int header);
+            List<byte[]> models = Sections(friendPage, out _);
+            byte[] model = Materials(models, out _)?.Find(m => MaterialName(m) == "P_Pict");
+            byte[] picture = models.Find(s => Kind(s) == "pic1" && PaneName(s) == "P_LineVertical");
+
+            if (model == null || picture == null || sections.FindIndex(s => Kind(s) == "pic1" && PaneName(s) == "P_Icon") < 0)
+            {
+                return null;
+            }
+
+            int texture = AddTexture(sections, HeaderDecorationTexture);
+            int materialsAt = -1;
+            List<byte[]> materials = texture < 0 ? null : Materials(sections, out materialsAt);
+
+            if (materials == null || materialsAt < 0)
+            {
+                return null;
+            }
+
+            materials.Add(BannerMaterial(model, texture, "P_NxDecoH"));
+            sections[materialsAt] = MaterialSection(materials);
+
+            int icon = sections.FindIndex(s => Kind(s) == "pic1" && PaneName(s) == "P_Icon");
+            float side = BinaryPrimitives.ReadSingleLittleEndian(sections[icon].AsSpan(0x4C)) * DecorationScale;
+            int after = After(sections, icon);
+
+            sections.Insert(after, [(byte)'p', (byte)'a', (byte)'e', (byte)'1', 8, 0, 0, 0]);
+            sections.Insert(after, BannerPane(picture, (0f, 0f, side, side), materials.Count - 1, "P_NxDecoH"));
+            sections.Insert(after, [(byte)'p', (byte)'a', (byte)'s', (byte)'1', 8, 0, 0, 0]);
+
+            return Layout_(layout, header, sections);
+        }
+
         // The own picture of the user: round corners, by the setting of the system, on the
         // picture and on the cursor around it; its decoration over all of it, when
         // <paramref name="friendPage"/> gives the models of a picture.
@@ -1025,11 +1196,17 @@ namespace Ryujinx.HLE.HOS
 
         // A friend of the list: the picture smaller and round, in the card's margins; the
         // nickname and the status under it; the card and its cursor with rounder corners.
+        /// <summary>
+        /// The file is made for a real console (by the export tool): no emulator there to make the
+        /// friends' pictures of the list round as they load, so the layout masks them as well.
+        /// </summary>
+        public static bool ForConsole { get; set; }
+
         private static byte[] PatchFriendTile(byte[] layout)
         {
             List<byte[]> sections = Sections(layout, out int header);
 
-            if (!PatchPictures(sections, _friendTilePictures, CircleTexture))
+            if (!PatchPictures(sections, ForConsole ? [.. _friendTilePictures, "P_Image"] : _friendTilePictures, CircleTexture))
             {
                 return null;
             }
@@ -1141,6 +1318,12 @@ namespace Ryujinx.HLE.HOS
                 foreach ((string name, int side) in new[] { (DecorationTexture, DecorationSide), (OwnDecorationTexture, OwnDecorationSide) })
                 {
                     added.Add((name, side, side, 0x0B01u, 0x05040302u, BlockHeightLog2, new byte[(side * 4 + 63) / 64 * 64 * ((side + 127) / 128 * 128)]));
+                }
+
+                if (ForConsole)
+                {
+                    const int side = HeaderDecorationSide;
+                    added.Add((HeaderDecorationTexture, side, side, 0x0B01u, 0x05040302u, BlockHeightLog2, new byte[(side * 4 + 63) / 64 * 64 * ((side + 127) / 128 * 128)]));
                 }
             }
 
