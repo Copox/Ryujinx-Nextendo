@@ -20,6 +20,45 @@ namespace Ryujinx.Tests.HLE
         }
 
         [Test]
+        public void CountryIsWrittenAtSdkOffset0x20()
+        {
+            // SDK : GetCountry = strnlen(this + 0x20, 4). Mario Kart 8 Deluxe en tire le drapeau.
+            byte[] data = CachedAccountInfo.Create("fr");
+            Assert.That(CachedAccountInfo.CountryOffset, Is.EqualTo(0x20));
+            Assert.That(Encoding.ASCII.GetString(data, 0, 10), Is.EqualTo("2000-01-01"));
+            Assert.That(data[0x20], Is.EqualTo((byte)'F'));
+            Assert.That(data[0x21], Is.EqualTo((byte)'R'));
+            Assert.That(data[0x22], Is.EqualTo(0));
+            Assert.That(data.Where((b, i) => i >= 10 && i != 0x20 && i != 0x21).All(b => b == 0), Is.True);
+        }
+
+        [TestCase("")]
+        [TestCase(null)]
+        [TestCase("FRA")]
+        [TestCase("F1")]
+        [TestCase("É1")]
+        public void InvalidCountryLeavesTheFieldEmpty(string country)
+        {
+            byte[] data = CachedAccountInfo.Create(country);
+            Assert.That(data.Skip(10).All(b => b == 0), Is.True);
+        }
+
+        [Test]
+        public void CountryIsReadFromTheSiteAccount()
+        {
+            using System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(
+                "{\"account\":{\"name\":\"x\",\"country\":\"mx\"}}");
+            Assert.That(Ryujinx.Common.Configuration.NextendoCountry.Parse(doc.RootElement), Is.EqualTo("MX"));
+
+            using System.Text.Json.JsonDocument none = System.Text.Json.JsonDocument.Parse(
+                "{\"account\":{\"country\":\"\"}}");
+            Assert.That(Ryujinx.Common.Configuration.NextendoCountry.Parse(none.RootElement), Is.EqualTo(""));
+
+            using System.Text.Json.JsonDocument bad = System.Text.Json.JsonDocument.Parse("{\"country\":\"FR\"}");
+            Assert.That(Ryujinx.Common.Configuration.NextendoCountry.Parse(bad.RootElement), Is.EqualTo(""));
+        }
+
+        [Test]
         public void MixedPointerAndResourceBuffersReturnUserBaseViaPointer()
         {
             IpcMessage request = new();

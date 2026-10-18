@@ -7,13 +7,26 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
     {
         public const int Size = 0x68;
 
-        public static byte[] Create()
+        // SDK CachedNintendoAccountInfo::GetCountry : chaîne de 4 octets au plus en 0x20
+        // (GetGender 8 en 0x10, GetRegion 4 en 0x24), relevé dans le sdk.
+        public const int CountryOffset = 0x20;
+
+        public static byte[] Create(string country = "")
         {
             // Operator-requested shared compatibility date, NOT a stored account DOB.
             // SDK GetBirthday reads a NUL-terminated string at offset 0 (capacity 0x10).
             // Unknown fields stay empty; the account ID is a separate IPC scalar.
             byte[] data = new byte[Size];
             Encoding.ASCII.GetBytes("2000-01-01").CopyTo(data, 0);
+
+            // Pays du compte (deux lettres ISO, terminé par 0) : Mario Kart 8 Deluxe en tire le
+            // drapeau de son profil en ligne. Vide = comportement d'avant (pas de drapeau).
+            string cc = Ryujinx.Common.Configuration.NextendoCountry.Normalize(country);
+            if (cc.Length == 2)
+            {
+                Encoding.ASCII.GetBytes(cc).CopyTo(data, CountryOffset);
+            }
+
             return data;
         }
 
