@@ -102,8 +102,10 @@ namespace Ryujinx.Ava.Systems
                 return (false, string.Empty);
             string id = TitleId.Value.ToLowerInvariant();
             string builtIn = Ryujinx.Ava.Systems.AppLibrary.ApplicationData.NextendoVersionFor(id);
+            // Built-in titles accept their version or a newer one (ApplicationData.IsNextendoVersionOk),
+            // catalog titles keep their exact versions.
             if (!string.IsNullOrEmpty(builtIn))
-                return (true, builtIn);
+                return (true, builtIn + "+");
             return NextendoCatalogVersions.TryGetValue(id, out string v) ? (true, v ?? string.Empty) : (false, string.Empty);
         }
         public string[] Labels { get; }

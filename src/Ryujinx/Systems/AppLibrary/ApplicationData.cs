@@ -360,8 +360,8 @@ namespace Ryujinx.Ava.Systems.AppLibrary
         [JsonIgnore]
         public bool IsNextendoCompatible => !string.IsNullOrEmpty(NextendoCompatibleVersion);
 
-        // The single game version Nextendo Network currently supports for this title.
-        // A different version can't reach the Nextendo servers (different NEX access key).
+        // The minimum game version Nextendo Network currently supports for this title (the
+        // installed version must be this one or a newer one, see IsNextendoVersionOk).
         [JsonIgnore]
         public string NextendoCompatibleVersion => NextendoVersionFor(IdBaseString);
 
@@ -490,8 +490,8 @@ namespace Ryujinx.Ava.Systems.AppLibrary
         [JsonIgnore]
         public bool IsCtgpdxVariant => IdBaseString == Mk8dxBaseId && Version == CtgpdxVersion && IsCtgpdxInstalled;
 
-        // Reaches Nextendo online when the installed version is the vanilla compatible version,
-        // OR the CTGPDX variant (MK8DX 3.0.3 + verified CTGPDX).
+        // Reaches Nextendo online when the installed version is the vanilla compatible version
+        // or a newer one, OR the CTGPDX variant (MK8DX 3.0.3 + verified CTGPDX).
         //
         // Each title has ONE supported version because the NEX access key and the protocol shape
         // are version-specific: a mismatched build doesn't play badly, it fails to talk to the
@@ -505,8 +505,13 @@ namespace Ryujinx.Ava.Systems.AppLibrary
         public bool IsNextendoVersionOk =>
             // [Nextendo] DEV / unstamped local builds skip the exact-version gate so ANY version
             // of a compatible title can be tested online; stamped releases keep the strict check.
-            IsNextendoCompatible && (Version == NextendoCompatibleVersion || IsCtgpdxVariant
-                || !Ryujinx.Common.ReleaseInformation.IsValid);
+            //
+            // [Nextendo 2026-10-18] La version demandee OU PLUS RECENTE passe (comparaison
+            // numerique, Ryujinx.Common.NextendoGameVersion). Avec l'egalite stricte, le passage du
+            // serveur MK8 a 4.0.1 refusait tout le monde : 4.0.0 par le serveur, 4.0.1 par
+            // l'emulateur, tant que cette table n'etait pas republiee.
+            IsNextendoCompatible && (Ryujinx.Common.NextendoGameVersion.IsAtLeast(Version, NextendoCompatibleVersion)
+                || IsCtgpdxVariant || !Ryujinx.Common.ReleaseInformation.IsValid);
 
         // Splatoon 2 uses schedule byaml; Scarlet and Violet use event BCAT and Legends: Z-A
         // and Sword/Shield use it for Nextendo's Mystery Gifts. Switch Sports refuses online without its
@@ -535,6 +540,6 @@ namespace Ryujinx.Ava.Systems.AppLibrary
         public string NextendoBadge =>
             IsCtgpdxVariant
                 ? "Nextendo Network · CTGPDX · 3.0.3"
-                : $"Nextendo Network · v{NextendoCompatibleVersion}";
+                : $"Nextendo Network · v{NextendoCompatibleVersion}+";
     }
 }
