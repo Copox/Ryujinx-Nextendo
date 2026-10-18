@@ -4,20 +4,19 @@ namespace Ryujinx.Common
 {
     /// <summary>
     /// [Nextendo] Comparaison des versions de jeu (chaine d'affichage de la NACP, ex. "4.0.1",
-    /// "1.0.17", "13.0.5"). Le controle de version en ligne exigeait la version EXACTE de la table
-    /// d'ApplicationData : le jour ou un serveur passe a une mise a jour plus recente (MK8 4.0.1 le
-    /// 18/10/2026), tout joueur a jour etait refuse par l'emulateur tant qu'une release ne
-    /// changeait pas la table. Une version egale ou plus recente passe desormais.
-    /// Comparaison numerique composant par composant ("1.0.10" &gt; "1.0.9"), pas de texte.
+    /// "1.0.17", "13.0.5"). La version de la table d'ApplicationData est la version EXACTE
+    /// obligatoire en ligne : ni une plus ancienne, ni une plus recente (une mise a jour Nintendo
+    /// que Nextendo n'a pas encore preparee ne doit pas pouvoir aller en ligne). La lecture
+    /// numerique sert seulement a normaliser l'ecriture ("4.0.1" == "4.0.1.0" == "v4.0.1").
     /// </summary>
     public static class NextendoGameVersion
     {
         /// <summary>
-        /// Vrai si <paramref name="installed"/> vaut <paramref name="required"/> ou une version
-        /// plus recente. Une version illisible (vide, texte, plus de 4 composants) ne passe que
-        /// si elle est identique au texte exige.
+        /// Vrai si <paramref name="installed"/> est exactement <paramref name="required"/>
+        /// (egalite numerique, composants absents = 0). Une version illisible (vide, texte, plus
+        /// de 4 composants) ne passe que si elle est identique au texte exige.
         /// </summary>
-        public static bool IsAtLeast(string installed, string required)
+        public static bool IsExactly(string installed, string required)
         {
             if (string.IsNullOrWhiteSpace(installed) || string.IsNullOrWhiteSpace(required))
             {
@@ -29,7 +28,7 @@ namespace Ryujinx.Common
                 return true;
             }
 
-            return TryParse(installed, out Version have) && TryParse(required, out Version need) && have >= need;
+            return TryParse(installed, out Version have) && TryParse(required, out Version need) && have == need;
         }
 
         /// <summary>

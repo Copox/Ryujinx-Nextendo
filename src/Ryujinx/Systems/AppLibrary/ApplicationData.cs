@@ -360,8 +360,8 @@ namespace Ryujinx.Ava.Systems.AppLibrary
         [JsonIgnore]
         public bool IsNextendoCompatible => !string.IsNullOrEmpty(NextendoCompatibleVersion);
 
-        // The minimum game version Nextendo Network currently supports for this title (the
-        // installed version must be this one or a newer one, see IsNextendoVersionOk).
+        // The single game version Nextendo Network currently supports for this title: the
+        // installed version must be exactly this one, neither older nor newer (see IsNextendoVersionOk).
         [JsonIgnore]
         public string NextendoCompatibleVersion => NextendoVersionFor(IdBaseString);
 
@@ -490,8 +490,8 @@ namespace Ryujinx.Ava.Systems.AppLibrary
         [JsonIgnore]
         public bool IsCtgpdxVariant => IdBaseString == Mk8dxBaseId && Version == CtgpdxVersion && IsCtgpdxInstalled;
 
-        // Reaches Nextendo online when the installed version is the vanilla compatible version
-        // or a newer one, OR the CTGPDX variant (MK8DX 3.0.3 + verified CTGPDX).
+        // Reaches Nextendo online when the installed version is exactly the vanilla compatible
+        // version, OR the CTGPDX variant (MK8DX 3.0.3 + verified CTGPDX).
         //
         // Each title has ONE supported version because the NEX access key and the protocol shape
         // are version-specific: a mismatched build doesn't play badly, it fails to talk to the
@@ -506,11 +506,12 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             // [Nextendo] DEV / unstamped local builds skip the exact-version gate so ANY version
             // of a compatible title can be tested online; stamped releases keep the strict check.
             //
-            // [Nextendo 2026-10-18] La version demandee OU PLUS RECENTE passe (comparaison
-            // numerique, Ryujinx.Common.NextendoGameVersion). Avec l'egalite stricte, le passage du
-            // serveur MK8 a 4.0.1 refusait tout le monde : 4.0.0 par le serveur, 4.0.1 par
-            // l'emulateur, tant que cette table n'etait pas republiee.
-            IsNextendoCompatible && (Ryujinx.Common.NextendoGameVersion.IsAtLeast(Version, NextendoCompatibleVersion)
+            // [Nextendo 2026-10-19] Version EXACTE de la table, ni avant ni apres : une mise a jour
+            // Nintendo que Nextendo n'a pas encore preparee ne doit pas aller en ligne. La 1.9.6
+            // acceptait aussi les versions plus recentes, c'etait faux. La comparaison numerique
+            // (Ryujinx.Common.NextendoGameVersion.IsExactly) ne sert qu'a normaliser l'ecriture
+            // ("4.0.1" == "4.0.1.0").
+            IsNextendoCompatible && (Ryujinx.Common.NextendoGameVersion.IsExactly(Version, NextendoCompatibleVersion)
                 || IsCtgpdxVariant || !Ryujinx.Common.ReleaseInformation.IsValid);
 
         // Splatoon 2 uses schedule byaml; Scarlet and Violet use event BCAT and Legends: Z-A
@@ -540,6 +541,6 @@ namespace Ryujinx.Ava.Systems.AppLibrary
         public string NextendoBadge =>
             IsCtgpdxVariant
                 ? "Nextendo Network · CTGPDX · 3.0.3"
-                : $"Nextendo Network · v{NextendoCompatibleVersion}+";
+                : $"Nextendo Network · v{NextendoCompatibleVersion}";
     }
 }
