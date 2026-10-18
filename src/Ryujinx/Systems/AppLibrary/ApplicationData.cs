@@ -375,7 +375,8 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             //
             // CTGPDX n'est pas affecte : IsNextendoVersionOk accepte aussi IsCtgpdxVariant, qui
             // reste sur la base 3.0.3 avec son mod verifie.
-            "0100152000022000" => "4.0.0",  // Mario Kart 8 Deluxe
+            // [Nextendo 2026-10-18] 4.0.1 obligatoire en ligne (serveur MK8 : NEXTENDO_VERSION_MIN=4.0.1).
+            "0100152000022000" => "4.0.1",  // Mario Kart 8 Deluxe
             // [Nextendo 2026-09-06] 13.0.5, publiee le 1er septembre. Elle corrige "un probleme
             // quand des donnees invalides sont envoyees ou recues pendant les combats en ligne",
             // donc elle DURCIT le client : c'etait le candidat evident a une casse. Verifiee le
