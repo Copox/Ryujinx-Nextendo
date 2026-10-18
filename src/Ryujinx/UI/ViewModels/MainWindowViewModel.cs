@@ -2136,6 +2136,26 @@ namespace Ryujinx.Ava.UI.ViewModels
                 return;
             }
 
+            // [Nextendo] Pseudo et photo du compte recopies sur le profil local AVANT que le jeu
+            // demarre. Les jeux lisent le pseudo du profil (nn::account::GetNickname) : Mario Kart
+            // 8 Deluxe le met dans son profil en ligne et l'annonce aux autres joueurs. Jusqu'ici
+            // cette recopie ne se faisait qu'au lancement du menu HOME, dans la vue carrousel, les
+            // reglages ou la fenetre d'amis : un joueur qui lancait le jeu depuis la liste gardait
+            // l'ancien pseudo apres l'avoir change sur le site. 3 s au plus, le jeu demarre quand
+            // meme (profil local tel quel) si le serveur ne repond pas.
+            if (application.Id != 0x0100000000001000 && Ryujinx.Common.Configuration.NextendoAccount.IsLinked
+                && !NextendoServerOverride.HorsNextendo)
+            {
+                try
+                {
+                    await Task.WhenAny(Ryujinx.Ava.Common.NextendoApi.GetProfileSyncAsync(), Task.Delay(3000));
+                }
+                catch
+                {
+                    // hors d'atteinte : le profil local tel qu'il est
+                }
+            }
+
             // [Nextendo] Splatoon 3 : prevenir AVANT le lancement que les mods installes seront
             // ignores.
             //
