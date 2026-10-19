@@ -37,9 +37,14 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
         // 8 s), l'historique et la liaison partent en tache de fond.
         private const int SmashListWaitMs = 8000;
 
+        // Animal Crossing: New Horizons aussi : il compare le NSA qu'annonce chaque joueur (session,
+        // carte) a Friend::GetAccountId. Une Switch annonce son baasUserID et Ryujinx aussi dans ce
+        // jeu (NextendoBaasNsa, ManagerServer) : les amis y sont donc ranges par leur « nsa ».
+        // Seulement quand notre propre baasUserID est connu, sinon tout reste au PID (comme avant).
         private static bool WantsNsaIds()
             => string.Equals(NextendoFriends.CurrentTitleId, Splatoon3TitleId, StringComparison.OrdinalIgnoreCase)
-                || string.Equals(NextendoFriends.CurrentTitleId, WonderTitleId, StringComparison.OrdinalIgnoreCase);
+                || string.Equals(NextendoFriends.CurrentTitleId, WonderTitleId, StringComparison.OrdinalIgnoreCase)
+                || (NextendoBaasNsa.TitleUsesBaasNsa(NextendoFriends.CurrentTitleId) && NextendoBaasNsa.Get() != 0);
 
         // True for the local profile the signed-in Nextendo account is bound to (every profile
         // when none is recorded yet).
@@ -501,8 +506,11 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
         {
             ulong pid = id;
             string name = null;
-            if (NextendoAccount.IsLinked && NextendoAccount.Pid == id)
+            // soi-meme : par le PID, ou par le baasUserID annonce dans ACNH (NextendoBaasNsa)
+            if (NextendoAccount.IsLinked && (NextendoAccount.Pid == id ||
+                (NextendoBaasNsa.TitleUsesBaasNsa(NextendoFriends.CurrentTitleId) && NextendoBaasNsa.Get() == id && id != 0)))
             {
+                pid = NextendoAccount.Pid;
                 name = NextendoAccount.Username;
             }
             else
