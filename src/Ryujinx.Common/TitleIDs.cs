@@ -54,7 +54,8 @@ namespace Ryujinx.Common
 
                           //Monster Hunter Franchise
             "0100770008dd8000", // Monster Hunter Generations Ultimate
-            "0100b04011742000", // Monster Hunter Rise 
+            "0100b04011742000", // Monster Hunter Rise
+            "0100559011740000", // Monster Hunter Rise (Japan/Hong Kong)
                           
                           //Mario Franchise
             "010021d00812a000", // Arcade Archives VS. SUPER MARIO BROS.

@@ -135,10 +135,10 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
                 { "hm", !NextendoAccount.OnlineBlocked },
             };
 
-            // Scarlet shares Violet's NPLN tenant but needs its own app_id.
-            // Violet and every other game's BAAS token remain byte-compatible
-            // with the existing claim shape.
-            if (programId == 0x0100A3D008C5C000)
+            // Scarlet shares Violet's NPLN tenant, and Monster Hunter Rise JP/HK shares the
+            // US/EU one, but each needs its own app_id. Every other game's BAAS token remains
+            // byte-compatible with the existing claim shape.
+            if (programId == 0x0100A3D008C5C000 || programId == 0x0100559011740000)
             {
                 claims["app_id"] = programId.ToString("X16");
             }
