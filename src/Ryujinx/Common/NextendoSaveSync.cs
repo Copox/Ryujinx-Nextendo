@@ -57,6 +57,11 @@ namespace Ryujinx.Ava.Common
         // Download + import this title's cloud save. Call BEFORE the game starts.
         public static async Task PullAsync(ApplicationData app)
         {
+            if (app != null && NextendoIslandSync.IsStrict(app.Id))
+            {
+                return; // île ACNH : NextendoIslandCloud.PrepareLaunchAsync
+            }
+
             // [Nextendo beta] Cloud saves are excluded for GUEST profiles — skip pull entirely.
             if (app == null || !app.CanUseNextendoCloudSaves || !NextendoAccount.IsLinked || NextendoAccount.IsGuest || string.IsNullOrEmpty(NextendoAccount.NexToken))
             {
@@ -111,6 +116,11 @@ namespace Ryujinx.Ava.Common
         // the save zip bytes, or null when there is no cloud save or the profile isn't eligible.
         public static async Task<byte[]> FetchCloudSaveAsync(ApplicationData app)
         {
+            if (app != null && NextendoIslandSync.IsStrict(app.Id))
+            {
+                return null; // île ACNH : NextendoIslandCloud.PrepareLaunchAsync
+            }
+
             if (app == null || !app.CanUseNextendoCloudSaves || !NextendoAccount.IsLinked || NextendoAccount.IsGuest || string.IsNullOrEmpty(NextendoAccount.NexToken))
             {
                 return null;
@@ -148,6 +158,12 @@ namespace Ryujinx.Ava.Common
         {
             if (app == null || !app.CanUseNextendoCloudSaves)
             {
+                return;
+            }
+            if (NextendoIslandSync.IsStrict(app.Id))
+            {
+                // Île ACNH : envoi conditionnel sur la révision (jamais d'écrasement du cloud).
+                await NextendoIslandCloud.PushAsync(app);
                 return;
             }
             ulong titleId = app.Id;
