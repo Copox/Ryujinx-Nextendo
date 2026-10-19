@@ -466,6 +466,26 @@ namespace Ryujinx.Ava.Common
             }
         }
 
+        // Le pseudo du compte tel que le serveur l'affiche partout (displayName de
+        // nextendo-account) : profile.name s'il est rempli, sinon l'identifiant (username).
+        // On recopiait l'identifiant seul : un joueur dont le pseudo differe de son identifiant
+        // (pseudo venu de la Switch, ou refuse comme identifiant) gardait l'identifiant sur le
+        // profil local, donc dans Mario Kart 8 Deluxe, qui lit nn::account::GetNickname.
+        internal static string PseudoDuCompte(JsonElement root)
+        {
+            if (root.TryGetProperty("profile", out JsonElement prof) && prof.ValueKind == JsonValueKind.Object
+                && prof.TryGetProperty("name", out JsonElement n) && n.ValueKind == JsonValueKind.String)
+            {
+                string pseudo = n.GetString()?.Trim();
+                if (!string.IsNullOrEmpty(pseudo))
+                {
+                    return pseudo;
+                }
+            }
+
+            return root.TryGetProperty("username", out JsonElement u) && u.ValueKind == JsonValueKind.String ? u.GetString() : null;
+        }
+
         public static async Task<(string name, byte[] image)> GetProfileSyncAsync()
         {
             try
@@ -480,7 +500,7 @@ namespace Ryujinx.Ava.Common
 
                 using JsonDocument doc = JsonDocument.Parse(await resp.Content.ReadAsStringAsync());
                 JsonElement root = doc.RootElement;
-                string name = root.TryGetProperty("username", out JsonElement u) ? u.GetString() : null;
+                string name = PseudoDuCompte(root);
 
                 byte[] image = null;
                 if (root.TryGetProperty("profile", out JsonElement prof) && prof.ValueKind == JsonValueKind.Object

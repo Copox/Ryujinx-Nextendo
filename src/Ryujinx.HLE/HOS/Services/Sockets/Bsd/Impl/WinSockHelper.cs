@@ -302,6 +302,29 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd.Impl
             return (LinuxError)errorCode;
         }
 
+        /// <summary>
+        /// Convertit une valeur <see cref="SocketError"/> (celle que rendent les surcharges
+        /// <c>Receive</c>/<c>Send</c> avec <c>out SocketError</c>) en errno Horizon.
+        /// </summary>
+        /// <remarks>
+        /// [Nextendo] Les valeurs de <see cref="SocketError"/> sont les codes Winsock sur TOUS les
+        /// systemes (WouldBlock vaut 10035 sous macOS aussi). <see cref="ConvertError"/> attend au
+        /// contraire, sous macOS, l errno natif de <c>SocketException.ErrorCode</c> (EAGAIN = 35) :
+        /// lui passer un SocketError rendait 10035 tel quel au jeu au lieu de EAGAIN. grpc (NPLN)
+        /// lit par RecvMMsg et prenait ce premier « pas encore de donnees » pour une erreur fatale,
+        /// fermait la connexion et le jeu affichait 2321-4992 (Splatoon 3 sous macOS, journal du
+        /// 17/10/2026 : « Operation failed with error 10035 » puis fermeture du socket).
+        /// </remarks>
+        public static LinuxError ConvertSocketError(SocketError socketError)
+        {
+            if (_errorMap.TryGetValue((WsaError)socketError, out LinuxError errno))
+            {
+                return errno;
+            }
+
+            return (LinuxError)socketError;
+        }
+
         public static bool TryConvertSocketOption(BsdSocketOption option, SocketOptionLevel level, out SocketOptionName name)
         {
             Dictionary<BsdSocketOption, SocketOptionName> table = level switch

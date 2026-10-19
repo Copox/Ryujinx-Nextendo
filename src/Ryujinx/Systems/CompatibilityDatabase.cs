@@ -102,6 +102,7 @@ namespace Ryujinx.Ava.Systems
                 return (false, string.Empty);
             string id = TitleId.Value.ToLowerInvariant();
             string builtIn = Ryujinx.Ava.Systems.AppLibrary.ApplicationData.NextendoVersionFor(id);
+            // Built-in titles need exactly their version (ApplicationData.IsNextendoVersionOk), like catalog titles.
             if (!string.IsNullOrEmpty(builtIn))
                 return (true, builtIn);
             return NextendoCatalogVersions.TryGetValue(id, out string v) ? (true, v ?? string.Empty) : (false, string.Empty);

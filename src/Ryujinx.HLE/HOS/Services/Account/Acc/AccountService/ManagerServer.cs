@@ -226,6 +226,13 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
 
             Logger.Stub?.PrintStub(LogClass.ServiceAcc);
 
+            // Le jeu passe en ligne : le pays du compte sera demandé juste après (informations du
+            // compte Nintendo), on le demande au site dès maintenant, sans attendre.
+            if (IsBoundNextendoProfile)
+            {
+                NextendoCountry.Prepare();
+            }
+
             // TODO: Use a real function instead, with the CancellationToken.
             await Task.CompletedTask;
         }
@@ -317,7 +324,11 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
                 return result;
             }
 
-            context.Memory.Write(context.OutputPointerBufferAddress, CachedAccountInfo.Create());
+            // Pays du compte Nextendo, seulement pour le profil lié au compte (les autres profils
+            // locaux restent sans pays, comme leur identité reste le bouchon 0xcafe).
+            string country = NextendoAccount.IsLinked && IsBoundNextendoProfile ? NextendoCountry.Get() : "";
+
+            context.Memory.Write(context.OutputPointerBufferAddress, CachedAccountInfo.Create(country));
             if (context.Request.ReceiveBuff.Count > 0)
             {
                 var resource = context.Request.ReceiveBuff[0];
@@ -326,7 +337,7 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
 
             context.ResponseData.Write(NetworkServiceAccountId);
             Logger.Info?.Print(LogClass.ServiceAcc,
-                "[Nextendo account cache] Returned 0x68-byte user base; shared birthday=2000-01-01.");
+                $"[Nextendo account cache] Returned 0x68-byte user base; shared birthday=2000-01-01; country {(country.Length == 2 ? "set" : "empty")}.");
             return ResultCode.Success;
         }
 

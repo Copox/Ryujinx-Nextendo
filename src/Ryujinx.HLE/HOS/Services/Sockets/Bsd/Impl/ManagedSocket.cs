@@ -981,7 +981,7 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd.Impl
                     UpdateMessages(out vlen, message, receiveSize);
                 }
 
-                return WinSockHelper.ConvertError((WsaError)socketError);
+                return WinSockHelper.ConvertSocketError(socketError);
             }
             catch (SocketException exception)
             {
@@ -1037,7 +1037,7 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd.Impl
                     UpdateMessages(out vlen, message, sendSize);
                 }
 
-                return WinSockHelper.ConvertError((WsaError)socketError);
+                return WinSockHelper.ConvertSocketError(socketError);
             }
             catch (SocketException exception)
             {

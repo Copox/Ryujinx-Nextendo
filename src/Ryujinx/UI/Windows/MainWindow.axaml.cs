@@ -670,6 +670,33 @@ namespace Ryujinx.Ava.UI.Windows
                     }
                 });
 
+                // [Nextendo] Pseudo et photo du compte relus toutes les 5 min et recopies sur le
+                // profil local lie (rien n'est ecrit s'ils n'ont pas change). Les jeux lances depuis
+                // le menu HOME ne passent pas par la relecture faite avant chaque lancement : un
+                // pseudo change sur le site pendant la session restait l'ancien dans Mario Kart 8
+                // Deluxe, qui relit nn::account::GetNickname a chaque construction de son profil en
+                // ligne, jusqu'au redemarrage de l'emulateur.
+                _ = System.Threading.Tasks.Task.Run(async () =>
+                {
+                    while (true)
+                    {
+                        await System.Threading.Tasks.Task.Delay(System.TimeSpan.FromMinutes(5));
+
+                        if (Ryujinx.Common.Configuration.NextendoAccount.IsLinked
+                            && !Ryujinx.Common.Configuration.NextendoServerOverride.HorsNextendo)
+                        {
+                            try
+                            {
+                                await Ryujinx.Ava.Common.NextendoApi.GetProfileSyncAsync();
+                            }
+                            catch
+                            {
+                                // hors d'atteinte : nouvel essai au prochain tour
+                            }
+                        }
+                    }
+                });
+
                 // [Nextendo] Heal a link that predates the profile binding (or a login path
                 // that skipped it): bind the linked account to the active local profile so the
                 // pseudo / avatar / Mii + "N" badge follow the account and the in-game name
