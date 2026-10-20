@@ -58,9 +58,9 @@ namespace Ryujinx.HLE.HOS.Services.Olsc
                     return ResultCode.NextendoUnavailable;
                 }
 
-                (ResultCode rc, _) = await NextendoOlscCloud.GetMetaAsync(titleId);
+                (NextendoIslandCloud.Outcome rc, _) = await NextendoIslandCloud.GetMetaAsync(titleId);
 
-                return rc;
+                return NextendoOlscCloud.ToResult(rc);
             }));
 
             Logger.Info?.Print(LogClass.ServiceOlsc, $"[Nextendo] olsc: VerifySaveDataBackupLicenseAsync {userId}");
@@ -161,7 +161,7 @@ namespace Ryujinx.HLE.HOS.Services.Olsc
             }
 
             byte[] info = new byte[NextendoIslandSync.BackupInfoSize];
-            NextendoIslandSync.WriteBackupInfo(info, entry.CacheId, entry.CacheTime, NextendoOlscCloud.DecodeCustom(entry.CacheCustom));
+            NextendoIslandSync.WriteBackupInfo(info, entry.CacheId, entry.CacheTime, NextendoIslandCloud.DecodeCustom(entry.CacheCustom));
             context.Memory.Write(context.Request.ReceiveBuff[0].Position, info);
 
             return ResultCode.Success;
@@ -188,13 +188,13 @@ namespace Ryujinx.HLE.HOS.Services.Olsc
                     return ResultCode.NextendoUnavailable;
                 }
 
-                (ResultCode rc, NextendoIslandSync.CloudIsland island) = await NextendoOlscCloud.GetMetaAsync(titleId);
-                if (rc == ResultCode.Success)
+                (NextendoIslandCloud.Outcome rc, NextendoIslandSync.CloudIsland island) = await NextendoIslandCloud.GetMetaAsync(titleId);
+                if (rc == NextendoIslandCloud.Outcome.Ok)
                 {
-                    NextendoOlscCloud.StoreCache(key, island);
+                    NextendoIslandCloud.StoreCache(key, island);
                 }
 
-                return rc;
+                return NextendoOlscCloud.ToResult(rc);
             }));
 
             return ResultCode.Success;
@@ -230,13 +230,13 @@ namespace Ryujinx.HLE.HOS.Services.Olsc
                     return ResultCode.NextendoUnavailable;
                 }
 
-                (ResultCode rc, NextendoIslandSync.CloudIsland island) = await NextendoOlscCloud.GetMetaAsync(titleId);
-                if (rc != ResultCode.Success)
+                (NextendoIslandCloud.Outcome rc, NextendoIslandSync.CloudIsland island) = await NextendoIslandCloud.GetMetaAsync(titleId);
+                if (rc != NextendoIslandCloud.Outcome.Ok)
                 {
-                    return rc;
+                    return NextendoOlscCloud.ToResult(rc);
                 }
 
-                NextendoOlscCloud.StoreCache(key, island);
+                NextendoIslandCloud.StoreCache(key, island);
                 if (NextendoIslandSync.IsRestorable(island))
                 {
                     byte[] info = new byte[NextendoIslandSync.BackupInfoSize];

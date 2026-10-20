@@ -2502,6 +2502,12 @@ namespace Ryujinx.Ava.UI.ViewModels
             IsAppletMenuActive = hasApplet;
         }
 
+        /// <summary>[Nextendo] Île ACNH : envoi d'après-partie si l'archivage est activé dans le jeu (rien sinon).</summary>
+        public Task UploadIslandAfterGameAsync()
+        {
+            return _currentApplicationData == null ? Task.CompletedTask : Ryujinx.Ava.Common.ApplicationHelper.UploadIslandAfterGame(_currentApplicationData.Id);
+        }
+
         // [Nextendo] Push the running title's save to the account. Used by the window-close
         // path (MainWindow.OnClosing), which swaps out AppHost_AppExit for a handler that
         // would otherwise close WITHOUT uploading — so closing the window lost SSBU/MK8 saves.
@@ -2557,6 +2563,8 @@ namespace Ryujinx.Ava.UI.ViewModels
                 _nextendoSaveTimer?.Dispose();
                 _nextendoSaveTimer = null;
                 await FlushNextendoSaveAsync();
+                _ = UploadIslandAfterGameAsync();
+
                 Ryujinx.Ava.Common.NextendoSaveSync.Playing = null; // normal exit: no crash-flush needed
 
                 await HandleRelaunch();

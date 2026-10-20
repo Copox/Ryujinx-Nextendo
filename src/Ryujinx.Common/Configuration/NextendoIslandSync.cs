@@ -235,6 +235,8 @@ namespace Ryujinx.Common.Configuration
             public ulong CacheId { get; set; }
             public long CacheTime { get; set; }
             public string CacheCustom { get; set; } = "";
+            /// <summary>Empreinte de la dernière île envoyée ou restaurée (pas de renvoi inutile).</summary>
+            public string LastUploadedHash { get; set; } = "";
         }
 
         private static readonly object _lock = new();

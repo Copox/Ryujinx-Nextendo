@@ -658,6 +658,49 @@ namespace Ryujinx.Ava.Common
             return false;
         }
 
+        /// <summary>
+        /// [Nextendo] Île d'Animal Crossing: New Horizons : comme le service système de la Switch
+        /// (« l'archivage se fait quand vous ne jouez pas »), l'île est envoyée une fois la partie
+        /// finie si le joueur a activé l'archivage dans le jeu (olsc, réglage du profil = 1). Une
+        /// île inchangée n'est pas renvoyée. Aucune fenêtre : tout se règle dans le menu du jeu.
+        /// </summary>
+        public static Task UploadIslandAfterGame(ulong titleId)
+        {
+            try
+            {
+                if (!Ryujinx.Common.Configuration.NextendoIslandSync.IsStrict(titleId) || _horizonClient == null || _accountManager?.LastOpenedUser == null)
+                {
+                    return Task.CompletedTask;
+                }
+
+                string key = Ryujinx.Common.Configuration.NextendoIslandSync.Key(titleId, _accountManager.LastOpenedUser.UserId.ToString());
+                if (Ryujinx.Common.Configuration.NextendoIslandSync.Get(key).Setting != 1)
+                {
+                    return Task.CompletedTask;
+                }
+
+                SaveDataFilter filter = SaveDataFilter.Make(titleId, SaveDataType.Device, default, default, default);
+                if (_horizonClient.Fs.FindSaveDataWithFilter(out SaveDataInfo info, SaveDataSpaceId.User, in filter).IsFailure())
+                {
+                    return Task.CompletedTask;
+                }
+
+                string root = Path.Combine(VirtualFileSystem.GetNandPath(), "user", "save", info.SaveDataId.ToString("x16"));
+                return Task.Run(async () =>
+                {
+                    Ryujinx.Common.Configuration.NextendoIslandCloud.Outcome outcome =
+                        await Ryujinx.Common.Configuration.NextendoIslandCloud.UploadAsync(titleId, root, key, onlyIfChanged: true);
+                    Logger.Info?.Print(LogClass.Application, $"[Nextendo] island backup after the game: {outcome}");
+                });
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning?.Print(LogClass.Application, $"[Nextendo] island backup after the game failed: {ex.Message}");
+            }
+
+            return Task.CompletedTask;
+        }
+
         // Export the current user's save for titleId as ZIP bytes, or null if none exists.
         public static byte[] ExportNextendoSave(ulong titleId)
         {

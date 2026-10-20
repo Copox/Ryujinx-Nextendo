@@ -1765,6 +1765,8 @@ namespace Ryujinx.Ava.UI.Windows
                         // sync on window-close (Alt+F4) too, not only via "Actions > Stop emulation".
                         // Awaited before Close() so they finish before the process exits.
                         await ViewModel.FlushNextendoSaveAsync();
+                        // Île ACNH : envoi d'après-partie (archivage activé dans le jeu), 60 s au plus.
+                        await System.Threading.Tasks.Task.WhenAny(ViewModel.UploadIslandAfterGameAsync(), System.Threading.Tasks.Task.Delay(60000));
                         await Ryujinx.Ava.Common.NextendoHistorySync.PushAsync("window-close");
                         Ryujinx.Ava.Common.NextendoHistorySync.ArreterPousseePeriodique();
 
