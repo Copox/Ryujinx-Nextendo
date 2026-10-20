@@ -31,6 +31,28 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
                 ? (long)NextendoAccount.Pid
                 : 0xcafe;
 
+        // [Nextendo] Le NSA rendu a l'application en cours. Animal Crossing: New Horizons compare
+        // le NSA annonce par chaque joueur a la liste d'amis nn::friends : il y recoit le
+        // baasUserID du compte, celui d'une vraie Switch (NextendoBaasNsa), pour que Switch et
+        // emulateur se reconnaissent comme amis. Le serveur ACNH reconnait encore l'emulateur au
+        // jeton nx2 de l'id_token. Les autres jeux gardent le PID.
+        private long NetworkServiceAccountIdFor(ServiceCtx context)
+        {
+            long id = NetworkServiceAccountId;
+            if (id == 0xcafe)
+            {
+                return id;
+            }
+
+            ulong programId = context.Device.Processes.ActiveApplication?.ProgramId ?? 0;
+            if (!NextendoBaasNsa.TitleUsesBaasNsa(programId))
+            {
+                return id;
+            }
+
+            return (long)NextendoBaasNsa.Choose(programId, (ulong)id, NextendoBaasNsa.Get());
+        }
+
         // True if this manager's profile is the one linked to the Nextendo account (or none bound).
         private bool IsBoundNextendoProfile
         {
@@ -135,10 +157,10 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
                 { "hm", !NextendoAccount.OnlineBlocked },
             };
 
-            // Scarlet shares Violet's NPLN tenant but needs its own app_id.
-            // Violet and every other game's BAAS token remain byte-compatible
-            // with the existing claim shape.
-            if (programId == 0x0100A3D008C5C000)
+            // Scarlet shares Violet's NPLN tenant, and Monster Hunter Rise JP/HK shares the
+            // US/EU one, but each needs its own app_id. Every other game's BAAS token remains
+            // byte-compatible with the existing claim shape.
+            if (programId == 0x0100A3D008C5C000 || programId == 0x0100559011740000)
             {
                 claims["app_id"] = programId.ToString("X16");
             }
@@ -195,9 +217,9 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
             //       as "%08x-%04x-%04x-%02x%02x-%08x%04x") in the account:/ savedata.
             //       Then it searches the NetworkServiceAccountId related to the UserId in this file and returns it.
 
-            Logger.Stub?.PrintStub(LogClass.ServiceAcc, new { NetworkServiceAccountId });
+            Logger.Stub?.PrintStub(LogClass.ServiceAcc);
 
-            context.ResponseData.Write(NetworkServiceAccountId);
+            context.ResponseData.Write(NetworkServiceAccountIdFor(context));
 
             return ResultCode.Success;
         }
@@ -335,7 +357,7 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
                 context.Memory.Fill(resource.Position, resource.Size, 0);
             }
 
-            context.ResponseData.Write(NetworkServiceAccountId);
+            context.ResponseData.Write(NetworkServiceAccountIdFor(context));
             Logger.Info?.Print(LogClass.ServiceAcc,
                 $"[Nextendo account cache] Returned 0x68-byte user base; shared birthday=2000-01-01; country {(country.Length == 2 ? "set" : "empty")}.");
             return ResultCode.Success;

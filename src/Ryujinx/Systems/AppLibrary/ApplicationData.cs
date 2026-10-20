@@ -55,6 +55,27 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             }
         }
 
+        private bool _isNextendoServerAvailable;
+
+        /// <summary>
+        /// [Nextendo] True when the live online-count feed includes this title.
+        /// </summary>
+        [JsonIgnore]
+        public bool IsNextendoServerAvailable
+        {
+            get => _isNextendoServerAvailable;
+            set
+            {
+                if (_isNextendoServerAvailable == value)
+                {
+                    return;
+                }
+
+                _isNextendoServerAvailable = value;
+                PropertyChanged?.Invoke(this, new System.ComponentModel.PropertyChangedEventArgs(nameof(IsNextendoServerAvailable)));
+            }
+        }
+
         /// <summary>[Nextendo] Hide the badge entirely at zero rather than showing "0 online".</summary>
         [JsonIgnore]
         public bool HasNextendoPlayersOnline => _nextendoPlayersOnline > 0;
@@ -422,6 +443,7 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             "01009b90006dc000" => "3.0.3",  // Super Mario Maker 2
             "0100000000010000" => "1.4.1",  // Super Mario Odyssey
             "010001701248c000" => "1.0.4",  // Super Monkey Ball Banana Mania
+            "0100b6e012ebe000" => "1.1.17", // UNO
             _ => "",
         };
 
