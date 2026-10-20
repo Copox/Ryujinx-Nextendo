@@ -912,6 +912,12 @@ namespace Ryujinx.Ava.UI.Windows
                     return;
                 }
 
+                // [Nextendo] Île ACNH : un envoi d'après-partie resté en attente (émulateur fermé
+                // avant la fin) repart maintenant, en arrière-plan, comme le service système de la
+                // Switch ; il attend la fin d'Animal Crossing si le jeu tourne.
+                Ryujinx.Common.Configuration.NextendoIslandCloud.IsGameRunning = titleId => ViewModel.IsRunningTitle(titleId);
+                _ = System.Threading.Tasks.Task.Run(Ryujinx.Common.Configuration.NextendoIslandCloud.RunPendingAsync);
+
                 // [Nextendo] Heartbeat de session : tant que l'app tourne avec un compte lié, on
                 // rafraîchit la session "connecté" du compte pour qu'elle apparaisse sur le site.
                 _ = System.Threading.Tasks.Task.Run(async () =>

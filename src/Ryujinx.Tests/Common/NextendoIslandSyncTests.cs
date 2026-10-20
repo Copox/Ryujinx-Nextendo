@@ -212,6 +212,60 @@ namespace Ryujinx.Tests.Common
             }
         }
 
+        // Rejeu de l'activation vue dans ACNH 3.0.3 (écran titre, touche −, « Yep! Enable, please! ») :
+        // 14 (autre profil, false), 10 (licence), 14 (profil, false), 15 (données du jeu), 14 (profil,
+        // true) ; puis 13 doit rendre 1 (« Backups - Enabled »), et la fin de partie marque l'envoi.
+        [Test]
+        public void EnableFlowReplay()
+        {
+            string dir = Path.Combine(Path.GetTempPath(), "nxolsc_" + Path.GetRandomFileName());
+            Directory.CreateDirectory(dir);
+            string saved = StoreDirectory;
+            StoreDirectory = dir;
+            try
+            {
+                const ulong Acnh = 0x01006f8002326000;
+                string user = Key(Acnh, "DC6F8D4E825A4D9C858F6DA4178BE3D0");
+                string other = Key(Acnh, "00000000000000010000000000000000");
+                Assert.AreEqual("01006f8002326000:dc6f8d4e825a4d9c858f6da4178be3d0", user);
+                Assert.AreEqual(0, Get(user).Setting, "jamais réglé : « Backups - Not Set »");
+
+                Update(other, e => e.Setting = 2);
+                Update(user, e => e.Setting = 2);
+                byte[] custom = Encoding.ASCII.GetBytes(new string('i', 405) + "\0");
+                Update(user, e => e.Custom = Convert.ToBase64String(custom));
+                Update(user, e => e.Setting = 1);
+
+                Assert.AreEqual(1, Get(user).Setting);
+                Assert.AreEqual(2, Get(other).Setting);
+                CollectionAssert.AreEqual(custom, Convert.FromBase64String(Get(user).Custom));
+
+                // fin de partie : marqué en attente avant l'envoi, retrouvé au lancement suivant
+                Ryujinx.Common.Configuration.NextendoIslandCloud.MarkPending(user, @"C:\save\1b");
+                var pending = AllPending();
+                Assert.AreEqual(1, pending.Count);
+                Assert.AreEqual(user, pending[0].Key);
+                Assert.AreEqual(@"C:\save\1b", pending[0].Entry.PendingSaveRoot);
+                Assert.AreEqual(1, Get(user).Setting, "la marque ne touche pas au réglage");
+            }
+            finally
+            {
+                StoreDirectory = saved;
+                Directory.Delete(dir, true);
+            }
+        }
+
+        [Test] // cache de l'île (cmd 18) : rendu tel que le jeu le lit, date +8 en PosixTime
+        public void InfoCacheFromServerMeta()
+        {
+            byte[] custom = Encoding.ASCII.GetBytes("ile\0");
+            CloudIsland c = ParseMeta("{\"exists\":true,\"rev\":4,\"updatedAt\":\"2026-10-20T12:06:10Z\",\"custom\":\"" + Convert.ToBase64String(custom) + "\"}");
+            byte[] info = new byte[BackupInfoSize];
+            WriteBackupInfo(info, c.Rev, c.PosixTime, c.Custom);
+            Assert.AreEqual(4UL, BitConverter.ToUInt64(info, 0));
+            Assert.AreEqual(DateTimeOffset.Parse("2026-10-20T12:06:10Z").ToUnixTimeSeconds(), BitConverter.ToInt64(info, 8));
+        }
+
         [Test]
         public void OnlyAcnhIsStrict()
         {

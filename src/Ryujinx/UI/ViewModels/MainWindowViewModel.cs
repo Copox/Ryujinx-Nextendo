@@ -2502,6 +2502,9 @@ namespace Ryujinx.Ava.UI.ViewModels
             IsAppletMenuActive = hasApplet;
         }
 
+        /// <summary>[Nextendo] Vrai quand ce titre est en cours d'émulation.</summary>
+        public bool IsRunningTitle(ulong titleId) => IsGameRunning && _currentApplicationData?.Id == titleId;
+
         /// <summary>[Nextendo] Île ACNH : envoi d'après-partie si l'archivage est activé dans le jeu (rien sinon).</summary>
         public Task UploadIslandAfterGameAsync()
         {

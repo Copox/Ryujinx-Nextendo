@@ -364,11 +364,17 @@ namespace Ryujinx.Common.Configuration
             public string CacheCustom { get; set; } = "";
             /// <summary>Empreinte de la dernière île envoyée ou restaurée (pas de renvoi inutile).</summary>
             public string LastUploadedHash { get; set; } = "";
+            /// <summary>Envoi d'après-partie pas encore fait (relancé au lancement suivant de l'émulateur).</summary>
+            public bool PendingUpload { get; set; }
+            public string PendingSaveRoot { get; set; } = "";
         }
 
         private static readonly object _lock = new();
 
-        private static string StorePath => Path.Combine(AppDataManager.BaseDirPath ?? ".", "nextendo_olsc.json");
+        /// <summary>Dossier du fichier d'état (par défaut celui des données de l'émulateur ; les tests le changent).</summary>
+        public static string StoreDirectory { get; set; }
+
+        private static string StorePath => Path.Combine(StoreDirectory ?? AppDataManager.BaseDirPath ?? ".", "nextendo_olsc.json");
 
         /// <summary>Clé d'un (jeu, profil) : « 01006f8002326000:&lt;uid en hexa&gt; ».</summary>
         public static string Key(ulong titleId, string uidHex) => $"{titleId:x16}:{uidHex.ToLowerInvariant()}";
@@ -384,6 +390,15 @@ namespace Ryujinx.Common.Configuration
             catch
             {
                 return [];
+            }
+        }
+
+        /// <summary>Les (clé, état) dont l'envoi est en attente.</summary>
+        public static List<(string Key, OlscEntry Entry)> AllPending()
+        {
+            lock (_lock)
+            {
+                return LoadAll().Where(kv => kv.Value.PendingUpload).Select(kv => (kv.Key, kv.Value)).ToList();
             }
         }
 

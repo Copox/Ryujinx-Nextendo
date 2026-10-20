@@ -49,8 +49,16 @@ namespace Ryujinx.Ava.UI.Applet
 
         private void SetNextendoWindowIcon()
         {
-            using Stream iconStream = AssetLoader.Open(new Uri("resm:Ryujinx.Assets.UIImages.Logo_Nextendo_Window.png?assembly=Ryujinx"));
-            Icon = new Bitmap(iconStream);
+            // [Nextendo] Une icône manquante ne doit jamais empêcher d'afficher l'erreur du jeu.
+            try
+            {
+                using Stream iconStream = AssetLoader.Open(new Uri("resm:Ryujinx.Assets.UIImages.Logo_Nextendo_Window.png?assembly=Ryujinx"));
+                Icon = new Bitmap(iconStream);
+            }
+            catch (Exception)
+            {
+                // icône par défaut
+            }
         }
 
         public string Message { get; set; }

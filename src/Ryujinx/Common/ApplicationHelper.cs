@@ -686,10 +686,12 @@ namespace Ryujinx.Ava.Common
                 }
 
                 string root = Path.Combine(VirtualFileSystem.GetNandPath(), "user", "save", info.SaveDataId.ToString("x16"));
+                // Marqué « en attente » AVANT l'envoi : une fermeture de l'émulateur le relancera au prochain démarrage.
+                Ryujinx.Common.Configuration.NextendoIslandCloud.MarkPending(key, root);
                 return Task.Run(async () =>
                 {
                     Ryujinx.Common.Configuration.NextendoIslandCloud.Outcome outcome =
-                        await Ryujinx.Common.Configuration.NextendoIslandCloud.UploadAsync(titleId, root, key, onlyIfChanged: true);
+                        await Ryujinx.Common.Configuration.NextendoIslandCloud.UploadPendingAsync(titleId, root, key);
                     Logger.Info?.Print(LogClass.Application, $"[Nextendo] island backup after the game: {outcome}");
                 });
             }

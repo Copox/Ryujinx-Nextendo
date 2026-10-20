@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace Ryujinx.Common.Configuration
@@ -25,6 +26,7 @@ namespace Ryujinx.Common.Configuration
             NoLocalSave,
             InvalidIsland,
             Unchanged,
+            Deferred,
         }
 
         private static string Url(ulong titleId, string suffix = "") => $"{NextendoEndpoint.BaseUrl()}/api/save/{titleId:x16}{suffix}";
@@ -127,11 +129,84 @@ namespace Ryujinx.Common.Configuration
         /// Envoie l'île de la sauvegarde <paramref name="saveRoot"/> avec les données du jeu du profil.
         /// <paramref name="onlyIfChanged"/> : l'envoi d'après-partie n'envoie pas une île inchangée.
         /// </summary>
+        // Un seul envoi à la fois : un envoi plus ancien ne peut pas finir après un plus récent.
+        private static readonly SemaphoreSlim _gate = new(1, 1);
+
+        /// <summary>
+        /// Vrai quand le jeu de ce titre tourne : l'envoi d'après-partie n'est alors pas lancé
+        /// (le jeu écrit sa sauvegarde ; l'envoi suivra sa fin). Posé par l'interface.
+        /// </summary>
+        public static Func<ulong, bool> IsGameRunning { get; set; } = _ => false;
+
         public static async Task<Outcome> UploadAsync(ulong titleId, string saveRoot, string key, bool onlyIfChanged)
+        {
+            await _gate.WaitAsync();
+            try
+            {
+                return await UploadLockedAsync(titleId, saveRoot, key, onlyIfChanged);
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+
+        /// <summary>
+        /// Comme le service système de la Switch, l'archivage se fait hors du jeu. L'envoi est
+        /// d'abord marqué « en attente » sur le disque : une fermeture de l'émulateur avant la fin
+        /// le laisse en attente, et il repart au lancement suivant (<see cref="RunPendingAsync"/>).
+        /// </summary>
+        public static void MarkPending(string key, string saveRoot)
+        {
+            NextendoIslandSync.Update(key, e =>
+            {
+                e.PendingUpload = true;
+                e.PendingSaveRoot = saveRoot ?? "";
+            });
+        }
+
+        /// <summary>Envoie l'île d'un profil marqué en attente, puis lève la marque si c'est fait.</summary>
+        public static async Task<Outcome> UploadPendingAsync(ulong titleId, string saveRoot, string key)
+        {
+            if (IsGameRunning(titleId))
+            {
+                return Outcome.Deferred;
+            }
+
+            Outcome outcome = await UploadAsync(titleId, saveRoot, key, onlyIfChanged: true);
+            if (outcome is Outcome.Ok or Outcome.Unchanged or Outcome.NoLocalSave)
+            {
+                NextendoIslandSync.Update(key, e => e.PendingUpload = false);
+            }
+
+            return outcome;
+        }
+
+        /// <summary>Au lancement de l'émulateur : relance les envois restés en attente.</summary>
+        public static async Task RunPendingAsync()
+        {
+            foreach ((string key, NextendoIslandSync.OlscEntry entry) in NextendoIslandSync.AllPending())
+            {
+                if (!ulong.TryParse(key.Split(':')[0], System.Globalization.NumberStyles.HexNumber, null, out ulong titleId) || !NextendoIslandSync.IsStrict(titleId))
+                {
+                    continue;
+                }
+
+                Outcome outcome = await UploadPendingAsync(titleId, entry.PendingSaveRoot, key);
+                Logger.Info?.Print(LogClass.ServiceOlsc, $"[Nextendo] island: pending backup {outcome}");
+            }
+        }
+
+        private static async Task<Outcome> UploadLockedAsync(ulong titleId, string saveRoot, string key, bool onlyIfChanged)
         {
             if (!Usable)
             {
                 return Outcome.Unavailable;
+            }
+
+            if (onlyIfChanged && IsGameRunning(titleId))
+            {
+                return Outcome.Deferred;
             }
 
             string dir = ContentDir(saveRoot);
@@ -147,7 +222,13 @@ namespace Ryujinx.Common.Configuration
                 return Outcome.Unchanged;
             }
 
+            // Instantané en mémoire, vérifié : une sauvegarde qui change pendant la lecture n'est pas envoyée.
             byte[] zip = NextendoIslandSync.ZipDirectory(dir);
+            if (NextendoIslandSync.Fingerprint(dir) != hash)
+            {
+                return Outcome.Deferred;
+            }
+
             byte[] custom = DecodeCustom(entry.Custom);
 
             try
@@ -197,6 +278,19 @@ namespace Ryujinx.Common.Configuration
         /// </summary>
         public static async Task<Outcome> DownloadAsync(ulong titleId, string saveRoot, string key)
         {
+            await _gate.WaitAsync();
+            try
+            {
+                return await DownloadLockedAsync(titleId, saveRoot, key);
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+
+        private static async Task<Outcome> DownloadLockedAsync(ulong titleId, string saveRoot, string key)
+        {
             if (!Usable)
             {
                 return Outcome.Unavailable;
@@ -240,7 +334,11 @@ namespace Ryujinx.Common.Configuration
 
             // L'île restaurée est celle du cloud : pas la peine de la renvoyer à la fin de la partie.
             string restoredHash = NextendoIslandSync.Fingerprint(dir0);
-            NextendoIslandSync.Update(key, e => e.LastUploadedHash = restoredHash);
+            NextendoIslandSync.Update(key, e =>
+            {
+                e.LastUploadedHash = restoredHash;
+                e.PendingUpload = false;
+            });
 
             (Outcome metaRc, NextendoIslandSync.CloudIsland island) = await GetMetaAsync(titleId);
             if (metaRc == Outcome.Ok)
