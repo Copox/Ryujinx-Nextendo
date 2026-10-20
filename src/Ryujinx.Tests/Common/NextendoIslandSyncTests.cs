@@ -144,6 +144,74 @@ namespace Ryujinx.Tests.Common
             Assert.IsFalse(IsRestorable(null));
         }
 
+        private static string SaveRoot(byte content)
+        {
+            string root = Path.Combine(Path.GetTempPath(), "nxsave_" + Path.GetRandomFileName());
+            foreach (string sub in new[] { "0", "1" })
+            {
+                Directory.CreateDirectory(Path.Combine(root, sub, "Villager0"));
+                File.WriteAllBytes(Path.Combine(root, sub, "main.dat"), new[] { content });
+                File.WriteAllBytes(Path.Combine(root, sub, "Villager0", "personal.dat"), new[] { content });
+            }
+
+            return root;
+        }
+
+        [Test] // restauration : « 0 » et « 1 » remplacés, l'île d'avant gardée en copie
+        public void ReplaceIslandSwapsBothDirectoriesAndKeepsACopy()
+        {
+            string root = SaveRoot(1);
+            string cloud = IslandDir();
+            string backups = Path.Combine(Path.GetTempPath(), "nxbak_" + Path.GetRandomFileName());
+            try
+            {
+                string before = Fingerprint(Path.Combine(root, "0"));
+                Assert.AreEqual(Ryujinx.Common.Configuration.NextendoIslandCloud.Outcome.Ok, ReplaceIsland(root, ZipDirectory(cloud), backups, "acnh"));
+                Assert.AreEqual(Fingerprint(cloud), Fingerprint(Path.Combine(root, "0")));
+                Assert.AreEqual(Fingerprint(cloud), Fingerprint(Path.Combine(root, "1")));
+                CollectionAssert.AreEquivalent(new[] { "0", "1" }, Directory.GetDirectories(root).Select(Path.GetFileName));
+
+                string[] copies = Directory.GetFiles(backups, "acnh-*.zip");
+                Assert.AreEqual(1, copies.Length);
+                string restored = Path.Combine(Path.GetTempPath(), "nxback_" + Path.GetRandomFileName());
+                ExtractIsland(File.ReadAllBytes(copies[0]), restored);
+                Assert.AreEqual(before, Fingerprint(restored));
+                Directory.Delete(restored, true);
+            }
+            finally
+            {
+                Directory.Delete(root, true);
+                Directory.Delete(cloud, true);
+                if (Directory.Exists(backups))
+                {
+                    Directory.Delete(backups, true);
+                }
+            }
+        }
+
+        [Test] // une île téléchargée invalide ne touche à rien
+        public void ReplaceIslandWithInvalidZipKeepsTheLocalIsland()
+        {
+            string root = SaveRoot(7);
+            string backups = Path.Combine(Path.GetTempPath(), "nxbak_" + Path.GetRandomFileName());
+            try
+            {
+                string before0 = Fingerprint(Path.Combine(root, "0"));
+                string before1 = Fingerprint(Path.Combine(root, "1"));
+                byte[] bad = Zip(("main.dat", new byte[1]), ("../evil.dat", new byte[1]));
+                Assert.AreEqual(Ryujinx.Common.Configuration.NextendoIslandCloud.Outcome.InvalidIsland, ReplaceIsland(root, bad, backups, "acnh"));
+                Assert.AreEqual(Ryujinx.Common.Configuration.NextendoIslandCloud.Outcome.InvalidIsland, ReplaceIsland(root, new byte[] { 1, 2, 3 }, backups, "acnh"));
+                Assert.AreEqual(before0, Fingerprint(Path.Combine(root, "0")));
+                Assert.AreEqual(before1, Fingerprint(Path.Combine(root, "1")));
+                CollectionAssert.AreEquivalent(new[] { "0", "1" }, Directory.GetDirectories(root).Select(Path.GetFileName));
+                Assert.IsFalse(Directory.Exists(backups));
+            }
+            finally
+            {
+                Directory.Delete(root, true);
+            }
+        }
+
         [Test]
         public void OnlyAcnhIsStrict()
         {

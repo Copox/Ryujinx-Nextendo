@@ -224,6 +224,133 @@ namespace Ryujinx.Common.Configuration
             }
         }
 
+        /// <summary>
+        /// Remplace l'île de la sauvegarde <paramref name="saveRoot"/> (dossiers « 0 » validé et « 1 »
+        /// de travail) par celle du zip. L'île de cette machine est d'abord gardée dans
+        /// <paramref name="backupsDir"/> (5 dernières « &lt;prefix&gt;-&lt;date&gt;.zip ») ; un zip invalide ne
+        /// touche à rien, un échec en cours de route remet l'île d'avant.
+        /// </summary>
+        public static NextendoIslandCloud.Outcome ReplaceIsland(string saveRoot, byte[] zip, string backupsDir, string prefix)
+        {
+            string fresh = Path.Combine(saveRoot, "nx_restore_new");
+            string old0 = Path.Combine(saveRoot, "nx_restore_old0");
+            string old1 = Path.Combine(saveRoot, "nx_restore_old1");
+
+            try
+            {
+                foreach (string leftover in new[] { fresh, old0, old1 })
+                {
+                    TryDelete(leftover);
+                }
+
+                ExtractIsland(zip, fresh);
+            }
+            catch (Exception)
+            {
+                TryDelete(fresh);
+                return NextendoIslandCloud.Outcome.InvalidIsland;
+            }
+
+            string current = NextendoIslandCloud.ContentDir(saveRoot);
+            if (current != null)
+            {
+                try
+                {
+                    Directory.CreateDirectory(backupsDir);
+                    string stamp = DateTime.UtcNow.ToString("yyyyMMddTHHmmssfffZ");
+                    File.WriteAllBytes(Path.Combine(backupsDir, $"{prefix}-{stamp}.zip"), ZipDirectory(current));
+                    foreach (string extra in Directory.GetFiles(backupsDir, $"{prefix}-*.zip").OrderByDescending(f => f, StringComparer.Ordinal).Skip(5))
+                    {
+                        File.Delete(extra);
+                    }
+                }
+                catch (Exception)
+                {
+                    TryDelete(fresh);
+                    return NextendoIslandCloud.Outcome.NoLocalSave;
+                }
+            }
+
+            string dir0 = Path.Combine(saveRoot, "0");
+            string dir1 = Path.Combine(saveRoot, "1");
+            bool had0 = Directory.Exists(dir0);
+            bool had1 = Directory.Exists(dir1);
+
+            try
+            {
+                if (had0)
+                {
+                    Directory.Move(dir0, old0);
+                }
+
+                if (had1)
+                {
+                    Directory.Move(dir1, old1);
+                }
+
+                Directory.Move(fresh, dir0);
+                if (had1)
+                {
+                    CopyDirectory(dir0, dir1);
+                }
+            }
+            catch (Exception)
+            {
+                try
+                {
+                    if (Directory.Exists(old0))
+                    {
+                        TryDelete(dir0);
+                        Directory.Move(old0, dir0);
+                    }
+
+                    if (Directory.Exists(old1))
+                    {
+                        TryDelete(dir1);
+                        Directory.Move(old1, dir1);
+                    }
+                }
+                catch (Exception)
+                {
+                    // la copie reste dans backupsDir
+                }
+
+                TryDelete(fresh);
+                return NextendoIslandCloud.Outcome.NoLocalSave;
+            }
+
+            TryDelete(old0);
+            TryDelete(old1);
+
+            return NextendoIslandCloud.Outcome.Ok;
+        }
+
+        private static void CopyDirectory(string src, string dst)
+        {
+            Directory.CreateDirectory(dst);
+            foreach (string file in Directory.EnumerateFiles(src, "*", SearchOption.AllDirectories))
+            {
+                string target = Path.Combine(dst, Path.GetRelativePath(src, file));
+                Directory.CreateDirectory(Path.GetDirectoryName(target));
+                File.Copy(file, target, overwrite: true);
+            }
+        }
+
+        private static void TryDelete(string dir)
+        {
+            try
+            {
+                if (Directory.Exists(dir))
+                {
+                    Directory.Delete(dir, true);
+                }
+            }
+            catch (Exception)
+            {
+                // un reste sans effet : effacé au prochain essai
+            }
+        }
+
         // ---- réglages d'archivage, données personnalisées et cache, par profil ---------------
 
         /// <summary>Ce qu'olsc garde par (profil, jeu) : réglage (1 = activé), données du jeu, cache de l'île.</summary>

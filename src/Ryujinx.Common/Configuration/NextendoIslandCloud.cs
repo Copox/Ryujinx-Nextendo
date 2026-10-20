@@ -228,99 +228,15 @@ namespace Ryujinx.Common.Configuration
                 return Outcome.NetworkError;
             }
 
-            string fresh = Path.Combine(saveRoot, "nx_restore_new");
-            string old0 = Path.Combine(saveRoot, "nx_restore_old0");
-            string old1 = Path.Combine(saveRoot, "nx_restore_old1");
-
-            try
+            string backups = Path.Combine(AppDataManager.BaseDirPath ?? ".", "nextendo_island_backups");
+            Outcome replaced = NextendoIslandSync.ReplaceIsland(saveRoot, zip, backups, $"{titleId:x16}");
+            if (replaced != Outcome.Ok)
             {
-                foreach (string leftover in new[] { fresh, old0, old1 })
-                {
-                    TryDelete(leftover);
-                }
-
-                NextendoIslandSync.ExtractIsland(zip, fresh);
-            }
-            catch (Exception ex)
-            {
-                Logger.Warning?.Print(LogClass.ServiceOlsc, $"[Nextendo] island: downloaded island refused ({ex.Message})");
-                TryDelete(fresh);
-                return Outcome.InvalidIsland;
-            }
-
-            string current = ContentDir(saveRoot);
-            if (current != null)
-            {
-                try
-                {
-                    string backups = Path.Combine(AppDataManager.BaseDirPath ?? ".", "nextendo_island_backups");
-                    Directory.CreateDirectory(backups);
-                    string stamp = DateTime.UtcNow.ToString("yyyyMMddTHHmmssZ");
-                    File.WriteAllBytes(Path.Combine(backups, $"{titleId:x16}-{stamp}.zip"), NextendoIslandSync.ZipDirectory(current));
-                    foreach (string extra in Directory.GetFiles(backups, $"{titleId:x16}-*.zip").OrderByDescending(f => f, StringComparer.Ordinal).Skip(5))
-                    {
-                        File.Delete(extra);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Logger.Warning?.Print(LogClass.ServiceOlsc, $"[Nextendo] island: local island backup failed ({ex.Message}), nothing replaced");
-                    TryDelete(fresh);
-                    return Outcome.NoLocalSave;
-                }
+                Logger.Warning?.Print(LogClass.ServiceOlsc, $"[Nextendo] island: restore not applied ({replaced}), local island kept");
+                return replaced;
             }
 
             string dir0 = Path.Combine(saveRoot, "0");
-            string dir1 = Path.Combine(saveRoot, "1");
-            bool had0 = Directory.Exists(dir0);
-            bool had1 = Directory.Exists(dir1);
-
-            try
-            {
-                if (had0)
-                {
-                    Directory.Move(dir0, old0);
-                }
-
-                if (had1)
-                {
-                    Directory.Move(dir1, old1);
-                }
-
-                Directory.Move(fresh, dir0);
-                if (had1)
-                {
-                    CopyDirectory(dir0, dir1);
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Warning?.Print(LogClass.ServiceOlsc, $"[Nextendo] island: restore failed, local island kept ({ex.Message})");
-                try
-                {
-                    if (Directory.Exists(old0))
-                    {
-                        TryDelete(dir0);
-                        Directory.Move(old0, dir0);
-                    }
-
-                    if (Directory.Exists(old1))
-                    {
-                        TryDelete(dir1);
-                        Directory.Move(old1, dir1);
-                    }
-                }
-                catch (Exception rollback)
-                {
-                    Logger.Error?.Print(LogClass.ServiceOlsc, $"[Nextendo] island: rollback failed ({rollback.Message}), copy kept in nextendo_island_backups");
-                }
-
-                TryDelete(fresh);
-                return Outcome.NoLocalSave;
-            }
-
-            TryDelete(old0);
-            TryDelete(old1);
 
             // L'île restaurée est celle du cloud : pas la peine de la renvoyer à la fin de la partie.
             string restoredHash = NextendoIslandSync.Fingerprint(dir0);
@@ -335,32 +251,6 @@ namespace Ryujinx.Common.Configuration
             Logger.Info?.Print(LogClass.ServiceOlsc, $"[Nextendo] island: rev {rev} restored ({zip.Length} bytes)");
 
             return Outcome.Ok;
-        }
-
-        private static void CopyDirectory(string src, string dst)
-        {
-            Directory.CreateDirectory(dst);
-            foreach (string file in Directory.EnumerateFiles(src, "*", SearchOption.AllDirectories))
-            {
-                string target = Path.Combine(dst, Path.GetRelativePath(src, file));
-                Directory.CreateDirectory(Path.GetDirectoryName(target));
-                File.Copy(file, target, overwrite: true);
-            }
-        }
-
-        private static void TryDelete(string dir)
-        {
-            try
-            {
-                if (Directory.Exists(dir))
-                {
-                    Directory.Delete(dir, true);
-                }
-            }
-            catch (Exception)
-            {
-                // un reste sans effet : effacé au prochain essai
-            }
         }
     }
 }
