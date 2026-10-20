@@ -2299,16 +2299,7 @@ namespace Ryujinx.Ava.UI.ViewModels
             // [Nextendo] Download this title's cloud save and apply it BEFORE the game
             // runs (compatible titles only; only meaningful because the user owns + is
             // launching this game).
-            if (application.CanUseNextendoCloudSaves && Ryujinx.Common.Configuration.NextendoAccount.IsLinked
-                && Ryujinx.Common.Configuration.NextendoIslandSync.IsStrict(application.Id))
-            {
-                // [Nextendo] Île ACNH : une île par compte, rien remplacé sans le choix du joueur.
-                if (!await Ryujinx.Ava.Common.NextendoIslandCloud.PrepareLaunchAsync(application))
-                {
-                    return;
-                }
-            }
-            else if (application.CanUseNextendoCloudSaves && Ryujinx.Common.Configuration.NextendoAccount.IsLinked)
+            if (application.CanUseNextendoCloudSaves && Ryujinx.Common.Configuration.NextendoAccount.IsLinked)
             {
                 // [Nextendo] If the local save folder is EMPTY but the account has a cloud save,
                 // ask the player (Switch-style) before starting: download it, or launch anyway with
@@ -2461,22 +2452,7 @@ namespace Ryujinx.Ava.UI.ViewModels
                 // Track the playing title so the crash handler can push its save best-effort.
                 Ryujinx.Ava.Common.NextendoSaveSync.Playing = application;
                 _nextendoSaveTimer = new System.Threading.Timer(
-                    _ =>
-                    {
-                        if (!IsGameRunning)
-                        {
-                            return;
-                        }
-
-                        if (Ryujinx.Common.Configuration.NextendoIslandSync.IsStrict(application.Id))
-                        {
-                            _ = Ryujinx.Ava.Common.NextendoIslandCloud.PeriodicAsync(application);
-                        }
-                        else
-                        {
-                            _ = FlushNextendoSaveAsync();
-                        }
-                    },
+                    _ => { if (IsGameRunning) { _ = FlushNextendoSaveAsync(); } },
                     null, TimeSpan.FromSeconds(60), TimeSpan.FromMinutes(3));
             }
 
@@ -2580,17 +2556,7 @@ namespace Ryujinx.Ava.UI.ViewModels
                 // MainWindow.OnClosing; abnormal exits are still covered by the periodic push.
                 _nextendoSaveTimer?.Dispose();
                 _nextendoSaveTimer = null;
-                ApplicationData exitedApp = _currentApplicationData;
-                if (exitedApp != null && exitedApp.CanUseNextendoCloudSaves && Ryujinx.Common.Configuration.NextendoAccount.IsLinked
-                    && Ryujinx.Common.Configuration.NextendoIslandSync.IsStrict(exitedApp.Id))
-                {
-                    // Île ACNH : dernier envoi conditionnel, puis question si le cloud a changé ailleurs.
-                    await Ryujinx.Ava.Common.NextendoIslandCloud.FinishAsync(exitedApp, canAsk: true);
-                }
-                else
-                {
-                    await FlushNextendoSaveAsync();
-                }
+                await FlushNextendoSaveAsync();
                 Ryujinx.Ava.Common.NextendoSaveSync.Playing = null; // normal exit: no crash-flush needed
 
                 await HandleRelaunch();

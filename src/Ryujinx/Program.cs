@@ -288,6 +288,9 @@ namespace Ryujinx.Ava
             // Parse arguments
             CommandLineState.ParseArguments(args);
 
+            // [Nextendo] Identité d'application des appels faits depuis HLE (archivage olsc de l'île).
+            Ryujinx.Common.Configuration.NextendoIslandSync.ClientId = Ryujinx.Ava.Common.NextendoAppIdentity.Id;
+
             if (OperatingSystem.IsMacOS())
             {
                 MVKInitialization.InitializeResolver();

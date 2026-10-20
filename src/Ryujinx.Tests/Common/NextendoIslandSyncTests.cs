@@ -1,43 +1,16 @@
 using NUnit.Framework;
-using Ryujinx.Common.Configuration;
+using System;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Text;
 using static Ryujinx.Common.Configuration.NextendoIslandSync;
 
 namespace Ryujinx.Tests.Common
 {
-    // [Nextendo] Île ACNH dans le cloud, règle de Nintendo : un emplacement par compte, le dernier envoi gagne,
-    // restauration seulement si débloquée sur le site ; le zip envoyé a la forme que le serveur accepte.
+    // [Nextendo] Archivage de l'île d'ACNH par olsc : formats lus dans le client d'ACNH 3.0.3.
     public class NextendoIslandSyncTests
     {
-        private static readonly SyncState Linked = new() { Linked = true, Rev = 4, LocalHash = "aaa" };
-
-        [Test]
-        public void NothingAnywhere() => Assert.AreEqual(LaunchAction.Nothing, Decide(false, false, false, null));
-
-        [Test] // île injectée ou jamais liée ici : on DEMANDE avant de la lier (elle remplacera l'archive)
-        public void UnlinkedLocalIslandAsksToLink() => Assert.AreEqual(LaunchAction.OfferLink, Decide(false, false, true, null));
-
-        [Test] // même si le cloud a une île : lier celle-ci la remplacera, comme dans le jeu
-        public void UnlinkedLocalIslandOverCloudAsksToLink() => Assert.AreEqual(LaunchAction.OfferLink, Decide(true, false, true, new SyncState()));
-
-        [Test] // île liée : plus aucune question, le dernier envoi gagne
-        public void LinkedIslandNeedsNoQuestion() => Assert.AreEqual(LaunchAction.Nothing, Decide(true, false, true, Linked));
-
-        [Test] // console neuve, île dans le cloud, restauration verrouillée : rien (comme chez Nintendo)
-        public void EmptyLocalWithLockedRestoreDoesNothing() => Assert.AreEqual(LaunchAction.Nothing, Decide(true, false, false, null));
-
-        [Test] // restauration débloquée sur le site : on la propose, île locale ou non
-        public void UnlockedRestoreIsOffered()
-        {
-            Assert.AreEqual(LaunchAction.OfferRestore, Decide(true, true, false, null));
-            Assert.AreEqual(LaunchAction.OfferRestore, Decide(true, true, true, Linked));
-        }
-
-        [Test] // débloquée mais rien dans le cloud : rien à restaurer
-        public void UnlockedRestoreWithoutCloudIsIgnored() => Assert.AreEqual(LaunchAction.OfferLink, Decide(false, true, true, null));
-
         private static string IslandDir()
         {
             string d = Path.Combine(Path.GetTempPath(), "nxile_" + Path.GetRandomFileName());
@@ -46,6 +19,21 @@ namespace Ryujinx.Tests.Common
             File.WriteAllBytes(Path.Combine(d, "mainHeader.dat"), new byte[768]);
             File.WriteAllBytes(Path.Combine(d, "Villager0", "personal.dat"), new byte[] { 9 });
             return d;
+        }
+
+        private static byte[] Zip(params (string Name, byte[] Data)[] files)
+        {
+            using MemoryStream ms = new();
+            using (ZipArchive z = new(ms, ZipArchiveMode.Create, leaveOpen: true))
+            {
+                foreach ((string name, byte[] data) in files)
+                {
+                    using Stream s = z.CreateEntry(name).Open();
+                    s.Write(data);
+                }
+            }
+
+            return ms.ToArray();
         }
 
         [Test]
@@ -82,6 +70,78 @@ namespace Ryujinx.Tests.Common
             {
                 Directory.Delete(d, true);
             }
+        }
+
+        [Test] // aller-retour : ce qu'on envoie est ce qu'on restaure
+        public void ExtractRestoresWhatWasZipped()
+        {
+            string d = IslandDir();
+            string target = Path.Combine(Path.GetTempPath(), "nxile_out_" + Path.GetRandomFileName());
+            try
+            {
+                ExtractIsland(ZipDirectory(d), target);
+                Assert.AreEqual(Fingerprint(d), Fingerprint(target));
+            }
+            finally
+            {
+                Directory.Delete(d, true);
+                if (Directory.Exists(target))
+                {
+                    Directory.Delete(target, true);
+                }
+            }
+        }
+
+        [Test] // jamais un fichier hors de la sauvegarde, jamais autre chose qu'une île
+        public void ExtractRefusesEscapesAndNonIslands()
+        {
+            foreach (byte[] bad in new[]
+            {
+                Zip(("main.dat", new byte[1]), ("../evil.dat", new byte[1])),
+                Zip(("main.dat", new byte[1]), ("a/../../evil.dat", new byte[1])),
+                Zip(("main.dat", new byte[1]), ("C:/evil.dat", new byte[1])),
+                Zip(("/main.dat", new byte[1])),
+                Zip(("Villager0/personal.dat", new byte[1])),
+            })
+            {
+                string target = Path.Combine(Path.GetTempPath(), "nxile_bad_" + Path.GetRandomFileName());
+                Assert.Throws<InvalidDataException>(() => ExtractIsland(bad, target));
+                Assert.IsFalse(Directory.Exists(target), "rien ne doit être écrit");
+            }
+        }
+
+        [Test] // élément SaveDataBackupInfo de 0x410 octets : +0 id, +8 PosixTime, +0x10 données du jeu
+        public void BackupInfoLayout()
+        {
+            byte[] info = new byte[BackupInfoSize];
+            Array.Fill(info, (byte)0xAA);
+            byte[] custom = Encoding.ASCII.GetBytes("ile\0");
+            WriteBackupInfo(info, 0x1122334455667788, 1760000000, custom);
+            Assert.AreEqual(0x410, info.Length);
+            Assert.AreEqual(0x1122334455667788UL, BitConverter.ToUInt64(info, 0));
+            Assert.AreEqual(1760000000L, BitConverter.ToInt64(info, 8));
+            CollectionAssert.AreEqual(custom, info.Skip(0x10).Take(custom.Length).ToArray());
+            Assert.IsTrue(info.Skip(0x10 + custom.Length).All(b => b == 0), "le reste est remis à zéro");
+        }
+
+        [Test]
+        public void MetaIsParsed()
+        {
+            string custom = Convert.ToBase64String(Encoding.ASCII.GetBytes("ile\0"));
+            CloudIsland c = ParseMeta("{\"exists\":true,\"rev\":7,\"updatedAt\":\"2026-10-20T10:00:00Z\",\"custom\":\"" + custom + "\"}");
+            Assert.IsTrue(c.Exists);
+            Assert.AreEqual(7UL, c.Rev);
+            Assert.AreEqual(new DateTimeOffset(2026, 10, 20, 10, 0, 0, TimeSpan.Zero).ToUnixTimeSeconds(), c.PosixTime);
+            Assert.IsTrue(IsRestorable(c));
+        }
+
+        [Test] // une île sans les données du jeu ferait échouer toute la liste dans le jeu : non proposée
+        public void IslandWithoutGameDataIsNotOffered()
+        {
+            Assert.IsFalse(IsRestorable(ParseMeta("{\"exists\":true,\"rev\":3}")));
+            Assert.IsFalse(IsRestorable(ParseMeta("{\"exists\":false,\"rev\":0}")));
+            Assert.IsFalse(IsRestorable(ParseMeta("{\"exists\":true,\"rev\":3,\"custom\":\"pas du base64\"}")));
+            Assert.IsFalse(IsRestorable(null));
         }
 
         [Test]
