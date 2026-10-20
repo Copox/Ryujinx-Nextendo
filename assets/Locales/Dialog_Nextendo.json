@@ -11976,56 +11976,6 @@
       }
     },
     {
-      "ID": "IslandOpenElsewhereFormat",
-      "Translations": {
-        "ar_SA": "",
-        "de_DE": "",
-        "el_GR": "",
-        "en_US": "Your island seems to be open on {0} (last seen {1} min ago). If you play here at the same time, the two games will diverge and one of them will have to be dropped when syncing.",
-        "es_ES": "",
-        "fr_FR": "Ton île semble ouverte sur {0} (dernier signe il y a {1} min). Si tu joues ici en même temps, les deux parties divergent et il faudra en abandonner une à la synchronisation.",
-        "he_IL": "",
-        "it_IT": "",
-        "ja_JP": "",
-        "ko_KR": "",
-        "no_NO": "",
-        "pl_PL": "",
-        "pt_BR": "",
-        "ru_RU": "",
-        "sv_SE": "",
-        "th_TH": "",
-        "tr_TR": "",
-        "uk_UA": "",
-        "zh_CN": "",
-        "zh_TW": ""
-      }
-    },
-    {
-      "ID": "IslandFirstUploadFormat",
-      "Translations": {
-        "ar_SA": "",
-        "de_DE": "",
-        "el_GR": "",
-        "en_US": "No island is stored in the cloud for your account. Link this emulator's island ({0}) to your Nextendo account? You will then be able to get it back on Ryujinx, Citron or your Switch.",
-        "es_ES": "",
-        "fr_FR": "Aucune île n'est enregistrée dans le cloud pour ton compte. Lier l'île de cet émulateur ({0}) à ton compte Nextendo ? Tu pourras ensuite la récupérer sur Ryujinx, Citron ou ta Switch.",
-        "he_IL": "",
-        "it_IT": "",
-        "ja_JP": "",
-        "ko_KR": "",
-        "no_NO": "",
-        "pl_PL": "",
-        "pt_BR": "",
-        "ru_RU": "",
-        "sv_SE": "",
-        "th_TH": "",
-        "tr_TR": "",
-        "uk_UA": "",
-        "zh_CN": "",
-        "zh_TW": ""
-      }
-    },
-    {
       "ID": "IslandLinkBtn",
       "Translations": {
         "ar_SA": "",
@@ -12076,14 +12026,14 @@
       }
     },
     {
-      "ID": "IslandDownloadFormat",
+      "ID": "IslandLinkFormat",
       "Translations": {
         "ar_SA": "",
         "de_DE": "",
         "el_GR": "",
-        "en_US": "Your cloud island (saved on {0} from {1}) is newer than this emulator's. Download it? This emulator's island will be replaced.",
+        "en_US": "Link the island of this emulator ({0}) to your Nextendo account? Like island backup in the game, your account keeps one island: each time you save, this island will replace the one in the cloud.",
         "es_ES": "",
-        "fr_FR": "Ton île dans le cloud (enregistrée le {0} depuis {1}) est plus récente que celle de cet émulateur. La télécharger ? L'île de cet émulateur sera remplacée.",
+        "fr_FR": "Lier l'île de cet émulateur ({0}) à ton compte Nextendo ? Comme l'archivage de l'île dans le jeu, ton compte garde une seule île : à chaque sauvegarde, cette île remplacera celle du cloud.",
         "he_IL": "",
         "it_IT": "",
         "ja_JP": "",
@@ -12101,14 +12051,14 @@
       }
     },
     {
-      "ID": "IslandKeepLocalBtn",
+      "ID": "IslandLinkReplaceFormat",
       "Translations": {
         "ar_SA": "",
         "de_DE": "",
         "el_GR": "",
-        "en_US": "Keep this emulator's island",
+        "en_US": "Your account already has an island in the cloud (saved on {0} from {1}). Link the island of this emulator ({2}) instead? The island in the cloud will be replaced. To get it back here instead, allow restore from your account page on the website.",
         "es_ES": "",
-        "fr_FR": "Garder l'île de cet émulateur",
+        "fr_FR": "Ton compte a déjà une île dans le cloud (enregistrée le {0} depuis {1}). Lier plutôt l'île de cet émulateur ({2}) ? L'île du cloud sera remplacée. Pour la récupérer ici à la place, autorise la restauration depuis ton espace sur le site.",
         "he_IL": "",
         "it_IT": "",
         "ja_JP": "",
@@ -12126,14 +12076,14 @@
       }
     },
     {
-      "ID": "IslandKeepCloudBtn",
+      "ID": "IslandRestoreFormat",
       "Translations": {
         "ar_SA": "",
         "de_DE": "",
         "el_GR": "",
-        "en_US": "Keep the cloud island",
+        "en_US": "Restore is allowed for your account. Restore the island saved on {0} from {1}? The island of this emulator will be replaced.",
         "es_ES": "",
-        "fr_FR": "Garder l'île du cloud",
+        "fr_FR": "La restauration est autorisée pour ton compte. Restaurer l'île enregistrée le {0} depuis {1} ? L'île de cet émulateur sera remplacée.",
         "he_IL": "",
         "it_IT": "",
         "ja_JP": "",
@@ -12151,64 +12101,14 @@
       }
     },
     {
-      "ID": "IslandConflictFormat",
+      "ID": "IslandRestoreBtn",
       "Translations": {
         "ar_SA": "",
         "de_DE": "",
         "el_GR": "",
-        "en_US": "Two different islands: the cloud one (saved on {0} from {1}) and this emulator's (modified on {2}). Only one island is kept per account: the other will be lost. Most recent: {3}.",
+        "en_US": "Restore",
         "es_ES": "",
-        "fr_FR": "Deux îles différentes : celle du cloud (enregistrée le {0} depuis {1}) et celle de cet émulateur (modifiée le {2}). Une seule île est gardée par compte : l'autre sera perdue. La plus récente : {3}.",
-        "he_IL": "",
-        "it_IT": "",
-        "ja_JP": "",
-        "ko_KR": "",
-        "no_NO": "",
-        "pl_PL": "",
-        "pt_BR": "",
-        "ru_RU": "",
-        "sv_SE": "",
-        "th_TH": "",
-        "tr_TR": "",
-        "uk_UA": "",
-        "zh_CN": "",
-        "zh_TW": ""
-      }
-    },
-    {
-      "ID": "IslandConflictExitFormat",
-      "Translations": {
-        "ar_SA": "",
-        "de_DE": "",
-        "el_GR": "",
-        "en_US": "While you were playing, the cloud island was changed from {0} ({1}). Replace the cloud island with the one you just played? Otherwise your island stays on this emulator and you will be asked again at the next launch.",
-        "es_ES": "",
-        "fr_FR": "Pendant ta partie, l'île du cloud a été modifiée depuis {0} ({1}). Remplacer l'île du cloud par celle que tu viens de jouer ? Sinon ton île reste sur cet émulateur et le choix te sera proposé au prochain lancement.",
-        "he_IL": "",
-        "it_IT": "",
-        "ja_JP": "",
-        "ko_KR": "",
-        "no_NO": "",
-        "pl_PL": "",
-        "pt_BR": "",
-        "ru_RU": "",
-        "sv_SE": "",
-        "th_TH": "",
-        "tr_TR": "",
-        "uk_UA": "",
-        "zh_CN": "",
-        "zh_TW": ""
-      }
-    },
-    {
-      "ID": "IslandReplaceCloudBtn",
-      "Translations": {
-        "ar_SA": "",
-        "de_DE": "",
-        "el_GR": "",
-        "en_US": "Replace the cloud island",
-        "es_ES": "",
-        "fr_FR": "Remplacer l'île du cloud",
+        "fr_FR": "Restaurer",
         "he_IL": "",
         "it_IT": "",
         "ja_JP": "",

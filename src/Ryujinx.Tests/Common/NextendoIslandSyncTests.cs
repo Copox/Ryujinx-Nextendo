@@ -7,38 +7,36 @@ using static Ryujinx.Common.Configuration.NextendoIslandSync;
 
 namespace Ryujinx.Tests.Common
 {
-    // [Nextendo] Île ACNH dans le cloud : la décision au lancement ne doit jamais écraser une île
-    // sans demander, et le zip envoyé doit avoir la forme que le serveur accepte.
+    // [Nextendo] Île ACNH dans le cloud, règle de Nintendo : un emplacement par compte, le dernier envoi gagne,
+    // restauration seulement si débloquée sur le site ; le zip envoyé a la forme que le serveur accepte.
     public class NextendoIslandSyncTests
     {
-        private static readonly SyncState Synced = new() { Rev = 4, LocalHash = "aaa" };
+        private static readonly SyncState Linked = new() { Linked = true, Rev = 4, LocalHash = "aaa" };
 
         [Test]
-        public void NothingAnywhere() => Assert.AreEqual(LaunchAction.Nothing, Decide(false, 0, false, "", null));
+        public void NothingAnywhere() => Assert.AreEqual(LaunchAction.Nothing, Decide(false, false, false, null));
 
-        [Test] // question c : île injectée, cloud vide -> on DEMANDE avant de la lier au compte
-        public void InjectedIslandWithEmptyCloudAsksBeforeLinking() =>
-            Assert.AreEqual(LaunchAction.OfferFirstUpload, Decide(false, 0, true, "bbb", null));
+        [Test] // île injectée ou jamais liée ici : on DEMANDE avant de la lier (elle remplacera l'archive)
+        public void UnlinkedLocalIslandAsksToLink() => Assert.AreEqual(LaunchAction.OfferLink, Decide(false, false, true, null));
 
-        [Test]
-        public void EmptyLocalOffersDownload() =>
-            Assert.AreEqual(LaunchAction.OfferDownloadEmptyLocal, Decide(true, 4, false, "", Synced));
+        [Test] // même si le cloud a une île : lier celle-ci la remplacera, comme dans le jeu
+        public void UnlinkedLocalIslandOverCloudAsksToLink() => Assert.AreEqual(LaunchAction.OfferLink, Decide(true, false, true, new SyncState()));
 
-        [Test]
-        public void InSync() => Assert.AreEqual(LaunchAction.Nothing, Decide(true, 4, true, "aaa", Synced));
+        [Test] // île liée : plus aucune question, le dernier envoi gagne
+        public void LinkedIslandNeedsNoQuestion() => Assert.AreEqual(LaunchAction.Nothing, Decide(true, false, true, Linked));
 
-        [Test] // joué ici hors ligne ou coupé avant l'envoi : le local avance, pas de question
-        public void LocalAheadNeedsNoQuestion() => Assert.AreEqual(LaunchAction.Nothing, Decide(true, 4, true, "ccc", Synced));
+        [Test] // console neuve, île dans le cloud, restauration verrouillée : rien (comme chez Nintendo)
+        public void EmptyLocalWithLockedRestoreDoesNothing() => Assert.AreEqual(LaunchAction.Nothing, Decide(true, false, false, null));
 
-        [Test] // joué sur la Switch, rien touché ici : proposer le téléchargement
-        public void CloudAheadOffersDownload() =>
-            Assert.AreEqual(LaunchAction.OfferDownloadCloudNewer, Decide(true, 5, true, "aaa", Synced));
+        [Test] // restauration débloquée sur le site : on la propose, île locale ou non
+        public void UnlockedRestoreIsOffered()
+        {
+            Assert.AreEqual(LaunchAction.OfferRestore, Decide(true, true, false, null));
+            Assert.AreEqual(LaunchAction.OfferRestore, Decide(true, true, true, Linked));
+        }
 
-        [Test] // question a : joué des deux côtés -> conflit, le joueur choisit
-        public void BothChangedIsConflict() => Assert.AreEqual(LaunchAction.Conflict, Decide(true, 5, true, "ccc", Synced));
-
-        [Test] // question b : île injectée alors que le cloud en a une -> conflit, jamais d'écrasement
-        public void InjectedIslandOverCloudIsConflict() => Assert.AreEqual(LaunchAction.Conflict, Decide(true, 4, true, "zzz", null));
+        [Test] // débloquée mais rien dans le cloud : rien à restaurer
+        public void UnlockedRestoreWithoutCloudIsIgnored() => Assert.AreEqual(LaunchAction.OfferLink, Decide(false, true, true, null));
 
         private static string IslandDir()
         {

@@ -162,7 +162,7 @@ namespace Ryujinx.Ava.Common
             }
             if (NextendoIslandSync.IsStrict(app.Id))
             {
-                // Île ACNH : envoi conditionnel sur la révision (jamais d'écrasement du cloud).
+                // Île ACNH : si elle est liée, le dernier envoi remplace l'île du cloud (règle de Nintendo).
                 await NextendoIslandCloud.PushAsync(app);
                 return;
             }

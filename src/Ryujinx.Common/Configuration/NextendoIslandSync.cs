@@ -10,11 +10,11 @@ using System.Text.Json;
 namespace Ryujinx.Common.Configuration
 {
     /// <summary>
-    /// [Nextendo] Synchro STRICTE d'une sauvegarde (île d'Animal Crossing: New Horizons) : une seule
-    /// sauvegarde par compte dans le cloud, une révision côté serveur, et jamais d'écrasement sans
-    /// que le joueur l'ait choisi. Ce fichier ne contient que la logique sans interface (testable) :
-    /// l'état de synchro par compte et par jeu, l'empreinte du contenu local, le zip envoyé, et la
-    /// décision prise au lancement.
+    /// [Nextendo] Île d'Animal Crossing: New Horizons dans le cloud, règle de Nintendo (prouvée le
+    /// 20/10 dans ACNH 3.0.3 et olsc 22.5.0) : UN emplacement par compte, la dernière île envoyée
+    /// remplace la précédente ; une île appartient à sa console (aucun signal « en jeu ailleurs ») ;
+    /// la restauration est verrouillée tant que le joueur ne l'a pas débloquée depuis le site
+    /// (chez Nintendo : le support). Ce fichier ne contient que la logique sans interface.
     /// </summary>
     public static class NextendoIslandSync
     {
@@ -25,10 +25,13 @@ namespace Ryujinx.Common.Configuration
 
         public sealed class SyncState
         {
-            /// <summary>Révision du cloud à la dernière synchro réussie (envoi ou téléchargement).</summary>
+            /// <summary>L'île de cette installation est celle archivée pour le compte (« Lier » ou restauration).</summary>
+            public bool Linked { get; set; }
+
+            /// <summary>Révision du cloud au dernier envoi ou à la dernière restauration (information).</summary>
             public ulong Rev { get; set; }
 
-            /// <summary>Empreinte du contenu local à ce moment-là.</summary>
+            /// <summary>Empreinte du contenu local à ce moment-là (évite de renvoyer une île inchangée).</summary>
             public string LocalHash { get; set; } = "";
         }
 
@@ -36,49 +39,31 @@ namespace Ryujinx.Common.Configuration
         {
             /// <summary>Rien à demander : lancer.</summary>
             Nothing,
-            /// <summary>Cloud vide, île locale : proposer de la lier au compte.</summary>
-            OfferFirstUpload,
-            /// <summary>Île dans le cloud, rien en local : proposer de la télécharger.</summary>
-            OfferDownloadEmptyLocal,
-            /// <summary>Le cloud a avancé, le local n'a pas bougé depuis la dernière synchro.</summary>
-            OfferDownloadCloudNewer,
-            /// <summary>Les deux ont changé, ou jamais synchronisé ici avec les deux présents.</summary>
-            Conflict,
+            /// <summary>Île locale pas encore archivée pour le compte : proposer de la lier.</summary>
+            OfferLink,
+            /// <summary>Restauration débloquée depuis le site et île dans le cloud : la proposer.</summary>
+            OfferRestore,
         }
 
         /// <summary>
-        /// Décision au lancement. Ne choisit JAMAIS à la place du joueur quand une île serait perdue :
-        /// seul le cas « rien n'a bougé ou seul le local a avancé » se passe de question.
+        /// Décision au lancement. La restauration n'est proposée que si le joueur l'a débloquée sur
+        /// le site ; sinon une île locale non liée se voit proposer le lien (qui remplacera l'île
+        /// archivée, comme l'activation de l'archivage dans le jeu).
         /// </summary>
-        public static LaunchAction Decide(bool cloudExists, ulong cloudRev, bool localExists, string localHash, SyncState state)
+        public static LaunchAction Decide(bool cloudExists, bool restoreUnlocked, bool localExists, SyncState state)
         {
-            if (!cloudExists)
+            if (cloudExists && restoreUnlocked)
             {
-                return localExists ? LaunchAction.OfferFirstUpload : LaunchAction.Nothing;
+                return LaunchAction.OfferRestore;
             }
 
-            if (!localExists)
+            if (localExists && (state == null || !state.Linked))
             {
-                return LaunchAction.OfferDownloadEmptyLocal;
+                return LaunchAction.OfferLink;
             }
 
-            if (state == null)
-            {
-                return LaunchAction.Conflict;
-            }
-
-            if (state.Rev == cloudRev)
-            {
-                return LaunchAction.Nothing; // local identique ou plus avancé : l'envoi suivra
-            }
-
-            return string.Equals(state.LocalHash, localHash, StringComparison.Ordinal)
-                ? LaunchAction.OfferDownloadCloudNewer
-                : LaunchAction.Conflict;
+            return LaunchAction.Nothing;
         }
-
-        /// <summary>La plus récente des deux, pour la proposer en premier dans le conflit.</summary>
-        public static bool CloudIsNewer(DateTime cloudUtc, DateTime localUtc) => cloudUtc >= localUtc;
 
         // ---- empreinte et zip ---------------------------------------------------------------
 
@@ -168,7 +153,7 @@ namespace Ryujinx.Common.Configuration
 
         private static string _deviceId;
 
-        /// <summary>Identifiant de cette installation (« ryujinx:3fa2c1d0 »), affiché à l'autre machine.</summary>
+        /// <summary>Identifiant de cette installation (« ryujinx:3fa2c1d0 »), affiché sur le site et dans la méta.</summary>
         public static string DeviceId
         {
             get
