@@ -172,6 +172,8 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Sfdnsres.Proxy
             // Plants vs. Zombies: Battle for Neighborville: only its Blaze redirector and gateways.
             ("spring18.gosredirector.ea.com", ResolveConfiguredIp("NEXTENDO_SERVER_IP")),
             ("pvzgw3prodapp-*.ea.com", ResolveConfiguredIp("NEXTENDO_SERVER_IP")),
+            // UNO signs in through Ubisoft's public services endpoint before any matchmaking.
+            ("public-ubiservices.ubi.com", ResolveConfiguredIp("NEXTENDO_SERVER_IP")),
         };
 
         // Reads a server address from an environment variable; falls back to loopback so no
