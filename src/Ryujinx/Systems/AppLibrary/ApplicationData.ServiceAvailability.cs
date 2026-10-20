@@ -23,7 +23,8 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             : "";
 
         [JsonIgnore]
-        public bool CanUseNextendoCloudSaves => IdBaseString == "0100c2500fc20000" && IsNextendoVersionOk;
+        // Splatoon 3, et l'île d'Animal Crossing: New Horizons (synchro stricte, NextendoIslandCloud).
+        public bool CanUseNextendoCloudSaves => (IdBaseString == "0100c2500fc20000" || IdBaseString == "01006f8002326000") && IsNextendoVersionOk;
 
         // Called on the UI thread. Existing built-in titles always keep their original path.
         public void ApplyServiceAvailability(ServiceListing listing, int? players)
