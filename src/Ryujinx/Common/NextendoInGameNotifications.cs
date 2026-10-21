@@ -333,7 +333,7 @@ namespace Ryujinx.Ava.Common
             // between the game server's title id and their emulator's — one path per poll. Comparing the
             // raw name would read that as a launch every flip (the "same person 4×" bug), so the dedup
             // key is stripped to letters/digits ("splatoon2"). Unknown games fall back to the base id.
-            string name = NextendoGameNames.Resolve(baseId) ?? NextendoGameNames.Resolve(appId);
+            string name = NextendoGameNames.Resolve(baseId) ?? NextendoGameNames.Resolve(appId) ?? ServerName(f);
             return name != null ? Canon(name) : baseId;
         }
 
@@ -353,6 +353,9 @@ namespace Ryujinx.Ava.Common
             return sb.ToString();
         }
 
+        private static string ServerName(NextendoApi.Friend f)
+            => string.IsNullOrWhiteSpace(f.Game) ? null : f.Game.Trim();
+
         private static string NameOf(NextendoApi.Friend f)
             => string.IsNullOrEmpty(f.Name) ? f.FriendCode : f.Name;
 
@@ -360,7 +363,11 @@ namespace Ryujinx.Ava.Common
         // same way ("Splatoon 2", never "Splatoon™ 2" for one friend and "Splatoon 2" for another).
         private static string GameNameOf(NextendoApi.Friend f)
         {
-            string name = NextendoGameNames.Resolve(f.AppId);
+            // The title id first (library, compatibility list, Nextendo table), then the name the
+            // account server sends with the presence, the one the website shows. Without it a
+            // friend in a title unknown here (Splatoon 3, Portal 2, absent from the compatibility
+            // list) was announced "is now playing a game".
+            string name = NextendoGameNames.Resolve(f.AppId) ?? ServerName(f);
             if (string.IsNullOrEmpty(name))
             {
                 return LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_NotifAGame];
