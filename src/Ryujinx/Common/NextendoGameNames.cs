@@ -30,9 +30,20 @@ namespace Ryujinx.Ava.Common
 
             string key = titleId.Trim().ToLowerInvariant();
 
-            // A miss is worth caching too — an unknown id stays unknown, and re-scanning the whole
-            // compatibility list every refresh to rediscover that would be pure waste.
-            return _cache.GetOrAdd(key, Lookup);
+            if (_cache.TryGetValue(key, out string cached))
+            {
+                return cached;
+            }
+
+            // Only a found name is cached. A miss used to be cached too, for the whole run: a title
+            // looked up before the game library had loaded stayed nameless until the next start.
+            string name = Lookup(key);
+            if (name is not null)
+            {
+                _cache[key] = name;
+            }
+
+            return name;
         }
 
         private static string Lookup(string titleId)
@@ -88,6 +99,10 @@ namespace Ryujinx.Ava.Common
             ["01003bc0000a0000"] = "Splatoon 2",
             ["01003c700009c800"] = "Splatoon 2",
             ["01006f8002326000"] = "Animal Crossing: New Horizons",
+            // Absent from the compatibility list, served by Nextendo: without them a friend in one
+            // of these read as plain "Online" in this list while the website named the game.
+            ["0100c2500fc20000"] = "Splatoon 3",
+            ["0100abd01785c000"] = "Portal 2",
         };
     }
 }

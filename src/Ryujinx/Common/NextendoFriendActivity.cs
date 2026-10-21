@@ -82,6 +82,7 @@ namespace Ryujinx.Ava.Common
                         OnlineStatus = f.OnlineStatus,
                         AppId = f.AppId,
                         AppDetail = f.AppDetail,
+                        ServerGame = f.Game,
                     });
                 }
 

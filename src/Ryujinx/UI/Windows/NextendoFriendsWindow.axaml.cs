@@ -268,6 +268,7 @@ namespace Ryujinx.Ava.UI.Windows
                     OnlineStatus = f.OnlineStatus,
                     AppId = f.AppId,
                     AppDetail = f.AppDetail,
+                    ServerGame = f.Game,
                     Favorite = f.Favorite,
                 });
             }

@@ -111,6 +111,37 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             return PresenceStatus.OnlinePlay;
         }
 
+        // [Nextendo] Same presence group as the running game: only a friend whose presence names
+        // THIS game (or a regional version of it). The flag was set for every online friend, so a
+        // game listing friends "playing <this game>" named all of them so: on 21/10 Portal 2's
+        // "Invite Friends" showed a friend "Playing Portal 2" while the server, the website and
+        // the NPLN session all had them in Splatoon 3, never connected to the Portal 2 server.
+        // Games that look up friends' sessions (MK8, S2) still get the flag for friends really in
+        // them: their presence carries the title id (emulator report or game server).
+        public static bool PlaysCurrentGame(NextendoFriends.Entry entry)
+        {
+            if (entry.Status <= 0 || entry.AppId == 0)
+            {
+                return false;
+            }
+
+            string current = NextendoFriends.CurrentTitleId;
+            if (string.IsNullOrWhiteSpace(current)
+                || !ulong.TryParse(current.Trim(), System.Globalization.NumberStyles.HexNumber, null, out ulong cur))
+            {
+                return false;
+            }
+
+            return PresenceGroup(entry.AppId) == PresenceGroup(cur);
+        }
+
+        // Regional versions sharing one online game (and one presence group on a console).
+        private static ulong PresenceGroup(ulong titleId) => titleId switch
+        {
+            0x01003BC0000A0000 or 0x01003C700009C800 => 0x0100F8F0000A2000, // Splatoon 2 (US, JP -> EU)
+            _ => titleId,
+        };
+
         private static FriendImpl MakeNextendoFriend(ulong netId, string nick, PresenceStatus status, byte[] appField = null, bool sameApp = true)
         {
             Array33<byte> nameArr = default;
@@ -271,7 +302,7 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                     // pretendus joueurs, n'en retrouve aucune, et ecarte l'entree.
                     PresenceStatus st = NextendoPresence(entry);
                     friendList[i] = MakeNextendoFriend(lid, entry.Name, st, entry.AppField,
-                        sameApp: entry.Status > 0);
+                        sameApp: PlaysCurrentGame(entry));
                 }
                 count = n;
 
@@ -332,7 +363,7 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                         // de jouer ». Annoncer OnlinePlay pour tout le monde pousse le jeu a proposer
                         // de rejoindre des parties qui n'existent pas.
                         PresenceStatus st = NextendoPresence(e);
-                        info[i] = MakeNextendoFriend(wanted, e.Name, st, e.AppField, sameApp: e.Status > 0);
+                        info[i] = MakeNextendoFriend(wanted, e.Name, st, e.AppField, sameApp: PlaysCurrentGame(e));
 
                         // [Nextendo, HOME Menu work] As on a console, the record names the user of
                         // the console whose friend it is: the overlay of the system checks it is a

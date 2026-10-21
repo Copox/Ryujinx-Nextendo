@@ -1737,6 +1737,7 @@ namespace Ryujinx.Ava.UI.Views.Misc
                     OnlineStatus = f.OnlineStatus,
                     AppId = f.AppId,
                     AppDetail = f.AppDetail,
+                    ServerGame = f.Game,
                     Favorite = f.Favorite,
                 });
             }
