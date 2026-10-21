@@ -672,6 +672,31 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd
             return WriteBsdResult(context, updateCount, errno);
         }
 
+        // [Nextendo] Le jeu peut passer un tampon de reception dont une page n'est plus (ou pas)
+        // adossee : GetWritableRegion leve alors NullReferenceException (Memmove) ou
+        // InvalidMemoryRegionException, et l'exception tue l'emulateur. Sur console, le noyau refuse
+        // le tampon et l'appel echoue : on rend EFAULT et on journalise l'adresse pour la preuve.
+        private static bool TryGetReceiveRegion(ServiceCtx context, ulong position, ulong length, out WritableRegion region)
+        {
+            region = null;
+            try
+            {
+                if (length != 0 && (length > int.MaxValue || !context.Memory.IsRangeMapped(position, length)))
+                {
+                    Logger.Warning?.Print(LogClass.ServiceBsd, $"[Nextendo] tampon de reception non mappe va=0x{position:x} taille=0x{length:x} -> EFAULT");
+                    return false;
+                }
+
+                region = context.Memory.GetWritableRegion(position, (int)length);
+                return true;
+            }
+            catch (Exception ex) when (ex is NullReferenceException || ex is InvalidMemoryRegionException)
+            {
+                Logger.Warning?.Print(LogClass.ServiceBsd, $"[Nextendo] tampon de reception illisible va=0x{position:x} taille=0x{length:x} ({ex.GetType().Name}) -> EFAULT");
+                return false;
+            }
+        }
+
         [CommandCmif(7)]
         // Sysctl(buffer<unknown, 0x21, 0>, buffer<unknown, 0x21, 0>) -> (i32 ret, u32 bsd_errno, u32, buffer<unknown, 0x22, 0>)
         public ResultCode Sysctl(ServiceCtx context)
@@ -692,7 +717,10 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd
 
             (ulong receivePosition, ulong receiveLength) = context.Request.GetBufferType0x22();
 
-            WritableRegion receiveRegion = context.Memory.GetWritableRegion(receivePosition, (int)receiveLength);
+            if (!TryGetReceiveRegion(context, receivePosition, receiveLength, out WritableRegion receiveRegion))
+            {
+                return WriteBsdResult(context, -1, LinuxError.EFAULT);
+            }
 
             LinuxError errno = LinuxError.EBADF;
             ISocket socket = _context.RetrieveSocket(socketFd);
@@ -723,7 +751,12 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd
             (ulong receivePosition, ulong receiveLength) = context.Request.GetBufferType0x22(0);
             (ulong sockAddrOutPosition, ulong sockAddrOutSize) = context.Request.GetBufferType0x22(1);
 
-            WritableRegion receiveRegion = context.Memory.GetWritableRegion(receivePosition, (int)receiveLength);
+            // [Nextendo] Tampon invalide = EFAULT, pas un plantage de l'emulateur (Portal 2, 21/10 :
+            // NullReferenceException dans GetWritableRegion juste apres un ralliement rate).
+            if (!TryGetReceiveRegion(context, receivePosition, receiveLength, out WritableRegion receiveRegion))
+            {
+                return WriteBsdResult(context, -1, LinuxError.EFAULT);
+            }
 
             LinuxError errno = LinuxError.EBADF;
             ISocket socket = _context.RetrieveSocket(socketFd);
