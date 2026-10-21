@@ -509,7 +509,11 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd
                     return error is not LinuxError.SUCCESS and not LinuxError.ETIMEDOUT;
                 }
 
-                if (hasEventFd)
+                // [Nextendo] A poll with a finite timeout is deferred too, not only one carrying an eventfd:
+                // blocking here holds the single Bsd thread, so every other socket call of the game waits
+                // behind it. Portal 2 online: two NEX threads poll(100 ms) in turn while the main thread
+                // reads its UDP sockets each frame, and the menu fell from 60 to 9 frames a second.
+                if (hasEventFd || timeout > 0)
                 {
                     // [Nextendo] Deferred Bsd Poll — ONLY when an eventfd is polled alongside
                     // its sockets. Do exactly ONE non-blocking pass; never block the
@@ -610,6 +614,8 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd
                     // eventfd-only deferred path above must NOT apply to them — deferring their poll broke
                     // the IPC (SendSyncRequest -> OutOfResource -> the game aborts on connect). Keep the
                     // original Ryujinx behaviour: let the PollManager block for `timeout` ms internally.
+                    // Only timeout 0 and -1 come here now: the OutOfResource above was the receive list left
+                    // unarmed after a deferral (see ServerBase.RearmReceiveList), fixed since.
                     for (int i = 0; i < eventsByPollManager.Length; i++)
                     {
                         if (eventsByPollManager[i].Count == 0)

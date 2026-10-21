@@ -33,7 +33,7 @@ namespace Ryujinx.Audio.Backends.Dummy
                 return new DummyHardwareDeviceSessionOutput(this, memoryManager, sampleFormat, sampleRate, channelCount);
             }
 
-            return new DummyHardwareDeviceSessionInput(this, memoryManager);
+            return new DummyHardwareDeviceSessionInput(this, memoryManager, sampleFormat, sampleRate, channelCount);
         }
 
         public ManualResetEvent GetUpdateRequiredEvent()
