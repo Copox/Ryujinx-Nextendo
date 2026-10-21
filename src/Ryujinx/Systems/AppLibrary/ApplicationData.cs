@@ -444,6 +444,7 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             "0100000000010000" => "1.4.1",  // Super Mario Odyssey
             "010001701248c000" => "1.0.4",  // Super Monkey Ball Banana Mania
             "0100b6e012ebe000" => "1.1.17", // UNO
+            "0100abd01785c000" => "1.0.3",  // Portal 2 (update v196608, NACP display version)
             _ => "",
         };
 

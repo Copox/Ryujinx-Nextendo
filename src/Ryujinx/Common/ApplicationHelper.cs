@@ -24,7 +24,6 @@ using Ryujinx.HLE.Loaders.Processes.Extensions;
 using System;
 using System.Buffers;
 using System.IO;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using ApplicationId = LibHac.Ncm.ApplicationId;
@@ -563,12 +562,7 @@ namespace Ryujinx.Ava.Common
 
             Ryujinx.HLE.HOS.Services.Account.Acc.UserId ryuUser = _accountManager.LastOpenedUser.UserId;
             LibHac.Fs.UserId fsUser = new((ulong)ryuUser.High, (ulong)ryuUser.Low);
-            // [Nextendo] ACNH n'a qu'une sauvegarde DEVICE (NACP 3.0.3 : UserAccountSaveDataSize = 0,
-            // DeviceSaveDataSize = 0x6f00000), sans utilisateur : le filtre par profil ne la trouve pas.
-            bool device = Ryujinx.Common.Configuration.NextendoIslandSync.IsStrict(titleId);
-            SaveDataFilter filter = device
-                ? SaveDataFilter.Make(titleId, SaveDataType.Device, default, default, default)
-                : SaveDataFilter.Make(titleId, default, fsUser, default, default);
+            SaveDataFilter filter = SaveDataFilter.Make(titleId, default, fsUser, default, default);
 
             Result rc = _horizonClient.Fs.FindSaveDataWithFilter(out SaveDataInfo info, SaveDataSpaceId.User, in filter);
             if (rc.IsSuccess())
@@ -583,10 +577,6 @@ namespace Ryujinx.Ava.Common
             }
 
             ref ApplicationControlProperty control = ref controlHolder.Value;
-            if (device && controlHolder.ByteSpan.IsZeros())
-            {
-                return false; // sans le NACP on ne sait pas créer une save Device de la bonne taille
-            }
             if (controlHolder.ByteSpan.IsZeros())
             {
                 control = ref new BlitStruct<ApplicationControlProperty>(1).Value;
@@ -668,33 +658,49 @@ namespace Ryujinx.Ava.Common
             return false;
         }
 
-        // [Nextendo] Dossier qui porte le contenu de la sauvegarde (le « 0 » validé, sinon le « 1 »
-        // de travail), ou null s'il n'y a rien. Même règle que l'export.
-        public static string NextendoSaveContentDir(ulong titleId)
+        /// <summary>
+        /// [Nextendo] Île d'Animal Crossing: New Horizons : comme le service système de la Switch
+        /// (« l'archivage se fait quand vous ne jouez pas »), l'île est envoyée une fois la partie
+        /// finie si le joueur a activé l'archivage dans le jeu (olsc, réglage du profil = 1). Une
+        /// île inchangée n'est pas renvoyée. Aucune fenêtre : tout se règle dans le menu du jeu.
+        /// </summary>
+        public static Task UploadIslandAfterGame(ulong titleId)
         {
             try
             {
-                if (!TryGetUserSaveDataId(titleId, new BlitStruct<ApplicationControlProperty>(1), create: false, out ulong saveDataId))
+                if (!Ryujinx.Common.Configuration.NextendoIslandSync.IsStrict(titleId) || _horizonClient == null || _accountManager?.LastOpenedUser == null)
                 {
-                    return null;
+                    return Task.CompletedTask;
                 }
 
-                string root = Path.Combine(VirtualFileSystem.GetNandPath(), $"user/save/{saveDataId:x16}");
-                foreach (string sub in new[] { "0", "1" })
+                string key = Ryujinx.Common.Configuration.NextendoIslandSync.Key(titleId, _accountManager.LastOpenedUser.UserId.ToString());
+                if (Ryujinx.Common.Configuration.NextendoIslandSync.Get(key).Setting != 1)
                 {
-                    string dir = Path.Combine(root, sub);
-                    if (Directory.Exists(dir) && Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories).Any())
-                    {
-                        return dir;
-                    }
+                    return Task.CompletedTask;
                 }
+
+                SaveDataFilter filter = SaveDataFilter.Make(titleId, SaveDataType.Device, default, default, default);
+                if (_horizonClient.Fs.FindSaveDataWithFilter(out SaveDataInfo info, SaveDataSpaceId.User, in filter).IsFailure())
+                {
+                    return Task.CompletedTask;
+                }
+
+                string root = Path.Combine(VirtualFileSystem.GetNandPath(), "user", "save", info.SaveDataId.ToString("x16"));
+                // Marqué « en attente » AVANT l'envoi : une fermeture de l'émulateur le relancera au prochain démarrage.
+                Ryujinx.Common.Configuration.NextendoIslandCloud.MarkPending(key, root);
+                return Task.Run(async () =>
+                {
+                    Ryujinx.Common.Configuration.NextendoIslandCloud.Outcome outcome =
+                        await Ryujinx.Common.Configuration.NextendoIslandCloud.UploadPendingAsync(titleId, root, key);
+                    Logger.Info?.Print(LogClass.Application, $"[Nextendo] island backup after the game: {outcome}");
+                });
             }
             catch (Exception ex)
             {
-                Logger.Warning?.Print(LogClass.Application, $"[Nextendo] save dir lookup failed: {ex.Message}");
+                Logger.Warning?.Print(LogClass.Application, $"[Nextendo] island backup after the game failed: {ex.Message}");
             }
 
-            return null;
+            return Task.CompletedTask;
         }
 
         // Export the current user's save for titleId as ZIP bytes, or null if none exists.
