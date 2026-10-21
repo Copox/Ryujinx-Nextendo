@@ -170,6 +170,47 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
             return Result.Success;
         }
 
+        // [Nextendo] The filter the game asks for, applied BEFORE the list is cut to the game's
+        // buffer. It was ignored: Portal 2's "Invite Friends" asks { Online, IsSameAppPresenceOnly }
+        // with room for 32, received the first 32 of a 293-friend list whatever their presence,
+        // and showed the two of those who were online (21/10) - never the friends past the 32nd,
+        // and friends in other games among the first 32. A console returns only the friends that
+        // match. Games asking no filter (PresenceStatus None, every other game seen in the logs)
+        // get the whole list as before. "Played this game" filters are not known here: kept as is.
+        private static IReadOnlyList<NextendoFriends.Entry> ApplyFilter(IReadOnlyList<NextendoFriends.Entry> friends, SizedFriendFilter filter)
+        {
+            bool online = filter.PresenceStatus is PresenceStatusFilter.Online
+                or PresenceStatusFilter.OnlinePlay or PresenceStatusFilter.OnlineOrOnlinePlay;
+
+            if (!online && !filter.IsSameAppPresenceOnly && !filter.IsFavoriteOnly)
+            {
+                return friends;
+            }
+
+            List<NextendoFriends.Entry> kept = new(friends.Count);
+            foreach (NextendoFriends.Entry entry in friends)
+            {
+                if (online && entry.Status <= 0)
+                {
+                    continue;
+                }
+
+                if (filter.IsSameAppPresenceOnly && !NextendoFriends.PlaysCurrentGame(entry))
+                {
+                    continue;
+                }
+
+                if (filter.IsFavoriteOnly && !entry.Favorite)
+                {
+                    continue;
+                }
+
+                kept.Add(entry);
+            }
+
+            return kept;
+        }
+
         [CmifCommand(10100)]
         public Result GetFriendListIds(
             out int count,
@@ -198,8 +239,8 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                 // rempli il repart definitivement avec zero ami. On lui accorde une attente courte
                 // et plafonnee ; les jeux NEX, qui reinterrogent en boucle, gardent le chemin non
                 // bloquant (les bloquer casse leurs acquittements PRUDP).
-                IReadOnlyList<NextendoFriends.Entry> friends =
-                    wantNsa ? NextendoFriends.GetWarm(2000) : NextendoFriends.Get();
+                IReadOnlyList<NextendoFriends.Entry> friends = ApplyFilter(
+                    wantNsa ? NextendoFriends.GetWarm(2000) : NextendoFriends.Get(), filter);
                 int n = Math.Min(Math.Max(0, friends.Count - offset), friendIds.Length);
                 // QUEL identifiant ce jeu attend-il dans sa liste locale ? Mario Kart 8 (NEX)
                 // redemande ses amis PAR LE PID. Splatoon 3 (NPLN) les nomme par NSA : mesure,
@@ -253,9 +294,9 @@ namespace Ryujinx.Horizon.Sdk.Friends.Detail.Ipc
                 // tous les clients friends (menu HOME compris) : jamais plus d'une attente par
                 // lancement (NextendoFriends.GetForSmashLaunch).
                 bool smash = NextendoFriends.ReadsListOnlyOnLaunch(NextendoFriends.CurrentTitleId) && !WantsNsaIds();
-                IReadOnlyList<NextendoFriends.Entry> friends = WantsNsaIds() ? NextendoFriends.GetWarm(2000)
+                IReadOnlyList<NextendoFriends.Entry> friends = ApplyFilter(WantsNsaIds() ? NextendoFriends.GetWarm(2000)
                     : smash ? NextendoFriends.GetForSmashLaunch(SmashListWaitMs)
-                    : NextendoFriends.Get();
+                    : NextendoFriends.Get(), filter);
                 bool wantNsa = WantsNsaIds();
                 int n = Math.Min(Math.Max(0, friends.Count - offset), friendList.Length);
                 for (int i = 0; i < n; i++)
