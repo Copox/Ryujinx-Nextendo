@@ -52,6 +52,12 @@ namespace Ryujinx.Ava.Common
             /// </summary>
             public string AppDetail = "";
 
+            /// <summary>
+            /// Name of that game as the account server names it ("jeu" of the presence), the same
+            /// name the website shows. Fallback when the title id is unknown here.
+            /// </summary>
+            public string Game = "";
+
             public bool IsOnline => OnlineStatus != 0;
         }
 
@@ -1524,6 +1530,7 @@ namespace Ryujinx.Ava.Common
 
                 friend.AppId = pr.TryGetProperty("app_id", out JsonElement ai) ? (ai.GetString() ?? "") : "";
                 friend.AppDetail = pr.TryGetProperty("app_detail", out JsonElement ad) ? (ad.GetString() ?? "") : "";
+                friend.Game = pr.TryGetProperty("jeu", out JsonElement jeu) && jeu.ValueKind == JsonValueKind.String ? (jeu.GetString() ?? "") : "";
             }
 
             return friend;

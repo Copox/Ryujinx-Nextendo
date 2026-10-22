@@ -22,6 +22,17 @@ namespace Ryujinx.Ava.UI.Models
         /// <summary>In-game detail from the play report ("Single Player"); empty for most games.</summary>
         public string AppDetail { get; init; } = "";
 
+        /// <summary>
+        /// The game's name as the account server gives it with the presence (the name the website
+        /// shows). Used when the title id is unknown locally: without it a friend in Splatoon 3,
+        /// absent from the compatibility list, read as a bare "Online" here while the website said
+        /// "Playing Splatoon 3" for the same presence.
+        /// </summary>
+        public string ServerGame { get; init; } = "";
+
+        private string GameName => NextendoGameNames.Resolve(AppId)
+            ?? (string.IsNullOrWhiteSpace(ServerGame) ? null : ServerGame.Trim());
+
         public bool IsOnline => OnlineStatus != 0;
 
         /// <summary>True when online AND in a game (has a title id) — any game, Nextendo or not.
@@ -72,7 +83,7 @@ namespace Ryujinx.Ava.UI.Models
                     return LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_FriendMainMenu];
                 }
 
-                string game = NextendoGameNames.Resolve(AppId);
+                string game = GameName;
                 if (game is null)
                 {
                     return LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_FriendOnline];
@@ -102,7 +113,7 @@ namespace Ryujinx.Ava.UI.Models
                     return LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_FriendMainMenu];
                 }
 
-                return NextendoGameNames.Resolve(AppId)
+                return GameName
                     ?? LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_FriendOnline];
             }
         }

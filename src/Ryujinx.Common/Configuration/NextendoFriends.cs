@@ -1232,6 +1232,38 @@ namespace Ryujinx.Common.Configuration
         // le blob de join S2 reste transporté quand on est en salon privé.
         public static volatile string CurrentTitleId = "";
 
+        // [Nextendo] Same presence group as the running game: only a friend whose presence names
+        // THIS game (or a regional version of it). The flag was set for every online friend, so a
+        // game listing friends "playing <this game>" named all of them so: on 21/10 Portal 2's
+        // "Invite Friends" showed a friend "Playing Portal 2" while the server, the website and
+        // the NPLN session all had them in Splatoon 3, never connected to the Portal 2 server.
+        // Games that look up friends' sessions (MK8, S2) still get the flag for friends really in
+        // them: their presence carries the title id (emulator report or game server).
+        public static bool PlaysCurrentGame(Entry entry)
+        {
+            if (entry.Status <= 0 || entry.AppId == 0)
+            {
+                return false;
+            }
+
+            string current = CurrentTitleId;
+            if (string.IsNullOrWhiteSpace(current)
+                || !ulong.TryParse(current.Trim(), System.Globalization.NumberStyles.HexNumber, null, out ulong cur))
+            {
+                return false;
+            }
+
+            return PresenceGroup(entry.AppId) == PresenceGroup(cur);
+        }
+
+        // Regional versions sharing one online game (and one presence group on a console).
+        private static ulong PresenceGroup(ulong titleId) => titleId switch
+        {
+            0x01003BC0000A0000 or 0x01003C700009C800 => 0x0100F8F0000A2000, // Splatoon 2 (US, JP -> EU)
+            _ => titleId,
+        };
+
+
         // [Nextendo] Détail du jeu courant venant de son PLAY REPORT (« Single Player », « Racing »…),
         // posé par NextendoRichPresence. N'existe QUE pour les jeux ayant une spec PlayReports (~13 :
         // MK8DX, SSBU, Odyssey, Zelda…) — chaque jeu émet un format propre, reversé titre par titre.
