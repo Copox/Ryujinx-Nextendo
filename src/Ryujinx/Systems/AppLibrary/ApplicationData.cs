@@ -260,6 +260,14 @@ namespace Ryujinx.Ava.Systems.AppLibrary
 
         public static string GetBuildId(VirtualFileSystem virtualFileSystem, IntegrityCheckLevel checkLevel, string titleFilePath)
         {
+            string moduleId = GetMainModuleId(virtualFileSystem, checkLevel, titleFilePath);
+
+            return moduleId.Length == 0 ? moduleId : moduleId[..16];
+        }
+
+        // [Nextendo] Full 32-byte build ID of the main NSO (64 hex digits), with the selected update applied.
+        public static string GetMainModuleId(VirtualFileSystem virtualFileSystem, IntegrityCheckLevel checkLevel, string titleFilePath)
+        {
             if (!System.IO.Path.Exists(titleFilePath))
             {
                 Logger.Error?.Print(LogClass.Application, $"File \"{titleFilePath}\" does not exist.");
@@ -374,7 +382,7 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             NsoReader reader = new();
             reader.Initialize(nsoFile.Release().AsStorage().AsFile(OpenMode.Read)).ThrowIfFailure();
 
-            return Convert.ToHexString(reader.Header.ModuleId).Replace("-", string.Empty).ToUpper()[..16];
+            return Convert.ToHexString(reader.Header.ModuleId).ToUpperInvariant();
         }
 
         // [Nextendo] Games with private-online support via Nextendo Network.
