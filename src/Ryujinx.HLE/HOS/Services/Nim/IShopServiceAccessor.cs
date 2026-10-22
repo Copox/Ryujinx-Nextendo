@@ -22,8 +22,6 @@ namespace Ryujinx.HLE.HOS.Services.Nim.ShopServiceAccessServerInterface.ShopServ
         // CreateAsyncInterface(u64) -> (handle<copy>, object<nn::ec::IShopServiceAsync>)
         public ResultCode CreateAsyncInterface(ServiceCtx context)
         {
-            MakeObject(context, new IShopServiceAsync());
-
             if (_eventHandle == 0)
             {
                 if (context.Process.HandleTable.GenerateHandle(_event.ReadableEvent, out _eventHandle) != Result.Success)
@@ -32,7 +30,12 @@ namespace Ryujinx.HLE.HOS.Services.Nim.ShopServiceAccessServerInterface.ShopServ
                 }
             }
 
+            // Set the event first: MakeObject keeps copy handles already in the response and adds the
+            // session as a move handle. Assigning the copy handle afterwards dropped the session, so the
+            // guest received a null IShopServiceAsync and crashed on its first call (Super Kirby Clash).
             context.Response.HandleDesc = IpcHandleDesc.MakeCopy(_eventHandle);
+
+            MakeObject(context, new IShopServiceAsync());
 
             Logger.Stub?.PrintStub(LogClass.ServiceNim);
 
