@@ -6,145 +6,14 @@ using System.IO;
 namespace Ryujinx.HLE.HOS
 {
     /// <summary>
-    /// Les correctifs que Splatoon 3 exige pour parler a nos serveurs, INTEGRES au binaire.
-    ///
-    /// Pourquoi ils sont ici et plus sur le disque :
-    ///
-    /// 1. PLUG AND PLAY. Jusqu'ici il fallait envoyer aux joueurs un dossier
-    ///    portable/sdcard/atmosphere/exefs_patches/ a recopier a la main. Sans lui, le TLS du jeu
-    ///    s'arretait au ClientHello et rien ne se connectait. Pour un test OUVERT, c'est une marche
-    ///    trop haute et une source d'erreurs sans fin.
-    ///
-    /// 2. COHERENCE AVEC L'INTERDICTION DES MODS. Ces correctifs sont des .ips, exactement la forme
-    ///    que le chargeur de mods refuse desormais pour ce titre (voir ModLoader.ModsInterdits). Les
-    ///    laisser sur le disque aurait oblige a percer une exception dans le blocage — et une
-    ///    exception par NOM de dossier se contourne en renommant son mod. Integres, il n'y a plus
-    ///    d'exception a percer : le disque est refuse en bloc, et ces octets-ci ne viennent pas du
-    ///    disque.
-    ///
-    /// Ce sont les memes octets que les fichiers .ips utilises jusqu'ici (verifies par empreinte).
-    /// Format IPS32 : "IPS32", puis des enregistrements {offset 4 o, taille 2 o, donnees}, puis "EEOF".
+    /// Online patches built into the emulator for titles the signed NPLN patch catalog does not
+    /// cover (see NplnPatchCatalog): Crash Team Racing (Demonware, not NPLN) and the HOME Menu
+    /// theme layouts. NPLN patches come only from the catalog, so a new game build no longer
+    /// needs an emulator release.
+    /// Format IPS32: "IPS32", then {offset 4 bytes, size 2 bytes, data} records, then "EEOF".
     /// </summary>
     internal static class NextendoS3Patches
     {
-        // Contourne la verification de certificat : le jeu epingle les certificats de Nintendo et
-        // refuse les notres. 19 octets, empreinte 219ee0cfea21fd4b…
-        private static readonly byte[] _contournementCertificat =
-        [
-            0x49, 0x50, 0x53, 0x33, 0x32,             // "IPS32"
-            0x00, 0x15, 0x7B, 0x20, 0x00, 0x04,       // offset 0x00157B20, 4 octets
-            0x2A, 0x00, 0x80, 0x52,
-            0x45, 0x45, 0x4F, 0x46,                   // "EEOF"
-        ];
-
-        // Super Mario Party Jamboree 2.3.0, build D70CE1726C979E45ED4200E9C2B23B2A258FDC18.
-        // Selects the gRPC certificate verification callback used by the tested client.
-        // Flat 0xAD38BC: LDRB W10,[X21,#0x38] -> MOV W10,#1; IPS includes the NSO header.
-        private static readonly byte[] _mpjCertificate230 =
-        [
-            0x49, 0x50, 0x53, 0x33, 0x32,
-            0x00, 0xAD, 0x39, 0xBC, 0x00, 0x04,
-            0x2A, 0x00, 0x80, 0x52,
-            0x45, 0x45, 0x4F, 0x46,
-        ];
-
-        // Super Mario Bros. Wonder 1.2.1
-        // Build FF773E90972D544EB79406EAA65396D53C43EFB9.
-        // Flat 0xB03528: LDRB W10,[X21,#0x38] -> MOV W10,#1.
-        private static readonly byte[] _certificateWonder121 =
-        [
-            0x49, 0x50, 0x53, 0x33, 0x32,
-            0x00, 0xB0, 0x36, 0x28, 0x00, 0x04,
-            0x2A, 0x00, 0x80, 0x52,
-            0x45, 0x45, 0x4F, 0x46,
-        ];
-
-        // Pokémon Violet 3.0.1 and 4.0.0 share main build 709BFD66115298640155FCC4979DBA151C7CC79A.
-        // Same IPS32 bytes validated in the local client; bypasses the pinned
-        // certificate and the two peer-name rejection branches.
-        private static readonly byte[] _violetTls301 =
-        [
-            0x49, 0x50, 0x53, 0x33, 0x32,
-            0x00, 0x1F, 0xEF, 0xA0, 0x00, 0x04, 0x2A, 0x00, 0x80, 0x52,
-            0x00, 0x1F, 0xE5, 0xB4, 0x00, 0x04, 0x1F, 0x20, 0x03, 0xD5,
-            0x00, 0x1F, 0xE6, 0x58, 0x00, 0x04, 0x1F, 0x20, 0x03, 0xD5,
-            0x45, 0x45, 0x4F, 0x46,
-        ];
-
-        // Pokémon Legends: Z-A 2.0.2, main build B1F12FD919EAE86AB8A978317677E64BCE443D1F: the same
-        // three checks as Scarlet/Violet (cert LDRB W10,[X21,#0x38] -> MOV W10,#1; peer CBNZ W0 and
-        // B.NE -> NOP).
-        private static readonly byte[] _legendsZaTls202 =
-        [
-            0x49, 0x50, 0x53, 0x33, 0x32,
-            0x02, 0x03, 0xB4, 0xC0, 0x00, 0x04, 0x2A, 0x00, 0x80, 0x52,
-            0x02, 0x03, 0xAA, 0xB8, 0x00, 0x04, 0x1F, 0x20, 0x03, 0xD5,
-            0x02, 0x03, 0xAB, 0xBC, 0x00, 0x04, 0x1F, 0x20, 0x03, 0xD5,
-            0x45, 0x45, 0x4F, 0x46,
-        ];
-
-        // Flat 0xB02BBC: CBNZ W0,0xB02C3C; flat 0xB02AA4: B.NE 0xB02C5C.
-        // Both branches lead to the peer-name rejection path.
-        private static readonly byte[] _peerNameWonder121 =
-        [
-            0x49, 0x50, 0x53, 0x33, 0x32,
-            0x00, 0xB0, 0x2C, 0xBC, 0x00, 0x04,
-            0x1F, 0x20, 0x03, 0xD5,
-            0x00, 0xB0, 0x2B, 0xA4, 0x00, 0x04,
-            0x1F, 0x20, 0x03, 0xD5,
-            0x45, 0x45, 0x4F, 0x46,
-        ];
-
-        // Corrige le nom d'hote presente au pair. 29 octets, empreinte aa8a453637092346…
-        private static readonly byte[] _nomDePair =
-        [
-            0x49, 0x50, 0x53, 0x33, 0x32,             // "IPS32"
-            0x00, 0x14, 0xE1, 0xB0, 0x00, 0x04,       // offset 0x0014E1B0, 4 octets
-            0x1F, 0x20, 0x03, 0xD5,
-            0x00, 0x14, 0xDD, 0x80, 0x00, 0x04,       // offset 0x0014DD80, 4 octets
-            0xF4, 0x03, 0x1F, 0x2A,
-            0x45, 0x45, 0x4F, 0x46,                   // "EEOF"
-        ];
-
-        // Nintendo 64 - Nintendo Classics 4.2.0, build 44EFA84EE9C32B466EA27215D3D91DFD0EBAE625.
-        private static readonly byte[] _certificatN64v420 =
-        [
-            0x49, 0x50, 0x53, 0x33, 0x32,
-            0x00, 0x29, 0xDB, 0xE0, 0x00, 0x04,
-            0x2A, 0x00, 0x80, 0x52,
-            0x45, 0x45, 0x4F, 0x46,
-        ];
-
-        private static readonly byte[] _nomDePairN64v420 =
-        [
-            0x49, 0x50, 0x53, 0x33, 0x32,
-            0x00, 0x29, 0x42, 0x70, 0x00, 0x04,
-            0x1F, 0x20, 0x03, 0xD5,
-            0x00, 0x29, 0x3E, 0x40, 0x00, 0x04,
-            0xF4, 0x03, 0x1F, 0x2A,
-            0x45, 0x45, 0x4F, 0x46,
-        ];
-
-        // METAL GEAR SOLID: Peace Walker - Master Collection,
-        // build BCA1A793E41A4836EF3C03286B18E816EEC62338.
-        private static readonly byte[] _certificatPeaceWalker =
-        [
-            0x49, 0x50, 0x53, 0x33, 0x32,
-            0x00, 0xB2, 0xA1, 0xC0, 0x00, 0x04,
-            0x2A, 0x00, 0x80, 0x52,
-            0x45, 0x45, 0x4F, 0x46,
-        ];
-
-        private static readonly byte[] _nomDePairPeaceWalker =
-        [
-            0x49, 0x50, 0x53, 0x33, 0x32,
-            0x00, 0xB2, 0x08, 0x50, 0x00, 0x04,
-            0x1F, 0x20, 0x03, 0xD5,
-            0x00, 0xB2, 0x04, 0x20, 0x00, 0x04,
-            0xF4, 0x03, 0x1F, 0x2A,
-            0x45, 0x45, 0x4F, 0x46,
-        ];
-
         // Crash Team Racing Nitro-Fueled 1.0.15, build 1C689518406930512C13DDF4217E7676.
         // Replaces the embedded Demonware RSA public key so signed Nextendo auth replies verify.
         private static readonly byte[] _ctrConfianceServeur =
@@ -185,16 +54,6 @@ namespace Ryujinx.HLE.HOS
             0x25, 0x80, 0x52, 0x45, 0x45, 0x4F, 0x46,
         ];
 
-        /// <summary>
-        /// Identifiant de build du NSO -> correctifs a lui appliquer.
-        ///
-        /// La cle est l'identifiant tel que le chargeur le calcule : hexadecimal MAJUSCULE, zeros de
-        /// fin retires. Deux builds de Splatoon 3 sont couverts ; un identifiant inconnu ne recoit
-        /// rien, exactement comme un .ips dont le nom ne correspondait a aucun programme.
-        /// </summary>
-        // Overcooked! 2 v1.0.19, certificate and peer hostname patches.
-        private static readonly byte[] _overcooked2 = [0x49, 0x50, 0x53, 0x33, 0x32, 0x00, 0x62, 0xF9, 0x70, 0x00, 0x04, 0x2A, 0x00, 0x80, 0x52, 0x00, 0x71, 0xA7, 0x10, 0x00, 0x04, 0x1F, 0x20, 0x03, 0xD5, 0x00, 0x71, 0xA2, 0xE0, 0x00, 0x04, 0xF4, 0x03, 0x1F, 0x2A, 0x45, 0x45, 0x4F, 0x46];
-
         // [Nextendo, HOME Menu themes] The HOME Menu 22.5.0 (qlaunch, build 26CC3BC5...): room for
         // the layouts of a custom theme, as NXThemes Installer gives it (the same four bytes it
         // writes to atmosphere/exefs_patches). Without it, a theme that brings its own home layout
@@ -209,37 +68,10 @@ namespace Ryujinx.HLE.HOS
             0x09, 0x04, 0xA0, 0x52,
             0x45, 0x45, 0x4F, 0x46,
         ];
-        // Monster Hunter Rise 16.0.2: the same NPLN patches shipped by Prelude.
-        private static readonly byte[] _rise1602 = [0x49, 0x50, 0x53, 0x33, 0x32, 0x02, 0x03, 0x3C, 0x04, 0x00, 0x04, 0x2A, 0x00, 0x80, 0x52, 0x02, 0x03, 0x2F, 0x28, 0x00, 0x04, 0x1F, 0x20, 0x03, 0xD5, 0x02, 0x03, 0x2F, 0xE8, 0x00, 0x04, 0x1F, 0x20, 0x03, 0xD5, 0x45, 0x45, 0x4F, 0x46];
 
         private static readonly Dictionary<string, byte[][]> _parIdentifiantDeBuild = new()
         {
-            ["6830B3A12406CB4716FEC5ADDC35D3E2DC92D212"] = [_contournementCertificat, _nomDePair],
-
-            // 11.3.0. Les TROIS sites sont aux MEMES offsets qu'en 11.2.0 — les memes octets IPS
-            // conviennent donc mot pour mot. Verifie le 2026-08-20 en comparant les images
-            // decompressees des deux versions (NEXTENDO_DUMP_NSO) :
-            //
-            //   0x00157B20  LDRB W10,[X21,#0x38]  (AA E2 40 39) -> MOV W10,#1    — signature de 64 o
-            //                                                                      UNIQUE dans 100 Mo
-            //   0x0014E1B0  CBZ  W0,+88           (C0 02 00 34) -> NOP
-            //   0x0014DD80  MOV  W20,W0           (F4 03 00 2A) -> MOV W20,WZR
-            //
-            // Aucun decalage : la croissance de 4096 octets du binaire est situee APRES ces sites.
-            ["28C4287AEE36F7499DA60F3E68B54C70DA382D75"] = [_contournementCertificat, _nomDePair],
-            ["726D2B882DD9EF10F4A9D73EED088740630FB6C8"] = [_contournementCertificat],
-            ["FF773E90972D544EB79406EAA65396D53C43EFB9"] = [_certificateWonder121, _peerNameWonder121],
-            ["709BFD66115298640155FCC4979DBA151C7CC79A"] = [_violetTls301],
-            // Scarlet 4.0.0: the three original four-byte instructions at the
-            // same offsets match Violet 4.0.0 in the decrypted main image.
-            ["421C5411B487EB4D049DD065FEC9547773E8E598"] = [_violetTls301],
-            ["B1F12FD919EAE86AB8A978317677E64BCE443D1F"] = [_legendsZaTls202],
-            ["44EFA84EE9C32B466EA27215D3D91DFD0EBAE625"] = [_certificatN64v420, _nomDePairN64v420],
-            ["C9A3DD7702075ECD90101F45553895822804D38F"] = [_rise1602],
-            ["BCA1A793E41A4836EF3C03286B18E816EEC62338"] = [_certificatPeaceWalker, _nomDePairPeaceWalker],
             ["1C689518406930512C13DDF4217E7676"] = [_ctrConfianceServeur, _ctrRechercheAmis],
-            ["616640F27B9362502D1CE10BF01EB9A6"] = [_overcooked2],
-            ["D70CE1726C979E45ED4200E9C2B23B2A258FDC18"] = [_mpjCertificate230],
         };
 
         /// <summary>
@@ -280,7 +112,7 @@ namespace Ryujinx.HLE.HOS
             }
 
             Logger.Info?.Print(LogClass.ModLoader,
-                $"[Nextendo] NPLN : {correctifs.Length} correctif(s) integre(s) appliques (build {identifiantDeBuild})");
+                $"[Nextendo] {correctifs.Length} built-in online patch(es) applied (build {identifiantDeBuild})");
 
             return correctifs.Length;
         }

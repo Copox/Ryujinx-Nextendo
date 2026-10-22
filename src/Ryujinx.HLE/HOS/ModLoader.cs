@@ -982,6 +982,15 @@ namespace Ryujinx.HLE.HOS
                     count++;
                 }
 
+                // NPLN patches come only from the signed catalog. A build the catalog decides on never
+                // receives built-in bytes, even when its guards reject this image.
+                if (NplnPatchCatalog.TryApply(applicationId, nso, out bool catalogApplied))
+                {
+                    count += catalogApplied ? 1 : 0;
+
+                    continue;
+                }
+
                 MemPatch patch = new();
 
                 if (NextendoS3Patches.Verser(Convert.ToHexString(nso.BuildId).TrimEnd('0'), patch) == 0)
