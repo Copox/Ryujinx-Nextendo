@@ -431,6 +431,9 @@ namespace Ryujinx.Ava.UI.ViewModels
             // Additional remote display metadata for titles absent from the built-in table.
             Ryujinx.Ava.Common.NextendoServiceCatalog.Start(applicationLibrary, () => !IsGameRunning && WindowState != WindowState.Minimized);
 
+            // [Nextendo] Signed NPLN patch catalog: fetch the title index once per session.
+            Ryujinx.Ava.Common.NplnPatchCatalogClient.Start();
+
             // [Nextendo] And the Discord-style avatars of friends currently playing each game,
             // shown as overlapping round pictures on the right of the game row.
             Ryujinx.Ava.Common.NextendoFriendActivity.Start(applicationLibrary);
@@ -2369,6 +2372,10 @@ namespace Ryujinx.Ava.UI.ViewModels
                     }
                 }
             }
+
+            // [Nextendo] NPLN online patches come from the signed catalog: fetch this build's patch
+            // before loading, so the loader only applies verified data and never waits on the network.
+            await Ryujinx.Ava.Common.NplnPatchCatalogClient.PrepareForGameAsync(application, VirtualFileSystem);
 
 #if RELEASE
             await PerformanceCheck();
