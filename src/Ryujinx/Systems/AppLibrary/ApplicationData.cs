@@ -459,7 +459,7 @@ namespace Ryujinx.Ava.Systems.AppLibrary
             "0100d870045b6000" => "9.1.0",  // Nintendo Entertainment System - Nintendo Switch Online
             "01008d300c50c000" => "6.0.0",  // Super Nintendo Entertainment System - Nintendo Switch Online
             "0100c62011050000" => "4.1.0",  // Game Boy - Nintendo Switch Online
-            "010012f017576000" => "3.3.0",  // Game Boy Advance - Nintendo Switch Online
+            "010012f017576000" => "3.4.0",  // Game Boy Advance - Nintendo Switch Online
             "0100b3c014bda000" => "3.1.1",  // SEGA Genesis - Nintendo Switch Online
             "0100c9a00ece6000" => "4.2.0",  // Nintendo 64 - Nintendo Classics
             _ => "",
