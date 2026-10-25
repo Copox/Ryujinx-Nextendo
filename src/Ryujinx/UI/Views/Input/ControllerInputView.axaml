@@ -534,7 +534,8 @@
                                 </CheckBox>
                                 <Button
                                     Margin="10, 0, 10, 10"
-                                    Command="{Binding ShowMotionConfig}">
+                                    Click="MotionSettingsButton_OnClick"
+                                    PointerPressed="MotionSettingsButton_OnPointerPressed">
                                     <pt:Icon Value="fa-solid fa-gear" />
                                 </Button>
                             </StackPanel>

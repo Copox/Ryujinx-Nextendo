@@ -61,6 +61,14 @@ namespace Ryujinx.SDL3.Common
                 SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_JOY_CONS, "1");
                 SDL_SetHint(SDL_HINT_VIDEO_ALLOW_SCREENSAVER, "1");
 
+                if (OperatingSystem.IsLinux())
+                {
+                    // Prefer the Deck's physical controller to Steam's virtual pad so SDL
+                    // can expose the built-in motion sensors and haptics in SteamOS.
+                    SDL_SetHintWithPriority(SDL_HINT_JOYSTICK_HIDAPI_STEAMDECK, "1",
+                        SDL_HintPriority.SDL_HINT_OVERRIDE);
+                }
+
                 // NOTE: As of SDL3 2.24.0, joycons are combined by default but the motion source only come from one of them.
                 // We disable this behavior for now.
                 SDL_SetHint(SDL_HINT_JOYSTICK_HIDAPI_COMBINE_JOY_CONS, "0");
