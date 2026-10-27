@@ -218,6 +218,14 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Sfdnsres.Proxy
         }
         private static bool TryMatchBuiltin(string host, ulong programId, out IPAddress address)
         {
+            // brainCloud is shared with UCH; Photon and analytics are shared too.
+            // Keep all three routes scoped to SpeedRunners 2 and the configured server.
+            if (NextendoSpeedRunners2Redirect.IsServiceHost(host, programId))
+            {
+                address = Substituer(host, ResolveConfiguredIp("NEXTENDO_SERVER_IP"));
+                return true;
+            }
+
             if (NextendoGgstRedirect.IsServiceHost(host, programId))
             {
                 IPAddress configuredAddress = Substituer(host, ResolveConfiguredIp("NEXTENDO_SERVER_IP"));
