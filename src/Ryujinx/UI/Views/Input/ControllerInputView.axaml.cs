@@ -10,6 +10,7 @@ using Ryujinx.Ava.UI.ViewModels.Input;
 using Ryujinx.Common.Configuration.Hid.Controller;
 using Ryujinx.Input;
 using Ryujinx.Input.Assigner;
+using System.Threading.Tasks;
 using Button = Ryujinx.Input.Button;
 using StickInputId = Ryujinx.Common.Configuration.Hid.Controller.StickInputId;
 
@@ -18,6 +19,40 @@ namespace Ryujinx.Ava.UI.Views.Input
     public partial class ControllerInputView : RyujinxControl<ControllerInputViewModel>
     {
         private ButtonKeyAssigner _currentAssigner;
+
+        private bool _motionSettingsOpening;
+
+        private async void MotionSettingsButton_OnClick(object sender, RoutedEventArgs e)
+        {
+            await OpenMotionSettingsAsync();
+        }
+
+        private async void MotionSettingsButton_OnPointerPressed(object sender, PointerPressedEventArgs e)
+        {
+            // SteamOS gaming mode may deliver a touchscreen press without raising
+            // Avalonia Button.Click. Open on press; the guard prevents a second dialog.
+            await OpenMotionSettingsAsync();
+        }
+
+        private async Task OpenMotionSettingsAsync()
+        {
+            if (_motionSettingsOpening || ViewModel is null)
+            {
+                return;
+            }
+
+            _motionSettingsOpening = true;
+
+            try
+            {
+                await MotionInputView.Show(ViewModel);
+                ViewModel.ParentModel.RefreshModifiedState();
+            }
+            finally
+            {
+                _motionSettingsOpening = false;
+            }
+        }
 
         public ControllerInputView()
         {
@@ -74,7 +109,7 @@ namespace Ryujinx.Ava.UI.Views.Input
 
         private void CheckBox_IsCheckedChanged(object sender, RoutedEventArgs e)
         {
-            if (sender is CheckBox { IsPointerOver: true })
+            if (sender is CheckBox checkBox && (checkBox.IsPointerOver || checkBox.IsFocused))
             {
                 FlagInputConfigChanged();
 

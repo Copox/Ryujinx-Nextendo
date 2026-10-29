@@ -1,0 +1,20 @@
+name: SpeedRunners 2 route and TLS regression
+on:
+  pull_request:
+    paths:
+      - 'src/Ryujinx.HLE/HOS/Services/Sockets/Sfdnsres/Proxy/*'
+      - 'src/Ryujinx.HLE/HOS/Services/Ssl/**'
+      - 'tests/speedrunners2/**'
+      - '.github/workflows/speedrunners2.yml'
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet run --project tests/speedrunners2/Tests.csproj -c Release

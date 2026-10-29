@@ -77,12 +77,21 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd
         {
             BsdAddressFamily domain = (BsdAddressFamily)context.RequestData.ReadInt32();
             BsdSocketType type = (BsdSocketType)context.RequestData.ReadInt32();
+            int requestedType = (int)type;
             ProtocolType protocol = (ProtocolType)context.RequestData.ReadInt32();
 
             Logger.Info?.PrintMsg(LogClass.ServiceBsd, $"Creating socket with domain={domain}, type={type}, protocol={protocol}");
 
             BsdSocketCreationFlags creationFlags = (BsdSocketCreationFlags)((int)type >> (int)BsdSocketCreationFlags.FlagsShift);
             type &= BsdSocketType.TypeMask;
+
+            // Ultimate Chicken Horse opens its UNET transport socket with the selector 0x10000000 and protocol IP,
+            // which has no socket type of its own. It is a datagram socket.
+            if (protocol == ProtocolType.IP && UchOnline.IsUdpSelector(context.Device.Processes.GetProcess(context.ClientProcessId).ProgramId, requestedType))
+            {
+                type = BsdSocketType.Dgram;
+                protocol = ProtocolType.Udp;
+            }
 
             if (domain == BsdAddressFamily.Unknown)
             {
@@ -509,14 +518,15 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd
                     return error is not LinuxError.SUCCESS and not LinuxError.ETIMEDOUT;
                 }
 
-                // [Nextendo] A poll with a finite timeout is deferred too, not only one carrying an eventfd:
+                // [Nextendo] Finite polls are deferred except for MK8's ordinary NEX polls,
+                // which retain the blocking path used in 1.9.9. Eventfd polls always defer:
                 // blocking here holds the single Bsd thread, so every other socket call of the game waits
                 // behind it. Portal 2 online: two NEX threads poll(100 ms) in turn while the main thread
                 // reads its UDP sockets each frame, and the menu fell from 60 to 9 frames a second.
-                if (hasEventFd || timeout > 0)
+                if (BsdPollSchedulingPolicy.ShouldDefer(hasEventFd, timeout,
+                    context.Device.Processes.GetProcess(context.ClientProcessId).ProgramId))
                 {
-                    // [Nextendo] Deferred Bsd Poll — ONLY when an eventfd is polled alongside
-                    // its sockets. Do exactly ONE non-blocking pass; never block the
+                    // [Nextendo] Deferred Bsd Poll. Do exactly ONE non-blocking pass; never block the
                     // single Bsd server thread here, or the eventfd Write that must be issued on that
                     // same thread to make this very poll ready would deadlock. Either return a genuine
                     // result now, or DEFER the IPC reply and let the ServerBase loop re-check us later.
@@ -609,13 +619,9 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd
                 }
                 else
                 {
-                    // [Nextendo beta] NEX games (Splatoon 2 / MK8 Deluxe / SSBU) issue an ordinary
-                    // BLOCKING poll while their async connect completes. They have no eventfd, so the
-                    // eventfd-only deferred path above must NOT apply to them — deferring their poll broke
-                    // the IPC (SendSyncRequest -> OutOfResource -> the game aborts on connect). Keep the
-                    // original Ryujinx behaviour: let the PollManager block for `timeout` ms internally.
-                    // Only timeout 0 and -1 come here now: the OutOfResource above was the receive list left
-                    // unarmed after a deferral (see ServerBase.RearmReceiveList), fixed since.
+                    // Ordinary MK8 NEX polls retain the 1.9.9 blocking behavior during
+                    // asynchronous connect. Other titles use this path for timeout 0 or -1.
+                    // Let PollManager wait for the requested timeout internally.
                     for (int i = 0; i < eventsByPollManager.Length; i++)
                     {
                         if (eventsByPollManager[i].Count == 0)
@@ -745,6 +751,8 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd
         // RecvFrom(u32 sock, u32 flags) -> (i32 ret, u32 bsd_errno, u32 addrlen, buffer<i8, 0x22, 0> message, buffer<nn::socket::sockaddr_in, 0x22, 0x10>)
         public ResultCode RecvFrom(ServiceCtx context)
         {
+            // A closed socket or invalid buffer must finish a deferred call with its error.
+            context.PollResult = 1;
             int socketFd = context.RequestData.ReadInt32();
             BsdSocketFlags socketFlags = (BsdSocketFlags)context.RequestData.ReadInt32();
 
@@ -758,19 +766,30 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd
                 return WriteBsdResult(context, -1, LinuxError.EFAULT);
             }
 
+            using WritableRegion receiveScope = receiveRegion;
+
             LinuxError errno = LinuxError.EBADF;
             ISocket socket = _context.RetrieveSocket(socketFd);
             int result = -1;
 
             if (socket != null)
             {
-                errno = socket.ReceiveFrom(out result, receiveRegion.Memory.Span, receiveRegion.Memory.Span.Length, socketFlags, out IPEndPoint endPoint);
+                errno = DeferredDatagramReceive.Receive(socket, receiveRegion.Memory.Span, socketFlags,
+                    out result, out IPEndPoint endPoint, out bool pending);
+
+                // Reuse the server's deferred IPC reply loop. No reply is sent while the
+                // datagram is absent; other sessions can continue to use BSD meanwhile.
+                context.PollResult = pending ? 0 : 1;
+                if (pending && !context.PollForceNonBlocking)
+                {
+                    context.PollDeferRequested = true;
+                    context.PollDeadlineMs = DeferredDatagramReceive.Deadline(socket, PerformanceCounter.ElapsedMilliseconds);
+                    return ResultCode.Success;
+                }
 
                 if (errno == LinuxError.SUCCESS)
                 {
                     SetResultErrno(socket, result);
-
-                    receiveRegion.Dispose();
 
                     if (sockAddrOutSize != 0 && sockAddrOutSize >= (ulong)Unsafe.SizeOf<BsdSockAddr>())
                     {
@@ -835,6 +854,15 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Bsd
             if (socket != null)
             {
                 IPEndPoint endPoint = context.Memory.Read<BsdSockAddr>(bufferPosition).ToIPEndPoint();
+
+                // Ultimate Chicken Horse: the NXU1 ticket frame goes out first, from this same gameplay socket,
+                // in front of the game's own connect request to the relay.
+                if (UchAccountTransport.Bootstrap(context.Device.Processes.ActiveApplication?.ProgramId ?? 0,
+                        socket, sendBuffer, socketFlags, endPoint, out LinuxError bootstrapError) &&
+                    bootstrapError != LinuxError.SUCCESS)
+                {
+                    return WriteBsdResult(context, -1, bootstrapError);
+                }
 
                 errno = socket.SendTo(out result, sendBuffer, sendBuffer.Length, socketFlags, endPoint);
 

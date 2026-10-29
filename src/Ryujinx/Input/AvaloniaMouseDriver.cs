@@ -1,12 +1,15 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Ryujinx.Input;
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using System.Threading;
 using MouseButton = Ryujinx.Input.MouseButton;
+using PointerMouseButton = Avalonia.Input.MouseButton;
 using Size = System.Drawing.Size;
 
 namespace Ryujinx.Ava.Input
@@ -20,8 +23,13 @@ namespace Ryujinx.Ava.Input
         private Size _size;
         private readonly TopLevel _window;
         private DispatcherTimer _scrollStopTimer;
+        private int _isTouchPressed;
+        private int _pendingTouchPress;
+        private int _pendingLeftMousePress;
 
         public bool[] PressedButtons { get; }
+        public bool IsTouchPressed =>
+            Volatile.Read(ref _isTouchPressed) != 0 || Interlocked.Exchange(ref _pendingTouchPress, 0) != 0;
         public Vector2 CurrentPosition { get; private set; }
         public Vector2 Scroll { get; private set; }
 
@@ -33,15 +41,18 @@ namespace Ryujinx.Ava.Input
             _widget = parent;
             _window = window;
 
-            _widget.PointerMoved += Parent_PointerMovedEvent;
-            _widget.PointerPressed += Parent_PointerPressedEvent;
-            _widget.PointerReleased += Parent_PointerReleasedEvent;
-            _widget.PointerWheelChanged += Parent_PointerWheelChanged;
+            // SteamOS/Wayland controls may mark touch-generated pointer events as handled
+            // before they bubble to the emulator surface. Observe handled events so the
+            // guest touchscreen receives taps even when Avalonia UI controls consume them.
+            _widget.AddHandler(InputElement.PointerMovedEvent, Parent_PointerMovedEvent, RoutingStrategies.Bubble, handledEventsToo: true);
+            _widget.AddHandler(InputElement.PointerPressedEvent, Parent_PointerPressedEvent, RoutingStrategies.Bubble, handledEventsToo: true);
+            _widget.AddHandler(InputElement.PointerReleasedEvent, Parent_PointerReleasedEvent, RoutingStrategies.Bubble, handledEventsToo: true);
+            _widget.AddHandler(InputElement.PointerWheelChangedEvent, Parent_PointerWheelChanged, RoutingStrategies.Bubble, handledEventsToo: true);
 
-            _window.PointerMoved += Parent_PointerMovedEvent;
-            _window.PointerPressed += Parent_PointerPressedEvent;
-            _window.PointerReleased += Parent_PointerReleasedEvent;
-            _window.PointerWheelChanged += Parent_PointerWheelChanged;
+            _window.AddHandler(InputElement.PointerMovedEvent, Parent_PointerMovedEvent, RoutingStrategies.Bubble, handledEventsToo: true);
+            _window.AddHandler(InputElement.PointerPressedEvent, Parent_PointerPressedEvent, RoutingStrategies.Bubble, handledEventsToo: true);
+            _window.AddHandler(InputElement.PointerReleasedEvent, Parent_PointerReleasedEvent, RoutingStrategies.Bubble, handledEventsToo: true);
+            _window.AddHandler(InputElement.PointerWheelChangedEvent, Parent_PointerWheelChanged, RoutingStrategies.Bubble, handledEventsToo: true);
 
             _scrollStopTimer = new DispatcherTimer
             {
@@ -95,28 +106,74 @@ namespace Ryujinx.Ava.Input
 
         private void Parent_PointerReleasedEvent(object o, PointerReleasedEventArgs args)
         {
-            uint button = (uint)args.InitialPressMouseButton - 1;
-
-            if ((uint)PressedButtons.Length > button)
+            if (args.Pointer.Type == PointerType.Touch)
             {
-                PressedButtons[button] = false;
+                Volatile.Write(ref _isTouchPressed, 0);
+            }
+
+            MouseButton? button = args.Pointer.Type == PointerType.Touch
+                ? MouseButton.Button1
+                : MapMouseButton(args.InitialPressMouseButton);
+            if (button.HasValue)
+            {
+                PressedButtons[(int)button.Value] = false;
             }
         }
+
         private void Parent_PointerPressedEvent(object o, PointerPressedEventArgs args)
         {
             PointerPoint currentPoint = args.GetCurrentPoint(_widget);
-            uint button = (uint)currentPoint.Properties.PointerUpdateKind;
-
-            if ((uint)PressedButtons.Length > button)
+            if (args.Pointer.Type == PointerType.Touch)
             {
-                PressedButtons[button] = true;
+                Volatile.Write(ref _isTouchPressed, 1);
+                Interlocked.Exchange(ref _pendingTouchPress, 1);
+            }
+            MouseButton? button = args.Pointer.Type == PointerType.Touch
+                ? MouseButton.Button1
+                : MapPointerUpdateKind(currentPoint.Properties.PointerUpdateKind);
+
+            // SteamOS Game Mode can synthesize touchscreen taps as mouse pointer
+            // presses while leaving PointerUpdateKind and button properties empty.
+            // Treat an otherwise-unclassified press as left-click; AppHost routes it
+            // to the guest touchscreen when Direct Mouse Access is disabled.
+            if (!button.HasValue && args.Pointer.Type != PointerType.Touch)
+            {
+                button = MouseButton.Button1;
             }
 
-            if (args.Pointer.Type == PointerType.Touch) // mouse position is unchanged for touch events, set touch position
+            if (button.HasValue)
             {
-                CurrentPosition = new Vector2((float)currentPoint.Position.X, (float)currentPoint.Position.Y);
+                PressedButtons[(int)button.Value] = true;
+
+                if (args.Pointer.Type != PointerType.Touch && button == MouseButton.Button1)
+                {
+                    Interlocked.Exchange(ref _pendingLeftMousePress, 1);
+                }
             }
+
+            // Capture the press location even when SteamOS synthesizes a tap as a mouse press.
+            CurrentPosition = new Vector2((float)currentPoint.Position.X, (float)currentPoint.Position.Y);
         }
+
+        private static MouseButton? MapPointerUpdateKind(PointerUpdateKind kind) => kind switch
+        {
+            PointerUpdateKind.LeftButtonPressed => MouseButton.Button1,
+            PointerUpdateKind.RightButtonPressed => MouseButton.Button2,
+            PointerUpdateKind.MiddleButtonPressed => MouseButton.Button3,
+            PointerUpdateKind.XButton1Pressed => MouseButton.Button4,
+            PointerUpdateKind.XButton2Pressed => MouseButton.Button5,
+            _ => null,
+        };
+
+        private static MouseButton? MapMouseButton(PointerMouseButton button) => button switch
+        {
+            PointerMouseButton.Left => MouseButton.Button1,
+            PointerMouseButton.Right => MouseButton.Button2,
+            PointerMouseButton.Middle => MouseButton.Button3,
+            PointerMouseButton.XButton1 => MouseButton.Button4,
+            PointerMouseButton.XButton2 => MouseButton.Button5,
+            _ => null,
+        };
 
         private void Parent_PointerMovedEvent(object o, PointerEventArgs args)
         {
@@ -144,6 +201,11 @@ namespace Ryujinx.Ava.Input
         public void SetPosition(double x, double y)
         {
             CurrentPosition = new Vector2((float)x, (float)y);
+        }
+
+        public bool ConsumeLeftMousePress()
+        {
+            return IsButtonPressed(MouseButton.Button1) || Interlocked.Exchange(ref _pendingLeftMousePress, 0) != 0;
         }
 
         public bool IsButtonPressed(MouseButton button)
@@ -177,15 +239,15 @@ namespace Ryujinx.Ava.Input
 
             _isDisposed = true;
 
-            _widget.PointerMoved -= Parent_PointerMovedEvent;
-            _widget.PointerPressed -= Parent_PointerPressedEvent;
-            _widget.PointerReleased -= Parent_PointerReleasedEvent;
-            _widget.PointerWheelChanged -= Parent_PointerWheelChanged;
+            _widget.RemoveHandler(InputElement.PointerMovedEvent, Parent_PointerMovedEvent);
+            _widget.RemoveHandler(InputElement.PointerPressedEvent, Parent_PointerPressedEvent);
+            _widget.RemoveHandler(InputElement.PointerReleasedEvent, Parent_PointerReleasedEvent);
+            _widget.RemoveHandler(InputElement.PointerWheelChangedEvent, Parent_PointerWheelChanged);
 
-            _window.PointerMoved -= Parent_PointerMovedEvent;
-            _window.PointerPressed -= Parent_PointerPressedEvent;
-            _window.PointerReleased -= Parent_PointerReleasedEvent;
-            _window.PointerWheelChanged -= Parent_PointerWheelChanged;
+            _window.RemoveHandler(InputElement.PointerMovedEvent, Parent_PointerMovedEvent);
+            _window.RemoveHandler(InputElement.PointerPressedEvent, Parent_PointerPressedEvent);
+            _window.RemoveHandler(InputElement.PointerReleasedEvent, Parent_PointerReleasedEvent);
+            _window.RemoveHandler(InputElement.PointerWheelChangedEvent, Parent_PointerWheelChanged);
 
             _widget = null;
         }

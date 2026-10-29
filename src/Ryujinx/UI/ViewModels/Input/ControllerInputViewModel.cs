@@ -93,6 +93,9 @@ namespace Ryujinx.Ava.UI.ViewModels.Input
                         ParentModel.SelectedGamepad.SetLed(Config.LedColor.ToUInt32());
                 }
             }
+
+            // Track controller-driven checkbox changes, including Steam Deck Gaming Mode.
+            ParentModel.RefreshModifiedState();
         }
 
         private void SetRainbowLed(ref System.Drawing.Color color)
