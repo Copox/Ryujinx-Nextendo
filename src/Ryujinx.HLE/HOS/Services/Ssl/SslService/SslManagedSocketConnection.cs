@@ -241,10 +241,7 @@ namespace Ryujinx.HLE.HOS.Services.Ssl.SslService
                 RemoteCertificateValidationCallback = certCallback,
                 ApplicationProtocols = appProtocols,
             };
-            _stream.AuthenticateAsClient(sslOptions);
-            EndSslOperation();
-
-            return ResultCode.Success;
+            return SslHandshakeGuard.Run(() => _stream.AuthenticateAsClient(sslOptions), EndSslOperation);
         }
 
         public ResultCode Peek(out int peekCount, Memory<byte> buffer)
