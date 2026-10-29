@@ -45,7 +45,7 @@ namespace Ryujinx.Ava.UI.Views.Input
 
             try
             {
-                await MotionInputView.Show(ViewModel, TopLevel.GetTopLevel(this) as Window);
+                await MotionInputView.Show(ViewModel);
                 ViewModel.ParentModel.RefreshModifiedState();
             }
             finally
