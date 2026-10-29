@@ -145,17 +145,23 @@ namespace Ryujinx.Input.SDL3
             }
             SDL_PropertiesID propID = SDL_GetGamepadProperties(_gamepadHandle);
             SDL_LockProperties(propID);
-            if (SDL_GetBooleanProperty(propID, SDL_PROP_GAMEPAD_CAP_RUMBLE_BOOLEAN, false))
-            {
-                result |= GamepadFeaturesFlag.Rumble;
-            }
-
             if (SDL_GetBooleanProperty(propID, SDL_PROP_GAMEPAD_CAP_MONO_LED_BOOLEAN, false))
             {
                 result |= GamepadFeaturesFlag.Led;
             }
             SDL_UnlockProperties(propID);
             SDL_DestroyProperties(propID);
+
+            // Probe SDL directly after releasing the properties lock. Some Linux
+            // backends expose rumble even when the capability property is missing.
+            if (SDL_RumbleGamepad(_gamepadHandle, 0, 0, 100))
+            {
+                result |= GamepadFeaturesFlag.Rumble;
+            }
+            else
+            {
+                SDL_ClearError();
+            }
 
             return result;
         }

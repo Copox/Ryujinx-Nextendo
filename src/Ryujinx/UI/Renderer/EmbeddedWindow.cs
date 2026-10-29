@@ -186,9 +186,55 @@ namespace Ryujinx.Ava.UI.Renderer
             WindowHandle = X11Window.WindowHandle.RawHandle;
             X11Display = X11Window.DisplayHandle.RawHandle;
 
+            MakeX11WindowInputTransparent(X11Display, WindowHandle);
+
             return new PlatformHandle(WindowHandle, "X11");
         }
 
+        [SupportedOSPlatform("linux")]
+        private static void MakeX11WindowInputTransparent(nint display, nint window)
+        {
+            try
+            {
+                if (XShapeQueryExtension(display, out _, out _) == 0)
+                {
+                    Logger.Warning?.Print(LogClass.UI, "X11 Shape extension is unavailable; native renderer input may intercept touchscreen events.");
+                    return;
+                }
+
+                // ShapeInput is 2 and ShapeSet is 0. An empty input region lets the
+                // parent Avalonia window receive touch and mouse events while keeping
+                // the renderer window visible and Vulkan/OpenGL rendering intact.
+                XShapeCombineRectangles(display, window, 2, 0, 0, nint.Zero, 0, 0, 3);
+                XFlush(display);
+            }
+            catch (DllNotFoundException)
+            {
+                Logger.Warning?.Print(LogClass.UI, "libXext is unavailable; native renderer input may intercept touchscreen events.");
+            }
+            catch (EntryPointNotFoundException)
+            {
+                Logger.Warning?.Print(LogClass.UI, "X11 Shape functions are unavailable; native renderer input may intercept touchscreen events.");
+            }
+        }
+
+        [DllImport("libXext.so.6")]
+        private static extern int XShapeQueryExtension(nint display, out int eventBase, out int errorBase);
+
+        [DllImport("libXext.so.6")]
+        private static extern void XShapeCombineRectangles(
+            nint display,
+            nint window,
+            int destinationKind,
+            int xOffset,
+            int yOffset,
+            nint rectangles,
+            int rectangleCount,
+            int operation,
+            int ordering);
+
+        [DllImport("libX11.so.6")]
+        private static extern int XFlush(nint display);
         [SupportedOSPlatform("windows")]
         PlatformHandle CreateWin32(IPlatformHandle control)
         {

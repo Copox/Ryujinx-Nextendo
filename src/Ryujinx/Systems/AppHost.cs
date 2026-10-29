@@ -1583,9 +1583,12 @@ namespace Ryujinx.Ava.Systems
             // Touchscreen.
             bool hasTouch = false;
 
-            if (_viewModel.IsActive && !ConfigurationState.Instance.Hid.EnableMouse.Value)
+            if (_viewModel.IsActive)
             {
-                hasTouch = TouchScreenManager.Update(true, (_inputManager.MouseDriver as AvaloniaMouseDriver).IsButtonPressed(MouseButton.Button1), ConfigurationState.Instance.Graphics.AspectRatio.Value.ToFloat());
+                AvaloniaMouseDriver mouseDriver = _inputManager.MouseDriver as AvaloniaMouseDriver;
+                bool isTouchPressed = mouseDriver.IsTouchPressed ||
+                    (!ConfigurationState.Instance.Hid.EnableMouse.Value && mouseDriver.ConsumeLeftMousePress());
+                hasTouch = TouchScreenManager.Update(true, isTouchPressed, ConfigurationState.Instance.Graphics.AspectRatio.Value.ToFloat());
             }
 
             if (!hasTouch)
