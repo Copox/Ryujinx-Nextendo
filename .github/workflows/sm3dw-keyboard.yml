@@ -1,5 +1,7 @@
 name: SM3DW keyboard regression and Windows build
 on:
+  push:
+    branches: [fix/sm3dw-inline-keyboard-20261101]
   workflow_dispatch: {}
 permissions:
   contents: read
