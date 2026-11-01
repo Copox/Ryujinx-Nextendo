@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="SkiaSharp" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Win32" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" />
+    <Compile Include="../../src/Ryujinx.HLE/HOS/Applets/SoftwareKeyboard/SoftwareKeyboardRendererBase.cs" Link="SoftwareKeyboardRendererBase.cs" />
+    <Compile Include="../../src/Ryujinx.HLE/HOS/Applets/SoftwareKeyboard/SoftwareKeyboardUIState.cs" Link="SoftwareKeyboardUIState.cs" />
+    <Compile Include="../../src/Ryujinx.HLE/UI/RenderingSurfaceInfo.cs" Link="RenderingSurfaceInfo.cs" />
+    <Compile Include="../../src/Ryujinx.HLE/UI/IHostUITheme.cs" Link="IHostUITheme.cs" />
+    <Compile Include="../../src/Ryujinx.HLE/UI/ThemeColor.cs" Link="ThemeColor.cs" />
+    <Compile Include="../../src/Ryujinx.HLE/UI/TypefaceFallback.cs" Link="TypefaceFallback.cs" />
+    <EmbeddedResource Include="../../src/Ryujinx.HLE/HOS/Applets/SoftwareKeyboard/Resources/*.png">
+      <LogicalName>Ryujinx.HLE.HOS.Applets.SoftwareKeyboard.Resources.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+</Project>

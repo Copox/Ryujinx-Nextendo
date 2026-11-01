@@ -1,0 +1,49 @@
+name: SM3DW keyboard regression and Windows build
+on:
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Exercise keyboard renderer and guest memory guards
+        run: dotnet run --project tests/sm3dw-keyboard/Tests.csproj -c Release
+  build-windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Use mirrored LibHac dependency
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $feed = Join-Path $env:RUNNER_TEMP 'libhac'
+          New-Item -ItemType Directory -Path $feed -Force | Out-Null
+          gh release download build-deps --repo $env:GITHUB_REPOSITORY --pattern 'ryujinx.libhac.*.nupkg' --dir $feed
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot download LibHac mirror' }
+          dotnet nuget update source LibHacAlpha --source $feed --configfile nuget.config
+      - name: Bake official Nextendo configuration
+        env:
+          NEXTENDO_SERVER_IP: ${{ secrets.NEXTENDO_SERVER_IP }}
+          NEXTENDO_NAT_IP: ${{ secrets.NEXTENDO_NAT_IP }}
+          NEXTENDO_OFFICIAL_CLIENT_ID: ${{ secrets.NEXTENDO_OFFICIAL_CLIENT_ID }}
+        run: python distribution/nextendo/bake_release.py '1.10.2-sm3dw' '${{ github.sha }}'
+      - name: Publish Windows x64
+        run: dotnet publish src/Ryujinx/Ryujinx.csproj -c Release -r win-x64 --self-contained true -p:Version=1.10.2-sm3dw -p:SourceRevisionId=${{ github.sha }} -o publish
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Ryujinx-SM3DW-Windows-x64
+          path: publish/
+          if-no-files-found: error
