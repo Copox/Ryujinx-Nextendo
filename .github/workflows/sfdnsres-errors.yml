@@ -1,0 +1,27 @@
+name: Portable DNS error regression
+on:
+  pull_request:
+    paths:
+      - 'src/Ryujinx.HLE/HOS/Services/Sockets/Sfdnsres/IResolver.cs'
+      - 'src/Ryujinx.HLE/HOS/Services/Sockets/Sfdnsres/ResolverErrorConverter.cs'
+      - 'src/Ryujinx.HLE/HOS/Services/Sockets/Sfdnsres/Types/GaiError.cs'
+      - 'src/Ryujinx.HLE/HOS/Services/Sockets/Sfdnsres/Types/NetDbError.cs'
+      - 'tests/sfdnsres-errors/**'
+      - '.github/workflows/sfdnsres-errors.yml'
+  workflow_dispatch: {}
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet run --project tests/sfdnsres-errors/Tests.csproj -c Release

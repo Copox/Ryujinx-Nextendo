@@ -431,8 +431,8 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Sfdnsres
                     }
                     catch (SocketException exception)
                     {
-                        netDbErrorCode = ConvertSocketErrorCodeToNetDbError(exception.ErrorCode);
-                        errno = ConvertSocketErrorCodeToGaiError(exception.ErrorCode, errno);
+                        netDbErrorCode = ResolverErrorConverter.ToNetDbError(exception);
+                        errno = ResolverErrorConverter.ToGaiError(exception, errno);
                     }
                 }
             }
@@ -514,8 +514,8 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Sfdnsres
                 }
                 catch (SocketException exception)
                 {
-                    netDbErrorCode = ConvertSocketErrorCodeToNetDbError(exception.ErrorCode);
-                    errno = ConvertSocketErrorCodeToGaiError(exception.ErrorCode, errno);
+                    netDbErrorCode = ResolverErrorConverter.ToNetDbError(exception);
+                    errno = ResolverErrorConverter.ToGaiError(exception, errno);
                 }
             }
             else
@@ -658,8 +658,8 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Sfdnsres
                     }
                     catch (SocketException exception)
                     {
-                        netDbErrorCode = ConvertSocketErrorCodeToNetDbError(exception.ErrorCode);
-                        errno = ConvertSocketErrorCodeToGaiError(exception.ErrorCode, errno);
+                        netDbErrorCode = ResolverErrorConverter.ToNetDbError(exception);
+                        errno = ResolverErrorConverter.ToGaiError(exception, errno);
                     }
                 }
             }
@@ -775,28 +775,6 @@ namespace Ryujinx.HLE.HOS.Services.Sockets.Sfdnsres
         private static IEnumerable<IPAddress> GetIpv4Addresses(IPHostEntry hostEntry)
         {
             return hostEntry.AddressList.Where(x => x.AddressFamily == AddressFamily.InterNetwork);
-        }
-
-        private static NetDbError ConvertSocketErrorCodeToNetDbError(int errorCode)
-        {
-            return errorCode switch
-            {
-                11001 => NetDbError.HostNotFound,
-                11002 => NetDbError.TryAgain,
-                11003 => NetDbError.NoRecovery,
-                11004 => NetDbError.NoData,
-                _ => NetDbError.Internal,
-            };
-        }
-
-        private static GaiError ConvertSocketErrorCodeToGaiError(int errorCode, GaiError errno)
-        {
-            return errorCode switch
-            {
-                11001 => GaiError.NoData,
-                10060 => GaiError.Again,
-                _ => errno,
-            };
         }
     }
 }
