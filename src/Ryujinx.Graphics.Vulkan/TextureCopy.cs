@@ -15,8 +15,8 @@ namespace Ryujinx.Graphics.Vulkan
             Image dstImage,
             TextureCreateInfo srcInfo,
             TextureCreateInfo dstInfo,
-            TextureCreateInfo srcStorageInfo,
-            TextureCreateInfo dstStorageInfo,
+            TextureStorage srcStorage,
+            TextureStorage dstStorage,
             Extents2D srcRegion,
             Extents2D dstRegion,
             int srcLayer,
@@ -29,6 +29,9 @@ namespace Ryujinx.Graphics.Vulkan
             ImageAspectFlags srcAspectFlags = 0,
             ImageAspectFlags dstAspectFlags = 0)
         {
+            TextureCreateInfo srcStorageInfo = srcStorage.Info;
+            TextureCreateInfo dstStorageInfo = dstStorage.Info;
+
             static (Offset3D, Offset3D) ExtentsToOffset3D(Extents2D extents, int width, int height, int level)
             {
                 static int Clamp(int value, int max)
@@ -72,7 +75,7 @@ namespace Ryujinx.Graphics.Vulkan
                 AccessFlags.TransferReadBit,
                 PipelineStageFlags.AllCommandsBit,
                 PipelineStageFlags.TransferBit,
-                srcAspectFlags,
+                srcStorage.GetBarrierAspectFlags(srcAspectFlags),
                 srcLayer,
                 srcLevel,
                 layers,
@@ -124,7 +127,7 @@ namespace Ryujinx.Graphics.Vulkan
                 TextureStorage.DefaultAccessMask,
                 PipelineStageFlags.TransferBit,
                 PipelineStageFlags.AllCommandsBit,
-                dstAspectFlags,
+                dstStorage.GetBarrierAspectFlags(dstAspectFlags),
                 dstLayer,
                 dstLevel,
                 layers,
@@ -138,8 +141,8 @@ namespace Ryujinx.Graphics.Vulkan
             Image dstImage,
             TextureCreateInfo srcInfo,
             TextureCreateInfo dstInfo,
-            TextureCreateInfo srcStorageInfo,
-            TextureCreateInfo dstStorageInfo,
+            TextureStorage srcStorage,
+            TextureStorage dstStorage,
             int srcViewLayer,
             int dstViewLayer,
             int srcViewLevel,
@@ -170,8 +173,8 @@ namespace Ryujinx.Graphics.Vulkan
                 dstImage,
                 srcInfo,
                 dstInfo,
-                srcStorageInfo,
-                dstStorageInfo,
+                srcStorage,
+                dstStorage,
                 srcViewLayer,
                 dstViewLayer,
                 srcViewLevel,
@@ -207,8 +210,8 @@ namespace Ryujinx.Graphics.Vulkan
             Image dstImage,
             TextureCreateInfo srcInfo,
             TextureCreateInfo dstInfo,
-            TextureCreateInfo srcStorageInfo,
-            TextureCreateInfo dstStorageInfo,
+            TextureStorage srcStorage,
+            TextureStorage dstStorage,
             int srcViewLayer,
             int dstViewLayer,
             int srcViewLevel,
@@ -220,6 +223,9 @@ namespace Ryujinx.Graphics.Vulkan
             int depthOrLayers,
             int levels)
         {
+            TextureCreateInfo srcStorageInfo = srcStorage.Info;
+            TextureCreateInfo dstStorageInfo = dstStorage.Info;
+
             int srcZ;
             int srcLayer;
             int srcDepth;
@@ -308,7 +314,7 @@ namespace Ryujinx.Graphics.Vulkan
                 AccessFlags.TransferReadBit,
                 PipelineStageFlags.AllCommandsBit,
                 PipelineStageFlags.TransferBit,
-                srcAspect,
+                srcStorage.GetBarrierAspectFlags(srcAspect),
                 srcViewLayer + srcLayer,
                 srcViewLevel + srcLevel,
                 srcLayers,
@@ -377,7 +383,7 @@ namespace Ryujinx.Graphics.Vulkan
                 TextureStorage.DefaultAccessMask,
                 PipelineStageFlags.TransferBit,
                 PipelineStageFlags.AllCommandsBit,
-                dstAspect,
+                dstStorage.GetBarrierAspectFlags(dstAspect),
                 dstViewLayer + dstLayer,
                 dstViewLevel + dstLevel,
                 dstLayers,

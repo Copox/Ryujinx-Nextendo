@@ -1482,6 +1482,7 @@ namespace Ryujinx.Graphics.Vulkan
 
             _newState.ColorBlendAttachmentStateCount = (uint)(FramebufferParams.MaxColorAttachmentIndex + 1);
             _newState.HasDepthStencil = FramebufferParams.HasDepthStencil;
+            _newState.StencilOnlyAttachment = FramebufferParams.GetDepthStencilAspectFlags() == ImageAspectFlags.StencilBit;
             _newState.SamplesCount = FramebufferParams.AttachmentsCount != 0 ? FramebufferParams.AttachmentSamples[0] : 1;
         }
 

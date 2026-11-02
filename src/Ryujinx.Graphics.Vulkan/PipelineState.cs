@@ -306,6 +306,12 @@ namespace Ryujinx.Graphics.Vulkan
             set => Internal.Id8 = (Internal.Id8 & 0xFFFFFFFFFFFFFE7F) | (((ulong)value) << 7);
         }
 
+        public bool StencilOnlyAttachment
+        {
+            readonly get => ((Internal.Id8 >> 9) & 0x1) != 0UL;
+            set => Internal.Id8 = (Internal.Id8 & 0xFFFFFFFFFFFFFDFF) | ((value ? 1UL : 0UL) << 9);
+        }
+
         public bool HasTessellationControlShader;
         public NativeArray<PipelineShaderStageCreateInfo> Stages;
         public PipelineLayout PipelineLayout;
@@ -510,8 +516,9 @@ namespace Ryujinx.Graphics.Vulkan
                 PipelineDepthStencilStateCreateInfo depthStencilState = new()
                 {
                     SType = StructureType.PipelineDepthStencilStateCreateInfo,
-                    DepthTestEnable = DepthTestEnable,
-                    DepthWriteEnable = DepthWriteEnable,
+                    // A host depth/stencil fallback must retain the guest's stencil-only semantics.
+                    DepthTestEnable = DepthTestEnable && !StencilOnlyAttachment,
+                    DepthWriteEnable = DepthWriteEnable && !StencilOnlyAttachment,
                     DepthCompareOp = DepthCompareOp,
                     DepthBoundsTestEnable = false,
                     StencilTestEnable = StencilTestEnable,
