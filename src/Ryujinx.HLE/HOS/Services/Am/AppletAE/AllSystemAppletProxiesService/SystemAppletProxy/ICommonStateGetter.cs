@@ -331,6 +331,28 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE.AllSystemAppletProxiesService.Sys
             return ResultCode.Success;
         }
 
+        [CommandCmif(610)] // 21.0.0+
+        public ResultCode Unknown610(ServiceCtx context)
+        {
+            // Firmware passes one opaque u64 and expects no output payload. Hardware effects remain undocumented.
+            _ = context.RequestData.ReadUInt64();
+
+            Logger.Stub?.PrintStub(LogClass.ServiceAm);
+
+            return ResultCode.Success;
+        }
+
+        [CommandCmif(611)] // 22.0.0+
+        public ResultCode Unknown611(ServiceCtx context)
+        {
+            // The adjacent firmware 22 command has an opaque u8 input and no output payload.
+            _ = context.RequestData.ReadByte();
+
+            Logger.Stub?.PrintStub(LogClass.ServiceAm);
+
+            return ResultCode.Success;
+        }
+
         [CommandCmif(900)] // 11.0.0+
         // SetRequestExitToLibraryAppletAtExecuteNextProgramEnabled()
         public ResultCode SetRequestExitToLibraryAppletAtExecuteNextProgramEnabled(ServiceCtx context)
