@@ -253,6 +253,19 @@ namespace Ryujinx.Graphics.Vulkan
             return false;
         }
 
+        public ImageAspectFlags GetBarrierAspectFlags(ImageAspectFlags aspectFlags = 0)
+        {
+            aspectFlags = aspectFlags == 0 ? Info.Format.ConvertAspectFlags() : aspectFlags;
+
+            // Combined formats require both aspects in barriers without separate depth/stencil layouts.
+            if (aspectFlags == ImageAspectFlags.StencilBit && Info.Format == Format.S8Uint && VkFormat != VkFormat.S8Uint)
+            {
+                return ImageAspectFlags.DepthBit | ImageAspectFlags.StencilBit;
+            }
+
+            return aspectFlags;
+        }
+
         private unsafe void InitialTransition(ImageLayout srcLayout, ImageLayout dstLayout)
         {
             CommandBufferScoped cbs;
@@ -275,7 +288,7 @@ namespace Ryujinx.Graphics.Vulkan
                 }
             }
 
-            ImageAspectFlags aspectFlags = _info.Format.ConvertAspectFlags();
+            ImageAspectFlags aspectFlags = GetBarrierAspectFlags();
 
             ImageSubresourceRange subresourceRange = new(aspectFlags, 0, (uint)_info.Levels, 0, (uint)_info.GetLayers());
 
@@ -484,7 +497,7 @@ namespace Ryujinx.Graphics.Vulkan
 
             if (srcAccessFlags != AccessFlags.None)
             {
-                ImageAspectFlags aspectFlags = Info.Format.ConvertAspectFlags();
+                ImageAspectFlags aspectFlags = GetBarrierAspectFlags();
                 ImageMemoryBarrier barrier = TextureView.GetImageBarrier(
                     _imageAuto.Get(cbs).Value,
                     srcAccessFlags,
@@ -517,7 +530,7 @@ namespace Ryujinx.Graphics.Vulkan
 
             if (_lastModificationAccess != AccessFlags.None)
             {
-                ImageAspectFlags aspectFlags = Info.Format.ConvertAspectFlags();
+                ImageAspectFlags aspectFlags = GetBarrierAspectFlags();
                 ImageMemoryBarrier barrier = TextureView.GetImageBarrier(
                     _imageAuto.Get(cbs).Value,
                     _lastModificationAccess,
