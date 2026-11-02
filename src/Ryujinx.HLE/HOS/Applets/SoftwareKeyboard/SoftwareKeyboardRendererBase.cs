@@ -271,10 +271,12 @@ namespace Ryujinx.HLE.HOS.Applets.SoftwareKeyboard
 
             Debug.Assert(_surfaceInfo.ColorFormat == Services.SurfaceFlinger.ColorFormat.A8B8G8R8);
 
-            // Use the whole area of the image to draw, even the alignment, otherwise it may shear the final
-            // image if the pitch is different.
+            // Keep horizontal row padding so the image matches the guest pitch.
+            // Size is the aligned allocation capacity, not the image height. Rendering
+            // its tail overwrites live guest objects after the pixels (SM3DW's keyboard
+            // controller is inside that tail).
             uint totalWidth = _surfaceInfo.Pitch / 4;
-            uint totalHeight = _surfaceInfo.Size / _surfaceInfo.Pitch;
+            uint totalHeight = _surfaceInfo.Height;
 
             Debug.Assert(_surfaceInfo.Width <= totalWidth);
             Debug.Assert(_surfaceInfo.Height <= totalHeight);
@@ -610,7 +612,8 @@ namespace Ryujinx.HLE.HOS.Applets.SoftwareKeyboard
 
                 _bufferData = buffer;
 
-                Debug.Assert(buffer.Length == _surfaceInfo.Size);
+                Debug.Assert((ulong)buffer.Length == (ulong)_surfaceInfo.Pitch * _surfaceInfo.Height);
+                Debug.Assert((ulong)buffer.Length <= _surfaceInfo.Size);
             }
         }
 
