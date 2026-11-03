@@ -5,7 +5,7 @@ on:
       - 'src/Ryujinx.HLE/HOS/Services/Sockets/Sfdnsres/IResolver.cs'
       - 'src/Ryujinx.HLE/HOS/Services/Sockets/Sfdnsres/ResolverErrorConverter.cs'
       - 'src/Ryujinx.HLE/HOS/Services/Sockets/Sfdnsres/Types/GaiError.cs'
-      - 'src/Ryujinx.HLE/HOS/Services/Sockets/Sfdnsres/Types/NetDbError.cs'
+      - 'src/Ryujinx.HLE/HOS/Services/Sockets/Sfdnsres/Types/NetDBError.cs'
       - 'tests/sfdnsres-errors/**'
       - '.github/workflows/sfdnsres-errors.yml'
   workflow_dispatch: {}

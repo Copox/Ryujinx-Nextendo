@@ -5,6 +5,6 @@
   <ItemGroup>
     <Compile Include="../../src/Ryujinx.HLE/HOS/Services/Sockets/Sfdnsres/ResolverErrorConverter.cs" Link="ResolverErrorConverter.cs" />
     <Compile Include="../../src/Ryujinx.HLE/HOS/Services/Sockets/Sfdnsres/Types/GaiError.cs" Link="GaiError.cs" />
-    <Compile Include="../../src/Ryujinx.HLE/HOS/Services/Sockets/Sfdnsres/Types/NetDbError.cs" Link="NetDbError.cs" />
+    <Compile Include="../../src/Ryujinx.HLE/HOS/Services/Sockets/Sfdnsres/Types/NetDBError.cs" Link="NetDBError.cs" />
   </ItemGroup>
 </Project>
