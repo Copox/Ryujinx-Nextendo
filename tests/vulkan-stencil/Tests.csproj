@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Ryujinx.Common/Ryujinx.Common.csproj" />
+    <ProjectReference Include="../../src/Ryujinx.Graphics.GAL/Ryujinx.Graphics.GAL.csproj" />
+    <ProjectReference Include="../../src/Ryujinx.Graphics.Vulkan/Ryujinx.Graphics.Vulkan.csproj" />
+    <PackageReference Include="Silk.NET.Vulkan" />
+    <Compile Include="../../src/Ryujinx.Graphics.Vulkan/FormatCapabilities.cs" Link="FormatCapabilities.cs" />
+    <Compile Include="../../src/Ryujinx.Graphics.Vulkan/FormatTable.cs" Link="FormatTable.cs" />
+    <Compile Include="../../src/Ryujinx.Graphics.Vulkan/VulkanConfiguration.cs" Link="VulkanConfiguration.cs" />
+  </ItemGroup>
+</Project>

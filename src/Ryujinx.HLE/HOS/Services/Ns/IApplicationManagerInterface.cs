@@ -273,11 +273,28 @@ namespace Ryujinx.HLE.HOS.Services.Ns
             return ResultCode.Success;
         }
 
+        private StubEvent _virtualGameCardNotificationEvent;
+        private StubEvent _virtualGameCardNotificationEvent4088;
+
         [CommandCmif(4022)] // 20.0.0+
+        // qlaunch imports a copied readable event for virtual game card notifications.
+        public ResultCode GetVirtualGameCardNotificationEvent(ServiceCtx context)
+        {
+            _virtualGameCardNotificationEvent ??= new StubEvent(context);
+            return _virtualGameCardNotificationEvent.ReplyWithHandle(context);
+        }
+
+        [CommandCmif(4088)] // 20.0.0+
+        // A separate notification event; its exact notification semantics are undocumented.
+        public ResultCode GetVirtualGameCardNotificationEvent4088(ServiceCtx context)
+        {
+            _virtualGameCardNotificationEvent4088 ??= new StubEvent(context);
+            return _virtualGameCardNotificationEvent4088.ReplyWithHandle(context);
+        }
+
         [CommandCmif(4023)] // 20.0.0+
         [CommandCmif(4053)] // 20.0.0+
         [CommandCmif(4054)] // 20.0.0+
-        [CommandCmif(4088)] // 20.0.0+
         // Asked by the virtual game cards page, without arguments.
         public ResultCode GetVirtualGameCardValue(ServiceCtx context)
         {

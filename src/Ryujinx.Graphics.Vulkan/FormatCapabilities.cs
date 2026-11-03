@@ -179,6 +179,22 @@ namespace Ryujinx.Graphics.Vulkan
                 {
                     format = VkFormat.D32SfloatS8Uint;
                 }
+                else if (srcFormat == Format.S8Uint)
+                {
+                    // Keep stencil transfers byte-sized while using a supported depth/stencil image.
+                    if (!VulkanConfiguration.ForceD24S8Unsupported && OptimalFormatSupports(requiredFeatures, Format.D24UnormS8Uint))
+                    {
+                        format = VkFormat.D24UnormS8Uint;
+                    }
+                    else if (OptimalFormatSupports(requiredFeatures, Format.D32FloatS8Uint))
+                    {
+                        format = VkFormat.D32SfloatS8Uint;
+                    }
+                    else
+                    {
+                        throw new NotSupportedException("No supported image format is available for S8Uint.");
+                    }
+                }
                 else if (srcFormat == Format.R4G4B4A4Unorm)
                 {
                     format = VkFormat.R4G4B4A4UnormPack16;
