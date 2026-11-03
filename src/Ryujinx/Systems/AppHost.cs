@@ -678,10 +678,20 @@ namespace Ryujinx.Ava.Systems
                 Device.Gpu.WaitUntilGpuReady();
             }
             
+            DisposeGpu();
+
+            // Cancellation requests shutdown; it does not mean the run-loop
+            // callback has finished using its event and cancellation token.
+            // DisposeGpu joins the threaded renderer's GPU worker. Join the
+            // owning render thread as well before releasing those handles.
+            if (_renderingThread.IsAlive)
+            {
+                _renderingThread.Join();
+            }
+
             _gpuDoneEvent.Dispose();
             _gpuCancellationTokenSource.Dispose();
-            
-            DisposeGpu();
+
             AppExit?.Invoke(this, EventArgs.Empty);
         }
 

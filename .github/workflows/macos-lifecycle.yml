@@ -1,0 +1,25 @@
+name: macOS application lifecycle build
+
+on:
+  pull_request:
+    paths:
+      - 'src/Ryujinx/Systems/AppHost.cs'
+      - 'tests/app-lifecycle/**'
+      - '.github/workflows/macos-lifecycle.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Publish the complete ARM64 application
+        run: dotnet publish src/Ryujinx/Ryujinx.csproj -c Release -r osx-arm64 --self-contained true -o publish-lifecycle
+      - name: Build the original short-lived guest
+        run: python3 tests/app-lifecycle/build.py "$RUNNER_TEMP/ryujinx-exit-test.nro"
