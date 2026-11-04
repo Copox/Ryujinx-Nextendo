@@ -814,16 +814,13 @@ namespace Ryujinx.Ava.UI.Views.Misc
             string targetId = config is Ryujinx.Common.Configuration.Hid.Controller.StandardControllerInputConfig ? config.Id : null;
 
             // Fall back to the first connected gamepad when no controller mapping is active.
+            // Read the ids only: GetGamepads() opens a new gamepad (SDL + HID handles) for every
+            // device on each call, and this runs every 40 ms, so the discarded ones leaked handles.
             if (string.IsNullOrEmpty(targetId))
             {
-                foreach (var g in inputManager.GamepadDriver.GetGamepads())
-                {
-                    if (g.IsConnected)
-                    {
-                        targetId = g.Id;
-                        break;
-                    }
-                }
+                ReadOnlySpan<string> gamepadIds = inputManager.GamepadDriver.GamepadsIds;
+                if (gamepadIds.Length > 0)
+                    targetId = gamepadIds[0];
             }
 
             if (string.IsNullOrEmpty(targetId))

@@ -287,6 +287,7 @@ namespace Ryujinx.Ava.UI.Views.Input
             foreach (IGamepad gamepad in RyujinxApp.MainWindow.InputManager.GamepadDriver.GetGamepads())
             {
                 gamepad?.ClearLed();
+                gamepad?.Dispose();
             }
 
             _currentAssigner?.Cancel();

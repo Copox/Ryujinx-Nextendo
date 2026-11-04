@@ -1001,7 +1001,10 @@ namespace Ryujinx.Ava.UI.Views.Misc
 
             if (string.IsNullOrEmpty(targetId))
             {
-                targetId = inputManager.GamepadDriver.GetGamepads().FirstOrDefault(gamepad => gamepad.IsConnected)?.Id;
+                // Read the ids only: GetGamepads() opens a new gamepad for every device on each
+                // call and this runs on the navigation timer, so the discarded ones leaked handles.
+                ReadOnlySpan<string> gamepadIds = inputManager.GamepadDriver.GamepadsIds;
+                targetId = gamepadIds.Length > 0 ? gamepadIds[0] : null;
             }
 
             if (string.IsNullOrEmpty(targetId))
