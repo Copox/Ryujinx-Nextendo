@@ -1878,7 +1878,7 @@ namespace Ryujinx.Ava.UI.ViewModels.Input
 
                 try
                 {
-                    IGamepad gp = _mainWindow?.InputManager?.GamepadDriver?.GetGamepad(id);
+                    using IGamepad gp = _mainWindow?.InputManager?.GamepadDriver?.GetGamepad(id);
 
                     if (gp is SDL3Gamepad sdlGp)
                     {
