@@ -26,10 +26,23 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
         // ONLINE is allowed ONLY on the profile bound to the Nextendo account. Any other
         // local profile presents the 0xcafe stub -> the gated server refuses it -> that
         // profile stays OFFLINE. (Instance property: uses _userId = the profile being queried.)
-        private long NetworkServiceAccountId =>
-            NextendoAccount.IsLinked && !NextendoAccount.OnlineBlocked && IsBoundNextendoProfile
-                ? (long)NextendoAccount.Pid
-                : 0xcafe;
+        private NextendoIdentitySnapshot IdentityForProfile()
+        {
+            NextendoIdentitySnapshot identity = NextendoAccount.GetIdentitySnapshot();
+            return NextendoAccount.OnlineBlocked ||
+                (!string.IsNullOrEmpty(identity.ProfileUserId) &&
+                 !string.Equals(_userId.ToString(), identity.ProfileUserId, StringComparison.OrdinalIgnoreCase))
+                ? new(0, "", "", identity.Generation) : identity;
+        }
+
+        private long NetworkServiceAccountId
+        {
+            get
+            {
+                NextendoIdentitySnapshot identity = IdentityForProfile();
+                return identity.Pid != 0 ? (long)identity.Pid : 0xcafe;
+            }
+        }
 
         // [Nextendo] Le NSA rendu a l'application en cours. Animal Crossing: New Horizons compare
         // le NSA annonce par chaque joueur a la liste d'amis nn::friends : il y recoit le
@@ -79,6 +92,7 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
         private bool _cachedOnlineIdentity;
         private bool _cachedOnlineBlocked;
         private string _cachedNexToken;
+        private long _cachedIdentityGeneration = -1;
 
         public ManagerServer(UserId userId)
         {
@@ -138,7 +152,7 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
                 0x0100B3C014BDA000;   // Mega Drive / Genesis
         }
 
-        private string GenerateIdToken(string installedVersion, ulong programId)
+        private string GenerateIdToken(string installedVersion, ulong programId, NextendoIdentitySnapshot identity)
         {
             RSAParameters parameters = _nextendoIdTokenRsa.ExportParameters(true);
 
@@ -187,8 +201,7 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
             // server holds) along in a custom "nnex" claim. The auth server validates that
             // HMAC and rejects any PID the token doesn't prove. Present only when a Nextendo
             // account is linked (online); absent otherwise, so offline is completely unaffected.
-            string nexToken = NextendoAccount.IsLinked && !NextendoAccount.OnlineBlocked && IsBoundNextendoProfile
-                ? NextendoAccount.NexToken : "";
+            string nexToken = identity.Token;
             if (!string.IsNullOrEmpty(nexToken))
             {
                 claims["nnex"] = nexToken;
@@ -329,20 +342,23 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc.AccountService
 
         private byte[] GetIdTokenData(string installedVersion, ulong programId)
         {
-            bool onlineIdentity = NextendoAccount.IsLinked && !NextendoAccount.OnlineBlocked && IsBoundNextendoProfile;
+            // PID, proof and cache generation must come from the same validated identity.
+            NextendoIdentitySnapshot identity = IdentityForProfile();
+            bool onlineIdentity = identity.Pid != 0;
             if (_cachedTokenData == null || DateTime.UtcNow > _cachedTokenExpiry ||
                 installedVersion != _cachedTokenVersion || programId != _cachedTokenProgramId ||
                 onlineIdentity != _cachedOnlineIdentity ||
                 NextendoAccount.OnlineBlocked != _cachedOnlineBlocked ||
-                NextendoAccount.NexToken != _cachedNexToken)
+                identity.Token != _cachedNexToken || identity.Generation != _cachedIdentityGeneration)
             {
                 _cachedTokenExpiry = DateTime.UtcNow + TimeSpan.FromHours(3);
                 _cachedTokenVersion = installedVersion;
                 _cachedTokenProgramId = programId;
                 _cachedOnlineIdentity = onlineIdentity;
                 _cachedOnlineBlocked = NextendoAccount.OnlineBlocked;
-                _cachedNexToken = NextendoAccount.NexToken;
-                _cachedTokenData = Encoding.ASCII.GetBytes(GenerateIdToken(installedVersion, programId));
+                _cachedNexToken = identity.Token;
+                _cachedIdentityGeneration = identity.Generation;
+                _cachedTokenData = Encoding.ASCII.GetBytes(GenerateIdToken(installedVersion, programId, identity));
             }
 
             return _cachedTokenData;

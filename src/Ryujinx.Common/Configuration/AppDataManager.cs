@@ -102,6 +102,16 @@ namespace Ryujinx.Common.Configuration
             }
 
             SetupBasePaths();
+            try
+            {
+                NextendoAccountStorage.Recover(BaseDirPath);
+            }
+            catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException or
+                System.Security.Cryptography.CryptographicException or FormatException or PlatformNotSupportedException)
+            {
+                Logger.Warning?.Print(LogClass.Application, "[Nextendo] Account recovery is incomplete. Existing files were retained.");
+            }
+            NextendoProfileLinks.Initialize(BaseDirPath);
         }
 
         public static string GetOrCreateLogsDir()

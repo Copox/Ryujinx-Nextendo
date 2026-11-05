@@ -41,34 +41,38 @@ namespace Ryujinx.Common.Configuration
 
         private static string FilePath => Path.Combine(AppDataManager.BaseDirPath, "nextendo_server_override.json");
 
+        private static readonly object _sync = new();
         private static Reglages _cache;
         private static bool _charge;
 
         private static Reglages Courant()
         {
-            if (_charge)
+            lock (_sync)
             {
+                if (_charge)
+                {
+                    return _cache;
+                }
+
+                _charge = true;
+                _cache = new Reglages();
+
+                try
+                {
+                    if (File.Exists(FilePath))
+                    {
+                        _cache = JsonSerializer.Deserialize<Reglages>(File.ReadAllText(FilePath)) ?? new Reglages();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // Un fichier illisible ne doit pas empêcher l'émulateur de démarrer :
+                    // on retombe sur les serveurs officiels, ce qui est l'état sûr.
+                    Logger.Warning?.Print(LogClass.Application, $"[Nextendo] override illisible: {ex.Message}");
+                }
+
                 return _cache;
             }
-
-            _charge = true;
-            _cache = new Reglages();
-
-            try
-            {
-                if (File.Exists(FilePath))
-                {
-                    _cache = JsonSerializer.Deserialize<Reglages>(File.ReadAllText(FilePath)) ?? new Reglages();
-                }
-            }
-            catch (Exception ex)
-            {
-                // Un fichier illisible ne doit pas empêcher l'émulateur de démarrer :
-                // on retombe sur les serveurs officiels, ce qui est l'état sûr.
-                Logger.Warning?.Print(LogClass.Application, $"[Nextendo] override illisible: {ex.Message}");
-            }
-
-            return _cache;
         }
 
         /// <summary>La redirection est-elle active ET utilisable ?</summary>
@@ -112,28 +116,31 @@ namespace Ryujinx.Common.Configuration
         /// <summary>Enregistre les réglages et les applique au prochain démarrage.</summary>
         public static void Save(bool enabled, string serverIp, string natIp)
         {
-            Reglages r = new()
+            lock (_sync)
             {
-                Enabled = enabled,
-                ServerIp = (serverIp ?? "").Trim(),
-                NatIp = (natIp ?? "").Trim(),
-            };
+                Reglages r = new()
+                {
+                    Enabled = enabled,
+                    ServerIp = (serverIp ?? "").Trim(),
+                    NatIp = (natIp ?? "").Trim(),
+                };
 
-            _cache = r;
-            _charge = true;
+                _cache = r;
+                _charge = true;
 
-            try
-            {
-                File.WriteAllText(FilePath, JsonSerializer.Serialize(r, new JsonSerializerOptions { WriteIndented = true }));
+                try
+                {
+                    File.WriteAllText(FilePath, JsonSerializer.Serialize(r, new JsonSerializerOptions { WriteIndented = true }));
 
-                Logger.Info?.Print(LogClass.Application,
-                    enabled
-                        ? $"[Nextendo] redirection reseau ACTIVE : jeu -> {r.ServerIp}, NAT -> {(string.IsNullOrEmpty(r.NatIp) ? "(inchange)" : r.NatIp)}"
-                        : "[Nextendo] redirection reseau desactivee, retour aux serveurs officiels");
-            }
-            catch (Exception ex)
-            {
-                Logger.Error?.Print(LogClass.Application, $"[Nextendo] override non enregistre: {ex.Message}");
+                    Logger.Info?.Print(LogClass.Application,
+                        enabled
+                            ? $"[Nextendo] redirection reseau ACTIVE : jeu -> {r.ServerIp}, NAT -> {(string.IsNullOrEmpty(r.NatIp) ? "(inchange)" : r.NatIp)}"
+                            : "[Nextendo] redirection reseau desactivee, retour aux serveurs officiels");
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error?.Print(LogClass.Application, $"[Nextendo] override non enregistre: {ex.Message}");
+                }
             }
         }
 

@@ -75,6 +75,7 @@ namespace Ryujinx.Ava.UI.Views.Settings
         protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
         {
             base.OnAttachedToVisualTree(e);
+            NextendoAccountMigration.Completed += OnMigrationCompleted;
 
             // Plusieurs comptes Nextendo : a chaque ouverture de l'onglet, on demande lequel.
             if (NextendoAccount.Count > 1)
@@ -98,9 +99,28 @@ namespace Ryujinx.Ava.UI.Views.Settings
             Refresh();
         }
 
+        protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+        {
+            NextendoAccountMigration.Completed -= OnMigrationCompleted;
+            base.OnDetachedFromVisualTree(e);
+        }
+
+        private void OnMigrationCompleted() => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            if (LinkedPanel.IsVisible != NextendoAccount.IsLinked) Refresh();
+            else RefreshStorageStatus();
+        });
+
+        private void RefreshStorageStatus()
+        {
+            AccountStorageStatus.Text = NextendoCredentialStorageUi.Message;
+            AccountStorageStatus.IsVisible = NextendoCredentialStorageUi.RequiresAttention;
+        }
+
         private void Refresh()
         {
             RefreshStartupView();
+            RefreshStorageStatus();
 
             bool linked = NextendoAccount.IsLinked;
             NotLinkedPanel.IsVisible = !linked;
@@ -144,7 +164,9 @@ namespace Ryujinx.Ava.UI.Views.Settings
         {
             try
             {
+                NextendoIdentitySnapshot expected = NextendoAccount.GetIdentitySnapshot();
                 (string name, byte[] image) = await NextendoApi.GetProfileSyncAsync();
+                if (NextendoAccount.GetIdentitySnapshot() != expected) return;
                 var am = RyujinxApp.MainWindow?.AccountManager;
                 AccUserProfile prof = FindBoundProfile(am);
 
@@ -155,7 +177,8 @@ namespace Ryujinx.Ava.UI.Views.Settings
                 if (!string.IsNullOrEmpty(name))
                 {
                     UsernameText.Text = name;
-                    NextendoAccount.Save(NextendoAccount.Pid, name, NextendoAccount.FriendCode, NextendoAccount.NexToken, isGuest: NextendoAccount.IsGuest);
+                    if (!NextendoAccount.UpdateDisplayName(expected, name)) return;
+                    RefreshStorageStatus();
                 }
 
                 if (image is { Length: > 0 })
@@ -482,10 +505,13 @@ namespace Ryujinx.Ava.UI.Views.Settings
                 return;
             }
 
+            NextendoIdentitySnapshot expected = NextendoAccount.GetIdentitySnapshot();
             (bool ok, string msg) = await NextendoApi.SetUsernameAsync(name);
+            if (NextendoAccount.GetIdentitySnapshot() != expected) return;
             if (ok)
             {
-                NextendoAccount.Save(NextendoAccount.Pid, name, NextendoAccount.FriendCode, NextendoAccount.NexToken, isGuest: NextendoAccount.IsGuest);
+                if (!NextendoAccount.UpdateDisplayName(expected, name)) return;
+                RefreshStorageStatus();
                 UsernameText.Text = name;
 
                 try

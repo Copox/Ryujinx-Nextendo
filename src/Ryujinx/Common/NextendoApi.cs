@@ -189,7 +189,7 @@ namespace Ryujinx.Ava.Common
             return url.TrimEnd('/');
         }
 
-        private static HttpClient Client()
+        private static HttpClient Client(NextendoIdentitySnapshot identity = null)
         {
             // [Nextendo] Seconde barrière, volontairement redondante avec NextendoAccount :
             // en mode « serveur personnalisé » aucune requête ne doit partir vers nos
@@ -202,9 +202,10 @@ namespace Ryujinx.Ava.Common
             }
 
             HttpClient http = new() { Timeout = TimeSpan.FromSeconds(15) };
-            if (!string.IsNullOrEmpty(NextendoAccount.NexToken))
+            identity ??= NextendoAccount.GetIdentitySnapshot();
+            if (!string.IsNullOrEmpty(identity.Token))
             {
-                http.DefaultRequestHeaders.Add("Authorization", "Bearer " + NextendoAccount.NexToken);
+                http.DefaultRequestHeaders.Add("Authorization", "Bearer " + identity.Token);
             }
             // [Nextendo] Preuve d'application (client_id enregistré), distincte du jeton joueur
             // ci-dessus : voir NextendoAppSecrets pour pourquoi les deux ne peuvent pas partager
@@ -291,27 +292,20 @@ namespace Ryujinx.Ava.Common
         public static event Action SessionRevoked;
 
         /// <summary>
-        /// [Nextendo] Auto-heal. A 401 on an authenticated call means the locally stored NEX token is
-        /// no good — expired, or REVOKED. (2026-07-22 incident: the 1.6.5 Windows package accidentally
-        /// shipped the maintainer's live session file — portable/nextendo_account.txt — so every
-        /// download booted logged in as him and carried HIS token; that token is now denylisted on the
-        /// server.) Left in place, such a client keeps presenting someone else's PID as its identity —
-        /// in the account panel AND, worse, as the bare NEX login id in-game. So on a definitive 401 we
-        /// wipe the local session: the identity falls back to the anonymous 0xcafe stub (no longer
-        /// impersonating anyone) and the player is prompted to sign in as themselves. Only a real 401
-        /// triggers this — network failures and 5xx surface as exceptions and must NEVER clear a valid
-        /// session. Returns true when a session was cleared.
+        /// Invalidates only the credential rejected by this request. Delayed responses from another
+        /// account must not sign out the active account or automatically switch an in-game identity.
+        /// Transport errors do not remove saved credentials.
         /// </summary>
         private static bool HealIfRejected(HttpResponseMessage resp)
         {
-            if (resp is null || resp.StatusCode != HttpStatusCode.Unauthorized || string.IsNullOrEmpty(NextendoAccount.NexToken))
+            if (resp is null || resp.StatusCode != HttpStatusCode.Unauthorized ||
+                !NextendoAccount.RejectCredential(resp.RequestMessage?.Headers.Authorization?.Parameter))
             {
                 return false;
             }
 
             Logger.Warning?.Print(LogClass.Application,
-                "[Nextendo] jeton rejeté par le serveur (401) — session locale purgée (compte révoqué ou expiré). Reconnexion requise.");
-            NextendoAccount.Clear();
+                "[Nextendo] The account credential was rejected. Online identity is disabled until sign-in.");
             try { SessionRevoked?.Invoke(); } catch { /* UI not ready yet */ }
             return true;
         }
@@ -496,7 +490,8 @@ namespace Ryujinx.Ava.Common
         {
             try
             {
-                using HttpClient http = Client();
+                NextendoIdentitySnapshot expected = NextendoAccount.GetIdentitySnapshot();
+                using HttpClient http = Client(expected);
                 HttpResponseMessage resp = await http.GetAsync($"{BaseUrl()}/api/profile");
                 if (!resp.IsSuccessStatusCode)
                 {
@@ -519,7 +514,8 @@ namespace Ryujinx.Ava.Common
                     }
                 }
 
-                MirrorLocalProfile(name, image);
+                if (NextendoAccount.GetIdentitySnapshot() != expected) return (null, null);
+                MirrorLocalProfile(expected, name, image);
 
                 return (name, image);
             }
@@ -533,12 +529,12 @@ namespace Ryujinx.Ava.Common
         // to it (the one the HOME Menu and its user page show). Only done before on login and in
         // the Nextendo settings: a picture changed on the website or the app stayed old in the
         // HOME Menu while the emulator's own windows showed the new one.
-        private static void MirrorLocalProfile(string name, byte[] image)
+        private static void MirrorLocalProfile(NextendoIdentitySnapshot expected, string name, byte[] image)
         {
             try
             {
                 var am = RyujinxApp.MainWindow?.AccountManager;
-                string bound = NextendoAccount.ProfileUserId;
+                string bound = expected.ProfileUserId;
 
                 if (am == null || string.IsNullOrEmpty(bound))
                 {
@@ -578,6 +574,7 @@ namespace Ryujinx.Ava.Common
         // this call MINTS the identity.
         public static async Task<(bool ok, string message)> CreateGuestAsync(string nickname)
         {
+            long signInGeneration = NextendoAccount.GetIdentitySnapshot().Generation;
             try
             {
                 using HttpClient http = new() { Timeout = TimeSpan.FromSeconds(15) };
@@ -615,7 +612,8 @@ namespace Ryujinx.Ava.Common
                     return (false, "Invalid server response");
                 }
 
-                NextendoAccount.Save(pid, username, friendCode, nexToken, isGuest: true);
+                if (!NextendoAccount.Save(pid, username, friendCode, nexToken, isGuest: true, expectedGeneration: signInGeneration))
+                    return (false, NextendoCredentialStorageUi.Message);
                 return (true, "");
             }
             catch (Exception ex)
@@ -1244,6 +1242,7 @@ namespace Ryujinx.Ava.Common
 
         public static async Task<(bool ok, string error)> SignInWithBrowserAsync()
         {
+            long signInGeneration = NextendoAccount.GetIdentitySnapshot().Generation;
             // PKCE (S256) + a CSRF `state` we verify on the way back.
             string verifier = RandUrl(32);
             string challenge = Base64Url(SHA256.HashData(Encoding.ASCII.GetBytes(verifier)));
@@ -1368,7 +1367,8 @@ namespace Ryujinx.Ava.Common
                 string username = acct.TryGetProperty("username", out JsonElement u) ? (u.GetString() ?? "") : "";
                 string friendCode = acct.TryGetProperty("friend_code", out JsonElement f) ? (f.GetString() ?? "") : "";
 
-                NextendoAccount.Save(pid, username, friendCode, nexToken);
+                if (!NextendoAccount.Save(pid, username, friendCode, nexToken, expectedGeneration: signInGeneration))
+                    return (false, NextendoCredentialStorageUi.Message);
                 return (true, "");
             }
             catch (Exception ex)

@@ -5,6 +5,8 @@ using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Net.Http;
+using System.Threading.Tasks;
 using System.Text;
 using System.Threading;
 
@@ -38,6 +40,19 @@ namespace Ryujinx.Tests.HLE
 
         private readonly Stopwatch _sinceLaunch = new();
         private HttpListener _server;
+        private NextendoIdentityAuthority _previousAuthority;
+
+        private sealed class FixtureAuthority : HttpMessageHandler
+        {
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                // Resolve the synthetic identity without contacting the production authority.
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("{\"account\":{\"pid\":100,\"username\":\"essai\",\"friend_code\":\"SW-0000-0000-0100\"}}"),
+                });
+            }
+        }
         private string _dir;
         private string _previousApi;
 
@@ -62,7 +77,9 @@ namespace Ryujinx.Tests.HLE
 
             _dir = Path.Combine(Path.GetTempPath(), "ryujinx-tests-smash-amis-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(_dir);
-            File.WriteAllText(Path.Combine(_dir, "nextendo_account.txt"), "pid=100\nusername=essai\nnex_token=jeton-essai\n");
+            File.WriteAllText(Path.Combine(_dir, "nextendo_account.txt"), "pid=100\nusername=essai\nnex_token=nx2.essai.signature\n");
+            _previousAuthority = NextendoAccount.Authority;
+            NextendoAccount.Authority = new NextendoIdentityAuthority(new FixtureAuthority());
             AppDataManager.Initialize(_dir);
 
             // Jamais le vrai compte non plus.
@@ -79,6 +96,7 @@ namespace Ryujinx.Tests.HLE
         {
             WaitForReadsToEnd();
             _server?.Close();
+            NextendoAccount.Authority = _previousAuthority;
             Environment.SetEnvironmentVariable("NEXTENDO_API", _previousApi);
 
             try

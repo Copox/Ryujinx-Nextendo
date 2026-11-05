@@ -1442,7 +1442,11 @@ namespace Ryujinx.Ava.UI.Views.Misc
                 return;
             }
 
-            NextendoAccount.Clear();
+            if (!NextendoAccount.Clear())
+            {
+                ShowStatus(FriendsStatusText, NextendoCredentialStorageUi.Message, false);
+                return;
+            }
 
             _friends.Clear();
             _requests.Clear();

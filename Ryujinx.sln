@@ -94,6 +94,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		nuget.config = nuget.config
 	EndProjectSection
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Tests", "Tests", "{0AB3BF05-4346-4AA6-1389-037BE0695223}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Ryujinx.AccountSecurity.Tests", "tests\nextendo-account-security\Ryujinx.AccountSecurity.Tests.csproj", "{57ECCC7B-28B2-490E-BBC9-EFEE53F36CA1}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -583,11 +587,26 @@ Global
 		{AC26EFF0-8593-4184-9A09-98E37EFFB32E}.Release|x64.Build.0 = Release|Any CPU
 		{AC26EFF0-8593-4184-9A09-98E37EFFB32E}.Release|x86.ActiveCfg = Release|Any CPU
 		{AC26EFF0-8593-4184-9A09-98E37EFFB32E}.Release|x86.Build.0 = Release|Any CPU
+		{57ECCC7B-28B2-490E-BBC9-EFEE53F36CA1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{57ECCC7B-28B2-490E-BBC9-EFEE53F36CA1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{57ECCC7B-28B2-490E-BBC9-EFEE53F36CA1}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{57ECCC7B-28B2-490E-BBC9-EFEE53F36CA1}.Debug|x64.Build.0 = Debug|Any CPU
+		{57ECCC7B-28B2-490E-BBC9-EFEE53F36CA1}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{57ECCC7B-28B2-490E-BBC9-EFEE53F36CA1}.Debug|x86.Build.0 = Debug|Any CPU
+		{57ECCC7B-28B2-490E-BBC9-EFEE53F36CA1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{57ECCC7B-28B2-490E-BBC9-EFEE53F36CA1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{57ECCC7B-28B2-490E-BBC9-EFEE53F36CA1}.Release|x64.ActiveCfg = Release|Any CPU
+		{57ECCC7B-28B2-490E-BBC9-EFEE53F36CA1}.Release|x64.Build.0 = Release|Any CPU
+		{57ECCC7B-28B2-490E-BBC9-EFEE53F36CA1}.Release|x86.ActiveCfg = Release|Any CPU
+		{57ECCC7B-28B2-490E-BBC9-EFEE53F36CA1}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {110169B3-3328-4730-8AB0-BA05BEF75C1A}
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{57ECCC7B-28B2-490E-BBC9-EFEE53F36CA1} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 	EndGlobalSection
 EndGlobal

@@ -6,6 +6,7 @@ using Gommon;
 using LibHac.Common;
 using LibHac.Ns;
 using Ryujinx.Ava.Common.Locale;
+using Ryujinx.Ava.Common;
 using Ryujinx.Ava.Systems.AppLibrary;
 using Ryujinx.Ava.Systems.Configuration;
 using Ryujinx.Ava.UI.Controls;
@@ -663,6 +664,7 @@ namespace Ryujinx.Ava.UI.Views.Main
                     new TextBlock { Text = LocaleManager.Instance.UpdateAndGetDynamicValue(LocaleKeys.Dialog_Nextendo_AccountPanelConnectedAsFormat, NextendoAccount.Username), FontWeight = Avalonia.Media.FontWeight.Bold, TextWrapping = Avalonia.Media.TextWrapping.Wrap },
                     new TextBlock { Text = LocaleManager.Instance.UpdateAndGetDynamicValue(LocaleKeys.Dialog_Nextendo_AccountPanelFriendCodeFormat, NextendoAccount.FriendCode), TextWrapping = Avalonia.Media.TextWrapping.Wrap },
                     new TextBlock { Text = LocaleManager.Instance.UpdateAndGetDynamicValue(LocaleKeys.Dialog_Nextendo_AccountPanelNetworkIdFormat, NextendoAccount.Pid), Foreground = Avalonia.Media.Brushes.Gray, FontSize = 12 },
+                    new TextBlock { Text = NextendoCredentialStorageUi.Message, IsVisible = NextendoCredentialStorageUi.RequiresAttention, TextWrapping = Avalonia.Media.TextWrapping.Wrap, MaxWidth = 360, FontSize = 12 },
                     MakeOpenSiteButton(LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_AccountPanelOpenAccountButton], "/dashboard"),
                     status,
                 },
@@ -717,35 +719,14 @@ namespace Ryujinx.Ava.UI.Views.Main
             {
                 args.Cancel = true;
 
-                // Remove the Nextendo-created profile (its data lives on the account and
-                // is re-downloaded on the next login). Never touch the default profile.
-                try
+                // Signing out preserves local users, saves and Miis for a later sign-in.
+                if (!NextendoAccount.Clear())
                 {
-                    var am = Window?.AccountManager;
-                    if (am != null)
-                    {
-                        var bound = FindBoundProfile(am);
-                        if (bound != null && bound.UserId != Ryujinx.HLE.HOS.Services.Account.Acc.AccountManager.DefaultUserId)
-                        {
-                            am.DeleteUser(bound.UserId);
-                        }
-                    }
+                    status.IsVisible = true;
+                    status.Foreground = Avalonia.Media.Brushes.IndianRed;
+                    status.Text = NextendoCredentialStorageUi.Message;
+                    return;
                 }
-                catch { /* best effort */ }
-
-                // Remove the account's Mii from the local Mii database.
-                try
-                {
-                    var client = ViewModel?.LibHacHorizonManager?.RyujinxClient;
-                    string miiB64 = NextendoAccount.MiiData;
-                    if (client != null && !string.IsNullOrEmpty(miiB64))
-                    {
-                        Ryujinx.HLE.HOS.Services.Mii.NextendoMiiSync.RemoveMii(client, Convert.FromBase64String(miiB64));
-                    }
-                }
-                catch { /* best effort */ }
-
-                NextendoAccount.Clear();
                 status.IsVisible = true;
                 status.Foreground = Avalonia.Media.Brushes.LightGreen;
                 status.Text = LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_AccountSignedOutMessage];
@@ -893,6 +874,7 @@ namespace Ryujinx.Ava.UI.Views.Main
 
         private static async Task<(bool ok, string name, string friendCode, string sessionToken, string error)> NextendoApiLogin(string loginId, string password)
         {
+            long signInGeneration = NextendoAccount.GetIdentitySnapshot().Generation;
             if (loginId.Length == 0 || password.Length == 0)
                 return (false, "", "", "", LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_LoginDialogEmptyFieldsError]);
 
@@ -919,7 +901,8 @@ namespace Ryujinx.Ava.UI.Views.Main
             string nexToken = root.TryGetProperty("nex_token", out JsonElement nt) ? (nt.GetString() ?? "") : "";
             string sessionToken = root.TryGetProperty("token", out JsonElement st) ? (st.GetString() ?? "") : "";
 
-            NextendoAccount.Save(pid, username, friendCode, nexToken);
+            if (!NextendoAccount.Save(pid, username, friendCode, nexToken, expectedGeneration: signInGeneration))
+                return (false, "", "", "", NextendoCredentialStorageUi.Message);
             return (true, username, friendCode, sessionToken, "");
         }
     }

@@ -22,6 +22,7 @@
         <Border Classes="settings">
             <StackPanel Margin="10" Orientation="Vertical" Spacing="12">
                 <TextBlock Classes="h1" Text="Nextendo Network" />
+                <TextBlock Name="AccountStorageStatus" TextWrapping="Wrap" />
 
                 <!-- Not linked: create a no-account GUEST online profile right here -->
                 <StackPanel Name="NotLinkedPanel" Spacing="8" IsVisible="False">
