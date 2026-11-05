@@ -441,7 +441,7 @@ namespace Ryujinx.Common.Configuration
                     return _deviceId;
                 }
 
-                string p = Path.Combine(AppDataManager.BaseDirPath ?? ".", "nextendo_device_id.txt");
+                string p = Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_device_id.txt");
                 try
                 {
                     string id = File.Exists(p) ? File.ReadAllText(p).Trim() : "";

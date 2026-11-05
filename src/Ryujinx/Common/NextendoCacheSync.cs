@@ -30,7 +30,7 @@ namespace Ryujinx.Ava.Common
         }
 
         // Per-title "don't ask again" list, persisted next to the other Nextendo state.
-        private static string SkipFilePath => Path.Combine(AppDataManager.BaseDirPath, "nextendo_cache_skip.txt");
+        private static string SkipFilePath => Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_cache_skip.txt");
 
         public static bool IsSkipped(string idString)
         {

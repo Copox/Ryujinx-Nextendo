@@ -19,7 +19,7 @@ namespace Ryujinx.AccountSecurity.Tests
         protected string DirectoryPath;
         protected Handler AuthorityHandler;
         private NextendoIdentityAuthority _previousAuthority;
-        protected string Active => Path.Combine(DirectoryPath, "nextendo_account.txt");
+        protected string Active => NextendoTextPaths.GetFilePath("nextendo_account.txt");
         protected string Canonical => Path.Combine(DirectoryPath, "nextendo_accounts", Pid + ".txt");
         protected sealed class Handler : HttpMessageHandler
         {
@@ -142,7 +142,7 @@ namespace Ryujinx.AccountSecurity.Tests
             byte[] active = File.ReadAllBytes(Active), canonical = File.ReadAllBytes(Canonical);
             Assert.That(await NextendoAccount.ProtectLegacyAsync(), Is.EqualTo(NextendoCredentialStorageState.Conflict));
             Assert.That(File.ReadAllBytes(Active), Is.EqualTo(active)); Assert.That(File.ReadAllBytes(Canonical), Is.EqualTo(canonical));
-            Assert.That(File.Exists(Path.Combine(DirectoryPath, "nextendo_profile_links.txt")), Is.False);
+            Assert.That(File.Exists(NextendoTextPaths.GetFilePath("nextendo_profile_links.txt")), Is.False);
             Assert.That(NextendoAccountStorage.HasPending(DirectoryPath), Is.False);
         }
         [Test]
@@ -183,9 +183,9 @@ namespace Ryujinx.AccountSecurity.Tests
         {
             Windows(); Legacy(); Legacy(Path.Combine(DirectoryPath, "nextendo_accounts", "1800000067.txt"), pid: 1800000067);
             await NextendoAccount.ProtectLegacyAsync(); string save = Path.Combine(DirectoryPath, "synthetic-save.bin"); File.WriteAllBytes(save, new byte[] { 1, 2, 3 });
-            string links = File.ReadAllText(Path.Combine(DirectoryPath, "nextendo_profile_links.txt")); Assert.That(NextendoAccount.Clear(), Is.True); Reset();
+            string links = File.ReadAllText(NextendoTextPaths.GetFilePath("nextendo_profile_links.txt")); Assert.That(NextendoAccount.Clear(), Is.True); Reset();
             Assert.That(NextendoAccount.IsLinked, Is.False); Assert.That(NextendoAccount.All, Is.Empty);
-            Assert.That(File.ReadAllText(Path.Combine(DirectoryPath, "nextendo_profile_links.txt")), Is.EqualTo(links)); Assert.That(File.ReadAllBytes(save), Is.EqualTo(new byte[] { 1, 2, 3 }));
+            Assert.That(File.ReadAllText(NextendoTextPaths.GetFilePath("nextendo_profile_links.txt")), Is.EqualTo(links)); Assert.That(File.ReadAllBytes(save), Is.EqualTo(new byte[] { 1, 2, 3 }));
         }
         [Test]
         public void OfflineAccountSelectionPreservesBothAccounts()

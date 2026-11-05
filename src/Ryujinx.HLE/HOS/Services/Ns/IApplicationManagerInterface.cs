@@ -359,7 +359,7 @@ namespace Ryujinx.HLE.HOS.Services.Ns
 
         // [Nextendo, HOME Menu work] "Online License Settings" of a user (User Settings): the
         // choice is kept with the emulator data.
-        private static string OnlineLicensePath => System.IO.Path.Combine(Ryujinx.Common.Configuration.AppDataManager.BaseDirPath, "nextendo_online_license.txt");
+        private static string OnlineLicensePath => Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_online_license.txt");
 
         private StubEvent _onlineLicenseEvent;
 

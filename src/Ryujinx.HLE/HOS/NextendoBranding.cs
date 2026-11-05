@@ -426,7 +426,7 @@ namespace Ryujinx.HLE.HOS
         {
             try
             {
-                string saved = System.IO.Path.Combine(Ryujinx.Common.Configuration.AppDataManager.BaseDirPath, "nextendo_color_set.txt");
+                string saved = Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_color_set.txt");
 
                 return File.Exists(saved) && File.ReadAllText(saved).Trim() == "0";
             }

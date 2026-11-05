@@ -13,7 +13,7 @@ namespace Ryujinx.AccountSecurity.Tests
     {
         private string JournalPath => Path.Combine(DirectoryPath, "nextendo_account_transaction.dat");
         private string StatePath => Path.Combine(DirectoryPath, NextendoProfileLinks.StateName);
-        private string MapPath => Path.Combine(DirectoryPath, NextendoProfileLinks.Name);
+        private string MapPath => NextendoTextPaths.GetFilePath(NextendoProfileLinks.Name);
         private static string Rejection(string token) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token))) + "=Rejected";
 
         [TestCase("journal")]

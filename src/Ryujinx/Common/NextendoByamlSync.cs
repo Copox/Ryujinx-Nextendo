@@ -82,11 +82,11 @@ namespace Ryujinx.Ava.Common
 
         // Stores the SHA-256 of the server BCAT zip currently extracted locally, so we can tell on
         // the next launch whether the server's schedule has changed.
-        private static string VersionFilePath => Path.Combine(AppDataManager.BaseDirPath, "nextendo_bcat_version.txt");
+        private static string VersionFilePath => Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_bcat_version.txt");
 
         // Les dossiers de premier niveau que la derniere synchronisation a poses. Sans cette
         // memoire, on ne saurait pas quoi retirer quand le serveur cesse de servir un dossier.
-        private static string DirsFilePath => Path.Combine(AppDataManager.BaseDirPath, "nextendo_bcat_dirs.txt");
+        private static string DirsFilePath => Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_bcat_dirs.txt");
 
         // Les noms de premier niveau contenus dans une archive : « vsdata/VSSetting_0.byaml » rend
         // « vsdata ». C'est le perimetre exact de ce que cette archive possede.
@@ -249,7 +249,7 @@ namespace Ryujinx.Ava.Common
         }
 
         // Per-title "don't ask again" list.
-        private static string SkipFilePath => Path.Combine(AppDataManager.BaseDirPath, "nextendo_byaml_skip.txt");
+        private static string SkipFilePath => Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_byaml_skip.txt");
 
         public static bool IsSkipped(string idString)
         {
@@ -431,7 +431,7 @@ namespace Ryujinx.Ava.Common
         {
             string titleId = app.IdBaseString;
             string titleRoot = PokemonSeedRoot(app);
-            string versionPath = Path.Combine(AppDataManager.BaseDirPath, $"nextendo_bcat_version_{titleId}.txt");
+            string versionPath = Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath($"nextendo_bcat_version_{titleId}.txt");
             try
             {
                 using HttpClient http = new() { Timeout = TimeSpan.FromSeconds(15) };

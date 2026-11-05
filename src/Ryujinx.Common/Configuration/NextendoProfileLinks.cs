@@ -90,7 +90,7 @@ namespace Ryujinx.Common.Configuration
 
         internal static byte[] Encode(string text) => NextendoCredentialFile.Encode(Canonicalize(text), prefix: Prefix, entropy: _purpose);
 
-        internal static string Read(string root) => Read(root, Path.Combine(root, Name), ReadState(root));
+        internal static string Read(string root) => Read(root, NextendoTextPaths.GetFilePath(root, Name), ReadState(root));
 
         internal static string Read(string root, string path, string stateText)
         {
@@ -139,7 +139,7 @@ namespace Ryujinx.Common.Configuration
             Dictionary<string, string> links = Fields(text);
             string copies = Path.Combine(root, "nextendo_accounts");
             IEnumerable<string> paths = Directory.Exists(copies) ? Directory.GetFiles(copies, "*.txt") : [];
-            paths = paths.Append(Path.Combine(root, "nextendo_account.txt"));
+            paths = paths.Append(NextendoTextPaths.GetFilePath(root, "nextendo_account.txt"));
             foreach (string path in paths)
             {
                 if (!File.Exists(path)) continue;
@@ -168,9 +168,14 @@ namespace Ryujinx.Common.Configuration
             if (!OperatingSystem.IsWindows()) return;
             try
             {
-                string path = Path.Combine(root, Name);
+                if (NextendoTextPaths.HasPendingCredentialCopy(root))
+                {
+                    SetIssue(root, NextendoCredentialStorageState.RecoveryRequired);
+                    return;
+                }
+                string path = NextendoTextPaths.GetFilePath(root, Name);
                 if (!File.Exists(path) && !File.Exists(Path.Combine(root, StateName)) &&
-                    !File.Exists(Path.Combine(root, "nextendo_account.txt")) && !Directory.Exists(Path.Combine(root, "nextendo_accounts"))) return;
+                    !File.Exists(NextendoTextPaths.GetFilePath(root, "nextendo_account.txt")) && !Directory.Exists(Path.Combine(root, "nextendo_accounts"))) return;
                 NextendoAccountStorage.Execute(root, plan =>
                 {
                     string status = plan.Read(StateName);

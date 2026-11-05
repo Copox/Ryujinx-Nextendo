@@ -53,7 +53,7 @@ namespace Ryujinx.HLE.HOS.Themes
 
         private static string ThemesFolder => Path.Combine(AppDataManager.BaseDirPath, "sdcard", "Themes");
 
-        private static string ChoicePath => Path.Combine(AppDataManager.BaseDirPath, "nextendo_home_theme.txt");
+        private static string ChoicePath => Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_home_theme.txt");
 
         /// <summary>The packs found: a folder holding .nxtheme files, or a lone .nxtheme file.</summary>
         public static List<string> Packs()
