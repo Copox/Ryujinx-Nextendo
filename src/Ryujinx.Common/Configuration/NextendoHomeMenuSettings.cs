@@ -23,8 +23,8 @@ namespace Ryujinx.Common.Configuration
         private static string _theme = "auto";
 
         private static string FilePath => Path.Combine(AppDataManager.BaseDirPath, "nextendo_home_menu.json");
-        private static string AlbumMenuPath => Path.Combine(AppDataManager.BaseDirPath, "nextendo_album_menu.txt");
-        private static string ColorSetPath => Path.Combine(AppDataManager.BaseDirPath, "nextendo_color_set.txt");
+        private static string AlbumMenuPath => Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_album_menu.txt");
+        private static string ColorSetPath => Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_color_set.txt");
 
         /// <summary>The HOME Menu starts with the emulator.</summary>
         public static bool AutoStart { get { Load(); return _autoStart; } set { Load(); _autoStart = value; Save(); } }

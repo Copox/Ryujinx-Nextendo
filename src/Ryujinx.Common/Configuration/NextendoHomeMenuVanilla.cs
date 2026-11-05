@@ -22,7 +22,7 @@ namespace Ryujinx.Common.Configuration
 
         private static bool? _choice;
 
-        private static string FilePath => Path.Combine(AppDataManager.BaseDirPath, "nextendo_home_vanilla.txt");
+        private static string FilePath => Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_home_vanilla.txt");
 
         /// <summary>
         /// The firmware installed ("" = none), set by the interface when it reads it; null while

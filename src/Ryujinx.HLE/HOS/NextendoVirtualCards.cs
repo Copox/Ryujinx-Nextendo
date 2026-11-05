@@ -23,8 +23,8 @@ namespace Ryujinx.HLE.HOS
         private static bool? _enabled;
         private static ulong? _inserted;
 
-        private static string EnabledPath => Path.Combine(AppDataManager.BaseDirPath, "nextendo_xci_cards.txt");
-        private static string InsertedPath => Path.Combine(AppDataManager.BaseDirPath, "nextendo_xci_inserted.txt");
+        private static string EnabledPath => Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_xci_cards.txt");
+        private static string InsertedPath => Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_xci_inserted.txt");
 
         /// <summary>The option (the HOME Menu's "Ryujinx | Nextendo" settings).</summary>
         public static bool Enabled
@@ -128,7 +128,7 @@ namespace Ryujinx.HLE.HOS
             HomeMenuLibrary.NotifyChanged();
         }
 
-        private static string WelcomePath => Path.Combine(AppDataManager.BaseDirPath, "nextendo_vgc_welcome.txt");
+        private static string WelcomePath => Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_vgc_welcome.txt");
 
         /// <summary>The welcome of the virtual game cards page was seen (it shows only once).</summary>
         public static bool WelcomeSeen

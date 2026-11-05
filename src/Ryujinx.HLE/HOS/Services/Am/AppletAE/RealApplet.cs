@@ -663,7 +663,7 @@ namespace Ryujinx.HLE.HOS.Services.Am.AppletAE
 
             try
             {
-                string setting = System.IO.Path.Combine(Ryujinx.Common.Configuration.AppDataManager.BaseDirPath, "nextendo_album_menu.txt");
+                string setting = Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_album_menu.txt");
 
                 if (System.IO.File.Exists(setting))
                 {

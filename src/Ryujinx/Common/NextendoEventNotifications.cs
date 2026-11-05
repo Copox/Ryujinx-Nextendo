@@ -201,7 +201,7 @@ namespace Ryujinx.Ava.Common
 
         // ---- Games added to the library ----
 
-        private static string KnownTitlesPath => Path.Combine(AppDataManager.BaseDirPath, "nextendo_known_titles.txt");
+        private static string KnownTitlesPath => Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_known_titles.txt");
 
         /// <summary>
         /// The games of the library: those never seen before are told (the first time, they are
@@ -267,7 +267,7 @@ namespace Ryujinx.Ava.Common
         private static Timer _badgeTimer;
         private static readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(10) };
 
-        private static string KnownBadgesPath => Path.Combine(AppDataManager.BaseDirPath, "nextendo_known_badges.txt");
+        private static string KnownBadgesPath => Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_known_badges.txt");
 
         // The badges of the account (/api/me): one not seen before is told, with its icon from the
         // website. The first time they are only remembered.

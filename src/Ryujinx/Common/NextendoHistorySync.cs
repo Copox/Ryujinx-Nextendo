@@ -64,7 +64,7 @@ namespace Ryujinx.Ava.Common
         private static readonly object _verrou = new();
         private static System.Threading.Timer _horloge;
 
-        private static string EtatPath => Path.Combine(AppDataManager.BaseDirPath, "nextendo_history_baseline.txt");
+        private static string EtatPath => Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_history_baseline.txt");
 
         /// <summary>
         /// Demarre la poussee periodique. Appelable plusieurs fois sans risque : la deuxieme ne fait

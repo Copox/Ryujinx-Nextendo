@@ -31,7 +31,8 @@ namespace Ryujinx.Common.Configuration
         private static NextendoCredentialStorageState _storageState;
         public static NextendoCredentialStorageState StorageState
         {
-            get { lock (_lock) { EnsureLoaded(); return NextendoProfileLinks.Issue(AppDataManager.BaseDirPath) != NextendoCredentialStorageState.None
+            get { lock (_lock) { EnsureLoaded(); return NextendoTextPaths.HasPendingCredentialCopy(AppDataManager.BaseDirPath)
+                    ? NextendoCredentialStorageState.RecoveryRequired : NextendoProfileLinks.Issue(AppDataManager.BaseDirPath) != NextendoCredentialStorageState.None
                     ? NextendoProfileLinks.Issue(AppDataManager.BaseDirPath) : _storageState; } }
         }
         private static long _generation;
@@ -85,6 +86,8 @@ namespace Ryujinx.Common.Configuration
             lock (_lock)
             {
                 EnsureLoaded();
+                if (NextendoTextPaths.HasPendingCredentialCopy(AppDataManager.BaseDirPath))
+                    return _storageState = NextendoCredentialStorageState.RecoveryRequired;
                 if (NextendoServerOverride.HorsNextendo || !_identityValid || _canProtect)
                     return _storageState;
                 if (!OperatingSystem.IsWindows()) return _storageState = NextendoCredentialStorageState.Unsupported;
@@ -152,6 +155,7 @@ namespace Ryujinx.Common.Configuration
                 NextendoCredentialStorageState active = await ProtectLegacyAsync().ConfigureAwait(false);
                 if (NeedsAttention(active)) issue = active;
                 if (NextendoAccountStorage.HasPending(AppDataManager.BaseDirPath)) return;
+                if (NextendoTextPaths.HasPendingCredentialCopy(AppDataManager.BaseDirPath)) return;
                 lock (_lock)
                 {
                     if (_identityValid && _canProtect && !NextendoServerOverride.HorsNextendo && Directory.Exists(StoreDir))
@@ -313,7 +317,7 @@ namespace Ryujinx.Common.Configuration
         /// refuses online — enforcing the required game version.</summary>
         public static bool OnlineBlocked { get; set; }
 
-        private static string FilePath => Path.Combine(AppDataManager.BaseDirPath, "nextendo_account.txt");
+        private static string FilePath => Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_account.txt");
 
         private static void EnsureLoaded()
         {
@@ -685,7 +689,7 @@ namespace Ryujinx.Common.Configuration
 
         // pid=profile lines: which local profile each Nextendo account was bound to. Kept apart
         // from the session, so that losing the session never loses the link.
-        private static string LinksPath => Path.Combine(AppDataManager.BaseDirPath, "nextendo_profile_links.txt");
+        private static string LinksPath => Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_profile_links.txt");
 
         private static string LinkedProfile(ulong pid) =>
             NextendoProfileLinks.Fields(NextendoProfileLinks.Read(AppDataManager.BaseDirPath)).GetValueOrDefault(pid.ToString(), "");
@@ -741,6 +745,12 @@ namespace Ryujinx.Common.Configuration
         private static bool WriteFileLocked()
         {
             if (!_identityValid || _pid == 0) return false;
+            if (NextendoTextPaths.HasPendingCredentialCopy(AppDataManager.BaseDirPath))
+            {
+                CredentialPersistenceFailed = true;
+                _storageState = NextendoCredentialStorageState.RecoveryRequired;
+                return false;
+            }
             try
             {
                 bool protect = OperatingSystem.IsWindows() && _canProtect;
@@ -879,6 +889,12 @@ namespace Ryujinx.Common.Configuration
             lock (_lock)
             {
                 EnsureLoaded();
+                if (NextendoTextPaths.HasPendingCredentialCopy(AppDataManager.BaseDirPath))
+                {
+                    CredentialPersistenceFailed = true;
+                    _storageState = NextendoCredentialStorageState.RecoveryRequired;
+                    return false;
+                }
                 candidates = All.Where(a => a.Pid != _pid && !a.RequiresSignIn).Select(a => a.Pid).ToArray();
                 try
                 {

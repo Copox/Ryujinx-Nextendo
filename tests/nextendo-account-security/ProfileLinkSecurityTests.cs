@@ -12,7 +12,7 @@ namespace Ryujinx.AccountSecurity.Tests
     [NonParallelizable]
     public class ProfileLinkSecurityTests : AccountFixture
     {
-        private string Links => Path.Combine(DirectoryPath, NextendoProfileLinks.Name);
+        private string Links => NextendoTextPaths.GetFilePath(NextendoProfileLinks.Name);
         private string State => Path.Combine(DirectoryPath, NextendoProfileLinks.StateName);
         private const string Mapping = "1800000031=remembered-profile\n42=second-profile";
 
@@ -196,11 +196,12 @@ namespace Ryujinx.AccountSecurity.Tests
             Assert.That(NextendoAccountStorage.HasPending(DirectoryPath), Is.False);
         }
 
-        [Test]
-        public void OldPlaintextJournalCanStillBeRecoveredAndMigrated()
+        [TestCase(1)]
+        [TestCase(2)]
+        public void OldPlaintextJournalCanStillBeRecoveredAndMigrated(int version)
         {
             Windows();
-            NextendoAccountStorage.Journal old = new(1,
+            NextendoAccountStorage.Journal old = new(version,
             [new(NextendoProfileLinks.Name, null, Encoding.UTF8.GetBytes(Mapping))]);
             NextendoCredentialFile.Write(Path.Combine(DirectoryPath, "nextendo_account_transaction.dat"), JsonSerializer.Serialize(old));
             AppDataManager.Initialize(DirectoryPath);

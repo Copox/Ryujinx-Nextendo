@@ -195,6 +195,12 @@ namespace Ryujinx.HLE.HOS.Services.Settings
         // The theme the user chose last; with none chosen yet, Basic Black when a custom HOME Menu
         // theme is installed (those are made for it: on Basic White their text comes out dark on
         // a dark background).
+        private static ColorSet? ReadSavedColorSetFile()
+        {
+            string path = Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_color_set.txt");
+            return System.IO.File.Exists(path) && int.TryParse(System.IO.File.ReadAllText(path).Trim(), out int id) ? (ColorSet)id : null;
+        }
+
         private static ColorSet SavedColorSet(ServiceCtx context)
         {
             if (!ReferenceEquals(_colorSetReadFor, context.Device.System))
@@ -204,7 +210,6 @@ namespace Ryujinx.HLE.HOS.Services.Settings
                 try
                 {
                     string baseDir = Ryujinx.Common.Configuration.AppDataManager.BaseDirPath;
-                    string saved = System.IO.Path.Combine(baseDir, "nextendo_color_set.txt");
 
                     // a theme chosen in the themes page is made for Basic Black (the page offers
                     // Basic White and Basic Black only as "no theme"): an older choice of Basic
@@ -213,9 +218,9 @@ namespace Ryujinx.HLE.HOS.Services.Settings
                     {
                         context.Device.System.State.ThemeColor = ColorSet.BasicBlack;
                     }
-                    else if (System.IO.File.Exists(saved) && int.TryParse(System.IO.File.ReadAllText(saved).Trim(), out int id))
+                    else if (ReadSavedColorSetFile() is { } saved)
                     {
-                        context.Device.System.State.ThemeColor = (ColorSet)id;
+                        context.Device.System.State.ThemeColor = saved;
                     }
                     else if (Ryujinx.HLE.HOS.Themes.NextendoThemes.Chosen != null ||
                              System.IO.Directory.Exists(System.IO.Path.Combine(baseDir, "sdcard", "atmosphere", "contents", "0100000000001000", "romfs", "lyt")))
@@ -262,7 +267,7 @@ namespace Ryujinx.HLE.HOS.Services.Settings
             // [Nextendo, HOME Menu work] The theme chosen in the HOME Menu settings is kept.
             try
             {
-                System.IO.File.WriteAllText(System.IO.Path.Combine(Ryujinx.Common.Configuration.AppDataManager.BaseDirPath, "nextendo_color_set.txt"), colorSetId.ToString());
+                System.IO.File.WriteAllText(Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_color_set.txt"), colorSetId.ToString());
             }
             catch (System.Exception)
             {
@@ -462,7 +467,7 @@ namespace Ryujinx.HLE.HOS.Services.Settings
         // and kept with its data (the serial of a console does not change).
         private static string NextendoSerialNumber()
         {
-            string path = System.IO.Path.Combine(Ryujinx.Common.Configuration.AppDataManager.BaseDirPath, "nextendo_serial.txt");
+            string path = Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_serial.txt");
 
             try
             {
@@ -529,7 +534,7 @@ namespace Ryujinx.HLE.HOS.Services.Settings
 
         private static bool? _initialSetupDone;
 
-        private static string InitialSetupPath => System.IO.Path.Combine(Ryujinx.Common.Configuration.AppDataManager.BaseDirPath, "nextendo_initial_setup.txt");
+        private static string InitialSetupPath => Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_initial_setup.txt");
 
         public static bool InitialSetupDone => _initialSetupDone ??= DecideInitialSetupDone();
 
@@ -566,9 +571,9 @@ namespace Ryujinx.HLE.HOS.Services.Settings
             try
             {
                 // a theme chosen in the HOME Menu
-                string colorSet = System.IO.Path.Combine(baseDir, "nextendo_color_set.txt");
+                string colorSet = Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_color_set.txt");
 
-                if (System.IO.File.Exists(colorSet) && Before(colorSet))
+                if (System.IO.File.Exists(colorSet) && System.IO.File.GetLastWriteTimeUtc(colorSet) < started)
                 {
                     return true;
                 }

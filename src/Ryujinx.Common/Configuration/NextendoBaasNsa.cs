@@ -47,7 +47,7 @@ namespace Ryujinx.Common.Configuration
         public static bool TitleUsesBaasNsa(string titleId)
             => ulong.TryParse(titleId, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out ulong id) && TitleUsesBaasNsa(id);
 
-        private static string FilePath => Path.Combine(AppDataManager.BaseDirPath, "nextendo_nsa.txt");
+        private static string FilePath => Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_nsa.txt");
 
         /// <summary>
         /// Le baasUserID du compte lié, ou 0. Connu une fois (site ou disque), il ne change plus pour

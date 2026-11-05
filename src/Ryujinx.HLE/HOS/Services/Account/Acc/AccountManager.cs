@@ -365,7 +365,7 @@ namespace Ryujinx.HLE.HOS.Services.Account.Acc
         }
 
         // [Nextendo, HOME Menu work] The order of the users ("Change Order" of the HOME Menu).
-        private static string UserOrderPath => System.IO.Path.Combine(Ryujinx.Common.Configuration.AppDataManager.BaseDirPath, "nextendo_user_order.txt");
+        private static string UserOrderPath => Ryujinx.Common.Configuration.NextendoTextPaths.GetFilePath("nextendo_user_order.txt");
 
         private List<string> _userOrder;
 
