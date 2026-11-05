@@ -57,9 +57,9 @@ namespace Ryujinx.Ava.UI.Windows
         /// </summary>
         public static async Task<bool> EnsureChosen(Window owner = null)
         {
-            if (NextendoAccount.Count <= 1)
+            if (NextendoAccount.Count <= 1 || NextendoAccount.All.All(account => account.RequiresSignIn))
             {
-                // un seul compte : c'est lui, et c'est son profil qui joue
+                // With no eligible online account, keep offline play available.
                 if (NextendoAccount.IsLinked)
                 {
                     OpenProfileOf(NextendoAccount.ProfileUserId);
@@ -185,13 +185,14 @@ namespace Ryujinx.Ava.UI.Windows
 
             foreach (NextendoAccount.Stored account in accounts)
             {
-                Control tile = MakeTile(account.Username, ProfileImage(account), account.Pid == NextendoAccount.Pid, add: false);
+                Control tile = MakeTile(account.Username, ProfileImage(account), account.Pid == NextendoAccount.Pid, add: false,
+                    pid: account.Pid, requiresSignIn: account.RequiresSignIn);
                 ulong pid = account.Pid;
-                tile.PointerReleased += (_, _) => Choose(tile, pid);
+                if (!account.RequiresSignIn) tile.PointerReleased += (_, _) => Choose(tile, pid);
                 _tiles.Add((tile, pid));
                 row.Children.Add(tile);
 
-                if (ProfileImage(account) == null)
+                if (!account.RequiresSignIn && ProfileImage(account) == null)
                 {
                     _ = LoadServerAvatar(tile, pid);
                 }
@@ -298,7 +299,7 @@ namespace Ryujinx.Ava.UI.Windows
         private static readonly IBrush _ringIdle = new SolidColorBrush(Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF));
         private static readonly IBrush _ringHover = new SolidColorBrush(Color.FromArgb(0xE6, 0xFF, 0xFF, 0xFF));
 
-        private Control MakeTile(string name, Bitmap picture, bool active, bool add)
+        private Control MakeTile(string name, Bitmap picture, bool active, bool add, ulong pid = 0, bool requiresSignIn = false)
         {
             Control face;
 
@@ -378,7 +379,8 @@ namespace Ryujinx.Ava.UI.Windows
                 Spacing = 10,
                 Width = 136,
                 Margin = new Thickness(12, 0),
-                Cursor = new Cursor(StandardCursorType.Hand),
+                Cursor = new Cursor(requiresSignIn ? StandardCursorType.Arrow : StandardCursorType.Hand),
+                IsEnabled = !requiresSignIn,
                 Background = Brushes.Transparent,
                 Opacity = 0,
                 RenderTransformOrigin = RelativePoint.Center,
@@ -403,7 +405,31 @@ namespace Ryujinx.Ava.UI.Windows
                 MaxWidth = 136,
             });
 
-            if (active)
+            if (pid != 0)
+            {
+                tile.Children.Add(new TextBlock
+                {
+                    Text = $"PID: {pid}",
+                    FontSize = 10,
+                    Foreground = Brushes.Gray,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                });
+            }
+
+            if (requiresSignIn)
+            {
+                tile.Children.Add(new TextBlock
+                {
+                    Text = LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_AccountPickerNeedsSignIn],
+                    FontSize = 11,
+                    Foreground = Brushes.IndianRed,
+                    TextWrapping = TextWrapping.Wrap,
+                    TextAlignment = TextAlignment.Center,
+                    MaxWidth = 136,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                });
+            }
+            else if (active)
             {
                 tile.Children.Add(new TextBlock
                 {
