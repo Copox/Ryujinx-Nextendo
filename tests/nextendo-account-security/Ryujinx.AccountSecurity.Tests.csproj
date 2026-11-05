@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsTestProject>true</IsTestProject>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../src/Ryujinx.Common/Ryujinx.Common.csproj" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="NUnit" />
+    <PackageReference Include="NUnit3TestAdapter" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="../../assets/Languages.json" Link="LocaleValidation/Languages.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="../../assets/Locales/*.json" Link="LocaleValidation/Locales/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

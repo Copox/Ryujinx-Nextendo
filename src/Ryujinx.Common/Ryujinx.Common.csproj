@@ -8,9 +8,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Ryujinx.AccountSecurity.Tests" />
+    <InternalsVisibleTo Include="Ryujinx.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.IO.RecyclableMemoryStream" />
     <PackageReference Include="MsgPack.Cli" />
     <PackageReference Include="Humanizer" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" />
     <PackageReference Include="Gommon" />
   </ItemGroup>
 

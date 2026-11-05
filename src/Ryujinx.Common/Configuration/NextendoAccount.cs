@@ -2,20 +2,246 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
+using Ryujinx.Common.Logging;
 
 namespace Ryujinx.Common.Configuration
 {
+    public enum NextendoCredentialStorageState
+    {
+        None, LegacyPending, Protected, Unsupported, Conflict, IdentityMismatch, Rejected, Unavailable, RecoveryRequired, Failed,
+    }
+
     /// <summary>
     /// Nextendo Network linked account. Written by the in-app "Connexion Nextendo
     /// Network" dialog, read by the Account service (ManagerServer) so the NEX
     /// login presents the account's PERSISTENT principal id (PID) instead of the
     /// 0xcafe stub — this is what makes "log in with your account = play online as
-    /// you" work. Stored as a tiny key=value file (no JSON, trimming/AOT-safe).
+    /// you" work. Persisted with operating-system protection; legacy migration runs automatically in the background.
     /// </summary>
     public static class NextendoAccount
     {
         private static readonly object _lock = new();
         private static bool _loaded;
+        private static bool _identityValid;
+        private static bool _canProtect;
+        private static string _activeHash;
+        private static Task _migrationTask;
+        public static NextendoCredentialStorageState BackgroundMigrationIssue { get; private set; }
+        private static NextendoCredentialStorageState _storageState;
+        public static NextendoCredentialStorageState StorageState
+        {
+            get { lock (_lock) { EnsureLoaded(); return NextendoProfileLinks.Issue(AppDataManager.BaseDirPath) != NextendoCredentialStorageState.None
+                    ? NextendoProfileLinks.Issue(AppDataManager.BaseDirPath) : _storageState; } }
+        }
+        private static long _generation;
+        internal static NextendoIdentityAuthority Authority { get; set; } = new();
+
+        public static bool CredentialPersistenceFailed { get; private set; }
+
+        /// <summary>A delayed rejection must never invalidate a different active account.</summary>
+        public static bool RejectCredential(string token)
+        {
+            lock (_lock)
+            {
+                EnsureLoaded();
+                if (string.IsNullOrEmpty(token) || token != _nexToken)
+                {
+                    return false;
+                }
+
+                _identityValid = false;
+                RecordRejectionLocked(NextendoCredentialStorageState.Rejected);
+                _nexToken = "";
+                _generation++;
+            }
+
+            try { ActiveChanged?.Invoke(); } catch { /* The UI may not be ready. */ }
+            return true;
+        }
+
+        /// <summary>Returns one coherent local session without network access or periodic writes.</summary>
+        public static NextendoIdentitySnapshot GetIdentitySnapshot()
+        {
+            if (NextendoServerOverride.HorsNextendo)
+            {
+                return new(0, "", "", -1);
+            }
+
+            lock (_lock)
+            {
+                EnsureLoaded();
+                return _identityValid ? new(_pid, _nexToken, _profileUserId, _generation) : new(0, "", "", _generation);
+            }
+        }
+
+        /// <summary>Validates a legacy credential once before protecting it. Availability
+        /// failures preserve the existing session; confirmed identity conflicts require sign-in.</summary>
+        public static async Task<NextendoCredentialStorageState> ProtectLegacyAsync()
+        {
+            string token;
+            ulong pid;
+            long generation;
+            lock (_lock)
+            {
+                EnsureLoaded();
+                if (NextendoServerOverride.HorsNextendo || !_identityValid || _canProtect)
+                    return _storageState;
+                if (!OperatingSystem.IsWindows()) return _storageState = NextendoCredentialStorageState.Unsupported;
+                token = _nexToken;
+                pid = _pid;
+                generation = _generation;
+            }
+
+            var resolution = await Authority.ResolveAsync(token).ConfigureAwait(false);
+            lock (_lock)
+            {
+                if (generation != _generation || token != _nexToken || NextendoServerOverride.HorsNextendo)
+                    return _storageState;
+                if (resolution.Identity == null)
+                {
+                    if (resolution.Rejected)
+                    {
+                        _identityValid = false;
+                        _generation++;
+                        RecordRejectionLocked(NextendoCredentialStorageState.Rejected);
+                        return _storageState;
+                    }
+                    return _storageState = NextendoCredentialStorageState.Unavailable;
+                }
+                if (resolution.Identity.Pid != pid)
+                {
+                    _identityValid = false;
+                    _generation++;
+                    RecordRejectionLocked(NextendoCredentialStorageState.IdentityMismatch);
+                    return _storageState;
+                }
+
+                _canProtect = true;
+                if (!WriteFileLocked()) _canProtect = false;
+                return _storageState;
+            }
+        }
+
+        /// <summary>Schedules one background pass for active and inactive legacy accounts.
+        /// Repeated startup/account-change requests share the same pass.</summary>
+        public static Task MigrateLegacyAccountsAsync()
+        {
+            lock (_lock)
+            {
+                if (_migrationTask == null || _migrationTask.IsCompleted)
+                    _migrationTask = Task.Run(MigrateLegacyAccountsCoreAsync);
+                return _migrationTask;
+            }
+        }
+
+        private static bool NeedsAttention(NextendoCredentialStorageState state) => state is
+            NextendoCredentialStorageState.Conflict or NextendoCredentialStorageState.IdentityMismatch or
+            NextendoCredentialStorageState.Rejected or NextendoCredentialStorageState.RecoveryRequired or NextendoCredentialStorageState.Failed;
+
+        private static async Task MigrateLegacyAccountsCoreAsync()
+        {
+            NextendoCredentialStorageState issue = NextendoCredentialStorageState.None;
+            try
+            {
+                lock (_lock)
+                {
+                    EnsureLoaded();
+                    if (!OperatingSystem.IsWindows() || NextendoServerOverride.HorsNextendo) return;
+                }
+                NextendoCredentialStorageState active = await ProtectLegacyAsync().ConfigureAwait(false);
+                if (NeedsAttention(active)) issue = active;
+                if (NextendoAccountStorage.HasPending(AppDataManager.BaseDirPath)) return;
+                lock (_lock)
+                {
+                    if (_identityValid && _canProtect && !NextendoServerOverride.HorsNextendo && Directory.Exists(StoreDir))
+                    {
+                        bool pendingCopy = Directory.GetFiles(StoreDir, "*.txt").Any(path =>
+                        {
+                            Dictionary<string, string> fields = ReadFields(path);
+                            return fields?.GetValueOrDefault("nex_token") == _nexToken &&
+                                !File.ReadAllText(path).StartsWith(NextendoCredentialFile.Prefix, StringComparison.Ordinal);
+                        });
+                        if (pendingCopy && !WriteFileLocked()) issue = _storageState;
+                    }
+                }
+                string[] files;
+                lock (_lock) files = Directory.Exists(StoreDir) ? Directory.GetFiles(StoreDir, "*.txt") : [];
+                foreach (string path in files)
+                {
+                    string text, token;
+                    ulong pid;
+                    try
+                    {
+                        lock (_lock)
+                        {
+                            if (NextendoServerOverride.HorsNextendo) return;
+                            // Protected records are never periodically revalidated.
+                            if (new FileInfo(path).Length > (NextendoCredentialFile.MaxPlaintextBytes + 4096L) * 2)
+                            {
+                                issue = NextendoCredentialStorageState.Failed;
+                                continue;
+                            }
+                            if (File.ReadAllText(path).StartsWith(NextendoCredentialFile.Prefix, StringComparison.Ordinal)) continue;
+                            text = NextendoCredentialFile.Read(path);
+                            Dictionary<string, string> fields = ParseFields(text);
+                            token = fields.GetValueOrDefault("nex_token", "");
+                            if (string.IsNullOrEmpty(token) || token == _nexToken || !ulong.TryParse(fields.GetValueOrDefault("pid"), out pid) || pid == 0) continue;
+                            string statusesPath = Path.Combine(AppDataManager.BaseDirPath, "nextendo_account_status.dat");
+                            if (File.Exists(statusesPath) && ParseFields(NextendoProfileLinks.ReadState(AppDataManager.BaseDirPath)).TryGetValue(CredentialHash(token), out string rejection))
+                            {
+                                if (Enum.TryParse(rejection, out NextendoCredentialStorageState recorded) && NeedsAttention(recorded)) issue = recorded;
+                                continue;
+                            }
+                        }
+                    }
+                    catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException or
+                        System.Security.Cryptography.CryptographicException or FormatException or PlatformNotSupportedException)
+                    {
+                        issue = NextendoCredentialStorageState.Failed;
+                        continue;
+                    }
+                    var resolution = await Authority.ResolveAsync(token).ConfigureAwait(false);
+                    lock (_lock)
+                    {
+                        if (NextendoServerOverride.HorsNextendo) return;
+                        if (!File.Exists(path) || NextendoCredentialFile.Read(path) != text || token == _nexToken) continue;
+                        if (resolution.Identity == null)
+                        {
+                            if (resolution.Rejected) issue = RecordRejectionLocked(NextendoCredentialStorageState.Rejected, token);
+                            continue;
+                        }
+                        if (resolution.Identity.Pid != pid)
+                        {
+                            issue = RecordRejectionLocked(NextendoCredentialStorageState.IdentityMismatch, token);
+                            continue;
+                        }
+                        try
+                        {
+                            Dictionary<string, string> fields = ParseFields(text);
+                            NextendoAccountStorage.Execute(AppDataManager.BaseDirPath, plan =>
+                            {
+                                if (plan.Read("nextendo_accounts/" + Path.GetFileName(path)) != text)
+                                    throw new IOException("Saved account changed during migration.");
+                                StageAccount(plan, pid, token, fields.GetValueOrDefault("profile_user_id", ""),
+                                    fields.GetValueOrDefault("mii_data", ""), text, true, false);
+                            });
+                        }
+                        catch (AccountConflictException) { issue = NextendoCredentialStorageState.Conflict; }
+                    }
+                }
+            }
+            catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException or
+                System.Security.Cryptography.CryptographicException or FormatException or PlatformNotSupportedException)
+            {
+                issue = NextendoAccountStorage.HasPending(AppDataManager.BaseDirPath)
+                    ? NextendoCredentialStorageState.RecoveryRequired : NextendoCredentialStorageState.Failed;
+            }
+            finally
+            {
+                lock (_lock) BackgroundMigrationIssue = issue;
+            }
+        }
 
         // ⚠️ Le PID et le jeton NEX sont stockes ici a l etat BRUT, et lus par les
         // proprietes publiques ci-dessous, qui les taisent en mode « serveur
@@ -26,7 +252,7 @@ namespace Ryujinx.Common.Configuration
 
         /// <summary>Numero de compte Nextendo. Zero quand aucun compte n est utilisable,
         /// y compris parce que le mode « serveur personnalise » est actif.</summary>
-        public static ulong Pid => NextendoServerOverride.HorsNextendo ? 0 : _pid;
+        public static ulong Pid => GetIdentitySnapshot().Pid;
 
         public static string Username { get; private set; } = "";
         public static string FriendCode { get; private set; } = "";
@@ -38,7 +264,7 @@ namespace Ryujinx.Common.Configuration
         /// recopie dans le login NEX (claim « nnex ») : sans cette garde, se connecter au
         /// serveur d un inconnu lui livrerait un jeton signe valable sur NOS serveurs.
         /// </summary>
-        public static string NexToken => NextendoServerOverride.HorsNextendo ? "" : _nexToken;
+        public static string NexToken => GetIdentitySnapshot().Token;
 
         private static bool _isGuest;
 
@@ -79,20 +305,7 @@ namespace Ryujinx.Common.Configuration
         /// présence, historique, identité NEX présentée au jeu. Une coupure éparpillée aurait
         /// laissé passer celui qu'on aurait oublié.
         /// </summary>
-        public static bool IsLinked
-        {
-            get
-            {
-                if (NextendoServerOverride.HorsNextendo)
-                {
-                    return false;
-                }
-
-                EnsureLoaded();
-
-                return _pid != 0;
-            }
-        }
+        public static bool IsLinked => GetIdentitySnapshot().Pid != 0;
 
         /// <summary>Runtime-only (not persisted): set true at game launch when the running
         /// game is a Nextendo title on an UNSUPPORTED version. While true, the NEX login
@@ -112,32 +325,35 @@ namespace Ryujinx.Common.Configuration
                 }
 
                 _loaded = true;
+                _canProtect = false;
+                CredentialPersistenceFailed = false;
+                _storageState = NextendoCredentialStorageState.None;
 
                 try
                 {
+                    NextendoAccountStorage.Recover(AppDataManager.BaseDirPath);
+                    _activeHash = ActiveHash();
                     if (!File.Exists(FilePath))
                     {
                         return;
                     }
 
                     ReadLocked(FilePath);
-
-                    // Un compte connecte avant le multi-comptes n'a pas encore sa copie dans la liste.
-                    if (_pid != 0 && !File.Exists(StoredPath(_pid)))
-                    {
-                        WriteFileLocked();
-                    }
                 }
                 catch
                 {
                     // Corrupt/unreadable file -> treat as not linked.
                     _pid = 0;
+                    _identityValid = false;
+                    _storageState = NextendoAccountStorage.HasPending(AppDataManager.BaseDirPath)
+                        ? NextendoCredentialStorageState.RecoveryRequired : NextendoCredentialStorageState.Failed;
                 }
             }
         }
 
-        private static void ReadLocked(string path)
+        private static void ReadLocked(string path, ulong expectedPid = 0)
         {
+            _identityValid = false;
             _pid = 0;
             Username = "";
             FriendCode = "";
@@ -146,7 +362,8 @@ namespace Ryujinx.Common.Configuration
             _miiData = "";
             _isGuest = false;
 
-            foreach (string line in File.ReadAllLines(path))
+            string text = NextendoCredentialFile.Read(path);
+            foreach (string line in text.Split('\n'))
             {
                 int eq = line.IndexOf('=');
                 if (eq <= 0)
@@ -168,6 +385,24 @@ namespace Ryujinx.Common.Configuration
                     case "is_guest": _isGuest = val == "1" || val.Equals("true", StringComparison.OrdinalIgnoreCase); break;
                 }
             }
+
+            if (expectedPid != 0 && _pid != expectedPid) throw new InvalidDataException("Stored account PID differs from its filename.");
+            _identityValid = _pid != 0 && !string.IsNullOrEmpty(_nexToken);
+            _canProtect = File.ReadAllText(path).StartsWith(NextendoCredentialFile.Prefix, StringComparison.Ordinal);
+            _storageState = _canProtect ? NextendoCredentialStorageState.Protected : OperatingSystem.IsWindows()
+                ? NextendoCredentialStorageState.LegacyPending : NextendoCredentialStorageState.Unsupported;
+            string statusPath = Path.Combine(AppDataManager.BaseDirPath, "nextendo_account_status.dat");
+            if (File.Exists(statusPath))
+            {
+                string rejection = ParseFields(NextendoProfileLinks.ReadState(AppDataManager.BaseDirPath)).GetValueOrDefault(CredentialHash(_nexToken));
+                if (Enum.TryParse(rejection, out NextendoCredentialStorageState rejected) &&
+                    rejected is NextendoCredentialStorageState.Rejected or NextendoCredentialStorageState.IdentityMismatch)
+                {
+                    _identityValid = false;
+                    _storageState = rejected;
+                }
+            }
+            _generation++;
         }
 
         // Plusieurs comptes Nextendo dans un seul emulateur.
@@ -179,7 +414,11 @@ namespace Ryujinx.Common.Configuration
         // avec lui le met a jour, jamais un second exemplaire.
 
         /// <summary>Un compte Nextendo connecte sur cet emulateur.</summary>
-        public sealed record Stored(ulong Pid, string Username, string FriendCode, string ProfileUserId, bool IsGuest);
+        public sealed record Stored(ulong Pid, string Username, string FriendCode, string ProfileUserId, bool IsGuest)
+        {
+            public NextendoCredentialStorageState StorageState { get; init; }
+            public bool RequiresSignIn => StorageState is NextendoCredentialStorageState.IdentityMismatch or NextendoCredentialStorageState.Rejected;
+        }
 
         private static string StoreDir => Path.Combine(AppDataManager.BaseDirPath, "nextendo_accounts");
 
@@ -204,17 +443,13 @@ namespace Ryujinx.Common.Configuration
                     {
                         if (Directory.Exists(StoreDir))
                         {
+                            Dictionary<string, string> statuses = ParseFields(NextendoProfileLinks.ReadState(AppDataManager.BaseDirPath));
                             foreach (string file in Directory.GetFiles(StoreDir, "*.txt"))
                             {
-                                Dictionary<string, string> v = [];
-
-                                foreach (string line in File.ReadAllLines(file))
+                                Dictionary<string, string> v = ReadFields(file);
+                                if (v == null)
                                 {
-                                    int eq = line.IndexOf('=');
-                                    if (eq > 0)
-                                    {
-                                        v.TryAdd(line[..eq].Trim(), line[(eq + 1)..].Trim());
-                                    }
+                                    continue;
                                 }
 
                                 if (!v.TryGetValue("pid", out string ps) || !ulong.TryParse(ps, out ulong pid) || pid == 0)
@@ -222,11 +457,17 @@ namespace Ryujinx.Common.Configuration
                                     continue;
                                 }
 
+                                NextendoCredentialStorageState state = NextendoCredentialStorageState.None;
+                                string token = v.GetValueOrDefault("nex_token", "");
+                                if (!string.IsNullOrEmpty(token) && statuses.TryGetValue(CredentialHash(token), out string rejection) &&
+                                    Enum.TryParse(rejection, out NextendoCredentialStorageState rejected) &&
+                                    rejected is NextendoCredentialStorageState.IdentityMismatch or NextendoCredentialStorageState.Rejected)
+                                    state = rejected;
                                 list.Add(new Stored(pid,
                                     v.GetValueOrDefault("username", ""),
                                     v.GetValueOrDefault("friend_code", ""),
                                     v.GetValueOrDefault("profile_user_id", ""),
-                                    v.GetValueOrDefault("is_guest", "0") == "1"));
+                                    v.GetValueOrDefault("is_guest", "0") == "1") { StorageState = state });
                             }
                         }
                     }
@@ -237,12 +478,12 @@ namespace Ryujinx.Common.Configuration
 
                     if (_pid != 0 && list.All(a => a.Pid != _pid))
                     {
-                        list.Add(new Stored(_pid, Username, FriendCode, _profileUserId, _isGuest));
+                        list.Add(new Stored(_pid, Username, FriendCode, _profileUserId, _isGuest) { StorageState = _storageState });
                     }
 
                     ulong active = _pid;
 
-                    return [.. list.OrderByDescending(a => a.Pid == active).ThenBy(a => a.Username, StringComparer.OrdinalIgnoreCase)];
+                    return [.. list.DistinctBy(a => a.Pid).OrderByDescending(a => a.Pid == active).ThenBy(a => a.Username, StringComparer.OrdinalIgnoreCase)];
                 }
             }
         }
@@ -259,7 +500,7 @@ namespace Ryujinx.Common.Configuration
 
                 if (pid == _pid)
                 {
-                    return _pid != 0;
+                    return pid != 0 && GetIdentitySnapshot().Pid == pid;
                 }
 
                 if (pid == 0 || !File.Exists(StoredPath(pid)))
@@ -267,19 +508,23 @@ namespace Ryujinx.Common.Configuration
                     return false;
                 }
 
+                var previous = (_pid, Username, FriendCode, _nexToken, _profileUserId, _miiData, _isGuest, _identityValid, _canProtect, _storageState);
                 try
                 {
-                    if (_pid != 0)
+                    if (!PreservePreviousLocked())
+                        return false;
+                    ReadLocked(StoredPath(pid), pid);
+                    if (!_identityValid || _pid != pid)
                     {
-                        WriteFileLocked(); // the account left keeps its copy, up to date
+                        throw new InvalidOperationException("The selected account could not be verified.");
                     }
-
-                    ReadLocked(StoredPath(pid));
                     _loaded = true;
-                    WriteFileLocked();
+                    if (!WriteFileLocked()) throw new IOException("Account selection could not be saved.");
                 }
                 catch
                 {
+                    (_pid, Username, FriendCode, _nexToken, _profileUserId, _miiData, _isGuest, _identityValid, _canProtect, _storageState) = previous;
+                    _generation++;
                     return false;
                 }
             }
@@ -315,76 +560,126 @@ namespace Ryujinx.Common.Configuration
             return !string.IsNullOrEmpty(userId) && All.Any(a => a.Pid != active && string.Equals(a.ProfileUserId, userId, StringComparison.OrdinalIgnoreCase));
         }
 
-        public static void Save(ulong pid, string username, string friendCode, string nexToken, bool isGuest = false)
+        /// <summary>Persists an authenticated login response without selecting it on a failed write.</summary>
+        public static bool Save(ulong pid, string username, string friendCode, string nexToken, bool isGuest = false, long? expectedGeneration = null)
         {
+            if (pid == 0 || string.IsNullOrWhiteSpace(nexToken) || nexToken.Contains('\n') || nexToken.Contains('\r'))
+                throw new ArgumentException("A login response must contain a valid account and credential.");
+            username = CleanField(username);
+            friendCode = CleanField(friendCode);
             lock (_lock)
             {
-                EnsureLoaded(); // preserve an existing profile binding for the same account
-                // Comparaison sur le champ BRUT : la propriete Pid rend 0 en mode « serveur
-                // personnalise », ce qui ferait croire a un changement de compte et delierait
-                // le profil local a tort.
-                if (pid != _pid)
+                EnsureLoaded();
+                if (expectedGeneration.HasValue && expectedGeneration.Value != _generation)
+                    throw new InvalidOperationException("The active account changed while signing in. Please try again.");
+                string rememberedProfile = LinkedProfile(pid);
+                bool switching = pid != _pid;
+                if (switching && !PreservePreviousLocked())
+                    throw new IOException("The previous account could not be saved. Resolve its storage problem before switching.");
+                bool saved = PersistMutationLocked(() =>
                 {
-                    // Another account signs in: the one active until now stays connected (its
-                    // copy is refreshed), and the new one takes back its own profile + Mii if it
-                    // was already connected here.
-                    if (_pid != 0)
+                    if (switching)
                     {
-                        WriteFileLocked();
-                    }
-
-                    _profileUserId = "";
-                    _miiData = "";
-
-                    if (pid != 0 && File.Exists(StoredPath(pid)))
-                    {
-                        try
+                        _profileUserId = "";
+                        _miiData = "";
+                        if (File.Exists(StoredPath(pid)))
                         {
-                            ReadLocked(StoredPath(pid));
-                        }
-                        catch
-                        {
-                            _profileUserId = "";
-                            _miiData = "";
+                            Dictionary<string, string> fields = ReadFields(StoredPath(pid));
+                            if (fields != null)
+                            {
+                                _profileUserId = fields.GetValueOrDefault("profile_user_id", "");
+                                _miiData = fields.GetValueOrDefault("mii_data", "");
+                            }
                         }
                     }
-                }
-                // The local profile this account used before (a session that expired, a
-                // logout): signing in again takes it back, with its saves, as a console asks
-                // to sign in again to the same user rather than making a new one.
-                if (string.IsNullOrEmpty(_profileUserId) && pid != 0)
-                {
-                    _profileUserId = LinkedProfile(pid);
-                }
-                _pid = pid;
-                Username = username ?? "";
-                FriendCode = friendCode ?? "";
-                _nexToken = nexToken ?? "";
-                _isGuest = isGuest;
-                _loaded = true;
-                WriteFileLocked();
+                    if (string.IsNullOrEmpty(_profileUserId)) _profileUserId = rememberedProfile;
+                    _pid = pid;
+                    Username = username;
+                    FriendCode = friendCode;
+                    _nexToken = nexToken;
+                    _isGuest = isGuest;
+                    _identityValid = true;
+                    _canProtect = true;
+                    _generation++;
+                    _loaded = true;
+                });
+                if (saved) BackgroundMigrationIssue = NextendoCredentialStorageState.None;
+                return saved;
             }
         }
 
-        /// <summary>Binds the Ryujinx user-profile created/used for this account.</summary>
-        public static void SetProfileUserId(string userId)
+        private static string CleanField(string value)
+        {
+            value ??= "";
+            if (value.Contains('\r') || value.Contains('\n')) throw new ArgumentException("Account fields cannot contain line breaks.");
+            return value;
+        }
+
+        // Callers hold _lock, so no reader can observe the candidate before persistence finishes.
+        private static bool PersistMutationLocked(Action mutate)
+        {
+            var previous = (_pid, Username, FriendCode, _nexToken, _profileUserId, _miiData,
+                _isGuest, _identityValid, _canProtect, _loaded, _activeHash);
+            void Restore()
+            {
+                (_pid, Username, FriendCode, _nexToken, _profileUserId, _miiData,
+                    _isGuest, _identityValid, _canProtect, _loaded, _activeHash) = previous;
+                // Invalidate responses captured during either the previous or failed candidate session.
+                _generation++;
+            }
+            try
+            {
+                mutate();
+                if (WriteFileLocked()) return true;
+            }
+            catch
+            {
+                Restore();
+                throw;
+            }
+            // Keep the storage error and pending journal visible while restoring session identity.
+            Restore();
+            return false;
+        }
+
+        /// <summary>Updates display metadata only if the originating session is still active.</summary>
+        public static bool UpdateDisplayName(NextendoIdentitySnapshot expected, string username)
         {
             lock (_lock)
             {
                 EnsureLoaded();
-                _profileUserId = userId ?? "";
-                WriteFileLocked();
+                if (expected == null || expected.Pid != _pid || expected.Token != _nexToken || expected.Generation != _generation || !_identityValid)
+                    return false;
+                string cleaned = CleanField(username);
+                return PersistMutationLocked(() => Username = cleaned);
             }
         }
 
-        /// <summary>Mirrors the account's Mii (base64 StoreData) locally for logout removal.</summary>
-        public static void SetMiiData(string miiData)
+        /// <summary>Binds the local profile only when its account metadata can be persisted.</summary>
+        public static bool SetProfileUserId(string userId)
         {
             lock (_lock)
             {
                 EnsureLoaded();
-                _miiData = miiData ?? "";
-                WriteFileLocked();
+                string cleaned = CleanField(userId);
+                if (_profileUserId == cleaned) return true;
+                return PersistMutationLocked(() =>
+                {
+                    _profileUserId = cleaned;
+                    _generation++;
+                });
+            }
+        }
+
+        /// <summary>Mirrors the account's Mii in its persisted metadata.</summary>
+        public static bool SetMiiData(string miiData)
+        {
+            lock (_lock)
+            {
+                EnsureLoaded();
+                string cleaned = CleanField(miiData);
+                if (_miiData == cleaned) return true;
+                return PersistMutationLocked(() => _miiData = cleaned);
             }
         }
 
@@ -392,103 +687,231 @@ namespace Ryujinx.Common.Configuration
         // from the session, so that losing the session never loses the link.
         private static string LinksPath => Path.Combine(AppDataManager.BaseDirPath, "nextendo_profile_links.txt");
 
-        private static string LinkedProfile(ulong pid)
+        private static string LinkedProfile(ulong pid) =>
+            NextendoProfileLinks.Fields(NextendoProfileLinks.Read(AppDataManager.BaseDirPath)).GetValueOrDefault(pid.ToString(), "");
+
+        private static Dictionary<string, string> ParseFields(string text)
+        {
+            Dictionary<string, string> fields = [];
+            foreach (string line in (text ?? "").Split('\n'))
+            {
+                int eq = line.IndexOf('=');
+                if (eq > 0) fields[line[..eq].Trim()] = line[(eq + 1)..].Trim();
+            }
+            return fields;
+        }
+
+        private static string CredentialHash(string token) => Convert.ToHexString(
+            System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(token)));
+
+        private static string ActiveHash()
+        {
+            if (!File.Exists(FilePath)) return null;
+            if (new FileInfo(FilePath).Length > (NextendoCredentialFile.MaxPlaintextBytes + 4096L) * 2)
+                throw new InvalidDataException("Account file exceeds its size limit.");
+            using FileStream stream = File.OpenRead(FilePath);
+            return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream));
+        }
+
+        private static NextendoCredentialStorageState RecordRejectionLocked(NextendoCredentialStorageState rejected, string token = null)
+        {
+            token ??= _nexToken;
+            try
+            {
+                NextendoAccountStorage.Execute(AppDataManager.BaseDirPath, plan =>
+                {
+                    Dictionary<string, string> statuses = ParseFields(plan.Read("nextendo_account_status.dat"));
+                    statuses[CredentialHash(token)] = rejected.ToString();
+                    plan.Put("nextendo_account_status.dat", string.Join("\n", statuses.Select(p => p.Key + "=" + p.Value)), OperatingSystem.IsWindows());
+                });
+                if (token == _nexToken) _storageState = rejected;
+                return rejected;
+            }
+            catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException or
+                System.Security.Cryptography.CryptographicException or FormatException or PlatformNotSupportedException)
+            {
+                CredentialPersistenceFailed = true;
+                var failure = NextendoAccountStorage.HasPending(AppDataManager.BaseDirPath)
+                    ? NextendoCredentialStorageState.RecoveryRequired : NextendoCredentialStorageState.Failed;
+                if (token == _nexToken) _storageState = failure;
+                return failure;
+            }
+        }
+
+        private static bool WriteFileLocked()
+        {
+            if (!_identityValid || _pid == 0) return false;
+            try
+            {
+                bool protect = OperatingSystem.IsWindows() && _canProtect;
+                string text = $"pid={_pid}\nusername={Username}\nfriend_code={FriendCode}\nnex_token={_nexToken}\nprofile_user_id={_profileUserId}\nmii_data={_miiData}\nis_guest={(_isGuest ? "1" : "0")}\n";
+                NextendoAccountStorage.Execute(AppDataManager.BaseDirPath, plan =>
+                {
+                    StageAccount(plan, _pid, _nexToken, _profileUserId, _miiData, text, protect, true);
+                });
+                _activeHash = ActiveHash();
+                CredentialPersistenceFailed = false;
+                _storageState = protect ? NextendoCredentialStorageState.Protected : OperatingSystem.IsWindows()
+                    ? NextendoCredentialStorageState.LegacyPending : NextendoCredentialStorageState.Unsupported;
+                return true;
+            }
+            catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException or
+                System.Security.Cryptography.CryptographicException or FormatException or PlatformNotSupportedException or AccountConflictException)
+            {
+                CredentialPersistenceFailed = true;
+                _storageState = exception is AccountConflictException or NextendoProfileLinks.ConflictException ? NextendoCredentialStorageState.Conflict :
+                    NextendoAccountStorage.HasPending(AppDataManager.BaseDirPath) ? NextendoCredentialStorageState.RecoveryRequired : NextendoCredentialStorageState.Failed;
+                Logger.Warning?.Print(LogClass.Application, "[Nextendo] Account storage is incomplete. Existing account files are retained for recovery; check account settings.");
+                return false;
+            }
+        }
+
+        private static void StageAccount(NextendoAccountStorage.Plan plan, ulong pid, string token, string profileId,
+            string miiData, string text, bool protect, bool writeActive)
+        {
+            string activeText = plan.Read("nextendo_account.txt");
+            if (ActiveHash() != _activeHash) throw new IOException("The active account file changed in another process. Restart before saving.");
+            Dictionary<string, string> active = ParseFields(activeText);
+            string sourceProfile = active.GetValueOrDefault("pid") == pid.ToString() ? active.GetValueOrDefault("profile_user_id", "") : profileId;
+            string sourceMii = active.GetValueOrDefault("pid") == pid.ToString() ? active.GetValueOrDefault("mii_data", "") : miiData;
+            List<string> copies = Directory.Exists(StoreDir)
+                ? Directory.GetFiles(StoreDir, "*.txt").Select(f => "nextendo_accounts/" + Path.GetFileName(f)).ToList() : [];
+            string canonical = "nextendo_accounts/" + pid + ".txt";
+            if (!copies.Contains(canonical)) copies.Add(canonical);
+            List<string> matching = [];
+            foreach (string copy in copies)
+            {
+                // Unreadable unrelated accounts are preserved. A canonical destination
+                // must be readable before it can be replaced.
+                string previous;
+                try { previous = plan.Read(copy); }
+                catch when (copy != canonical) { continue; }
+                Dictionary<string, string> fields = ParseFields(previous);
+                if (copy != canonical && fields.GetValueOrDefault("nex_token") != token) continue;
+                if (!protect && previous != null && File.ReadAllText(Path.Combine(AppDataManager.BaseDirPath, copy))
+                    .StartsWith(NextendoCredentialFile.Prefix, StringComparison.Ordinal)) throw new AccountConflictException();
+                string profile = fields.GetValueOrDefault("profile_user_id", "");
+                string mii = fields.GetValueOrDefault("mii_data", "");
+                if ((!string.IsNullOrEmpty(profile) && !string.Equals(profile, sourceProfile, StringComparison.OrdinalIgnoreCase)) ||
+                    (!string.IsNullOrEmpty(mii) && mii != sourceMii))
+                    throw new AccountConflictException();
+                matching.Add(copy);
+            }
+            Dictionary<string, string> links = ParseFields(plan.Read("nextendo_profile_links.txt"));
+            string existingLink = links.GetValueOrDefault(pid.ToString(), "");
+            if (!string.IsNullOrEmpty(existingLink) && !string.Equals(existingLink, sourceProfile, StringComparison.OrdinalIgnoreCase)) throw new AccountConflictException();
+            if (!string.IsNullOrEmpty(profileId)) links[pid.ToString()] = profileId;
+            Dictionary<string, string> statuses = ParseFields(plan.Read("nextendo_account_status.dat"));
+            if (statuses.Remove(CredentialHash(token)))
+                plan.Put("nextendo_account_status.dat", string.Join("\n", statuses.Select(p => p.Key + "=" + p.Value)), OperatingSystem.IsWindows());
+            foreach (string copy in matching) plan.Put(copy, text, protect);
+            if (writeActive) plan.Put("nextendo_account.txt", text, protect);
+            plan.Put("nextendo_profile_links.txt", string.Join("\n", links.Select(p => p.Key + "=" + p.Value)) + "\n", OperatingSystem.IsWindows());
+        }
+
+
+        private sealed class AccountConflictException : Exception { }
+
+        private static bool PreservePreviousLocked()
+        {
+            if (_pid == 0) return true;
+            if (_identityValid) return WriteFileLocked();
+            if (File.Exists(StoredPath(_pid)))
+            {
+                Dictionary<string, string> fields = ReadFields(StoredPath(_pid));
+                if (fields != null && fields.GetValueOrDefault("profile_user_id", "") == _profileUserId &&
+                    fields.GetValueOrDefault("mii_data", "") == _miiData) return true;
+                CredentialPersistenceFailed = true;
+                _storageState = NextendoCredentialStorageState.Conflict;
+                return false;
+            }
+            // A rejected legacy account still owns local profile metadata. Archive its record
+            // before replacing the active file; its credential-specific rejection remains in force.
+            try
+            {
+                NextendoAccountStorage.Execute(AppDataManager.BaseDirPath, plan =>
+                {
+                    string original = plan.Read("nextendo_account.txt");
+                    if (ActiveHash() != _activeHash || original == null) throw new IOException("The previous account changed.");
+                    plan.Put("nextendo_accounts/" + _pid + ".txt", original, OperatingSystem.IsWindows());
+                });
+                return true;
+            }
+            catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException or
+                System.Security.Cryptography.CryptographicException or FormatException or PlatformNotSupportedException)
+            {
+                CredentialPersistenceFailed = true;
+                _storageState = NextendoAccountStorage.HasPending(AppDataManager.BaseDirPath)
+                    ? NextendoCredentialStorageState.RecoveryRequired : NextendoCredentialStorageState.Failed;
+                return false;
+            }
+        }
+
+        private static Dictionary<string, string> ReadFields(string path)
         {
             try
             {
-                if (File.Exists(LinksPath))
+                Dictionary<string, string> fields = [];
+                foreach (string line in NextendoCredentialFile.Read(path).Split('\n'))
                 {
-                    foreach (string line in File.ReadAllLines(LinksPath))
+                    int separator = line.IndexOf('=');
+                    if (separator > 0)
                     {
-                        int eq = line.IndexOf('=');
-                        if (eq > 0 && ulong.TryParse(line[..eq].Trim(), out ulong p) && p == pid)
-                        {
-                            return line[(eq + 1)..].Trim();
-                        }
+                        fields[line[..separator].Trim()] = line[(separator + 1)..].Trim();
                     }
                 }
+
+                return fields;
             }
-            catch
+            catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException or
+                System.Security.Cryptography.CryptographicException or FormatException or PlatformNotSupportedException)
             {
-                // no link known
-            }
-
-            return "";
-        }
-
-        private static void RememberLinkLocked()
-        {
-            if (_pid == 0 || string.IsNullOrEmpty(_profileUserId) || LinkedProfile(_pid) == _profileUserId)
-            {
-                return;
-            }
-
-            try
-            {
-                System.Collections.Generic.List<string> lines = File.Exists(LinksPath) ? [.. File.ReadAllLines(LinksPath)] : [];
-
-                lines.RemoveAll(l => l.StartsWith(_pid + "=", StringComparison.Ordinal));
-                lines.Add($"{_pid}={_profileUserId}");
-                File.WriteAllLines(LinksPath, lines);
-            }
-            catch
-            {
-                // best effort
-            }
-        }
-
-        private static void WriteFileLocked()
-        {
-            RememberLinkLocked();
-
-            try
-            {
-                // ⚠️ Les champs BRUTS, jamais les propriétés. Pid et NexToken se taisent en mode
-                // « serveur personnalisé » : les écrire ici réécrirait le fichier avec pid=0 et un
-                // jeton vide, c'est-à-dire DÉTRUIRAIT le compte sur le disque — au premier
-                // SetProfileUserId ou SetMiiData venu, alors que l'utilisateur voulait seulement
-                // jouer ailleurs un moment.
-                string text = $"pid={_pid}\nusername={Username}\nfriend_code={FriendCode}\nnex_token={_nexToken}\nprofile_user_id={_profileUserId}\nmii_data={_miiData}\nis_guest={(_isGuest ? "1" : "0")}\n";
-
-                File.WriteAllText(FilePath, text);
-
-                if (_pid != 0)
-                {
-                    Directory.CreateDirectory(StoreDir);
-                    File.WriteAllText(StoredPath(_pid), text);
-                }
-            }
-            catch
-            {
-                // Best effort; the in-memory values still apply this session.
+                // One damaged saved account must not hide or prevent removal of other accounts.
+                return null;
             }
         }
 
         /// <summary>Signs out the ACTIVE account: it leaves the list, and another connected
         /// account, if any, becomes the active one.</summary>
-        public static void Clear()
+        public static bool Clear()
         {
-            ulong next;
-
+            ulong[] candidates;
             lock (_lock)
             {
                 EnsureLoaded();
-
+                candidates = All.Where(a => a.Pid != _pid && !a.RequiresSignIn).Select(a => a.Pid).ToArray();
                 try
                 {
-                    if (_pid != 0 && File.Exists(StoredPath(_pid)))
+                    NextendoAccountStorage.Execute(AppDataManager.BaseDirPath, plan =>
                     {
-                        File.Delete(StoredPath(_pid));
-                    }
+                        plan.Read("nextendo_account.txt");
+                        if (ActiveHash() != _activeHash) throw new IOException("The active account file changed.");
+                        foreach (string file in Directory.Exists(StoreDir) ? Directory.GetFiles(StoreDir, "*.txt") : [])
+                        {
+                            string relative = "nextendo_accounts/" + Path.GetFileName(file);
+                            Dictionary<string, string> fields;
+                            try { fields = ParseFields(plan.Read(relative)); }
+                            catch { continue; }
+                            if (_pid != 0 && (fields.GetValueOrDefault("pid") == _pid.ToString() ||
+                                (!string.IsNullOrEmpty(_nexToken) && fields.GetValueOrDefault("nex_token") == _nexToken)))
+                                plan.Put(relative, null);
+                        }
+                        // Keep local profile associations and saves on sign-out.
+                        plan.Put("nextendo_account.txt", null);
+                    });
                 }
-                catch
+                catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException or
+                    System.Security.Cryptography.CryptographicException or FormatException or PlatformNotSupportedException)
                 {
-                    // ignore
+                    CredentialPersistenceFailed = true;
+                    _storageState = NextendoAccountStorage.HasPending(AppDataManager.BaseDirPath)
+                        ? NextendoCredentialStorageState.RecoveryRequired : NextendoCredentialStorageState.Failed;
+                    return false;
                 }
-
-                ulong gone = _pid;
-                next = All.Select(a => a.Pid).FirstOrDefault(p => p != gone);
-
+                _activeHash = null;
+                _identityValid = false;
+                _canProtect = false;
+                _generation++;
                 _pid = 0;
                 Username = "";
                 FriendCode = "";
@@ -496,25 +919,15 @@ namespace Ryujinx.Common.Configuration
                 _profileUserId = "";
                 _miiData = "";
                 _isGuest = false;
-                _loaded = true;
-
-                try
-                {
-                    if (File.Exists(FilePath))
-                    {
-                        File.Delete(FilePath);
-                    }
-                }
-                catch
-                {
-                    // ignore
-                }
+                _storageState = NextendoCredentialStorageState.None;
+                CredentialPersistenceFailed = false;
             }
-
-            if (next == 0 || !Activate(next))
+            foreach (ulong candidate in candidates)
             {
-                try { ActiveChanged?.Invoke(); } catch { /* best effort */ }
+                if (Activate(candidate)) return true;
             }
+            try { ActiveChanged?.Invoke(); } catch { /* The UI may not be ready. */ }
+            return true;
         }
     }
 }

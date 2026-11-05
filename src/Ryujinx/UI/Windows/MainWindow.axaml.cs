@@ -1,4 +1,4 @@
-﻿using Avalonia;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -787,6 +787,7 @@ namespace Ryujinx.Ava.UI.Windows
                     return true; // a local profile only
                 }
 
+                Ryujinx.Common.Configuration.NextendoIdentitySnapshot expected = Ryujinx.Common.Configuration.NextendoAccount.GetIdentitySnapshot();
                 if (name != null)
                 {
                     Task<(bool ok, string message)> renamed = Task.Run(() => Ryujinx.Ava.Common.NextendoApi.SetUsernameAsync(name));
@@ -798,11 +799,7 @@ namespace Ryujinx.Ava.UI.Windows
                         return false;
                     }
 
-                    Ryujinx.Common.Configuration.NextendoAccount.Save(
-                        Ryujinx.Common.Configuration.NextendoAccount.Pid, name,
-                        Ryujinx.Common.Configuration.NextendoAccount.FriendCode,
-                        Ryujinx.Common.Configuration.NextendoAccount.NexToken,
-                        isGuest: Ryujinx.Common.Configuration.NextendoAccount.IsGuest);
+                    if (!Ryujinx.Common.Configuration.NextendoAccount.UpdateDisplayName(expected, name)) return false;
                 }
 
                 if (image != null)
@@ -861,6 +858,7 @@ namespace Ryujinx.Ava.UI.Windows
 
         protected override void OnClosed(EventArgs e)
         {
+            Ryujinx.Ava.Common.NextendoAccountMigration.Stop();
             base.OnClosed(e);
             if (PlatformSettings != null)
             {
@@ -1633,6 +1631,7 @@ namespace Ryujinx.Ava.UI.Windows
         protected override void OnOpened(EventArgs e)
         {
             base.OnOpened(e);
+            Ryujinx.Ava.Common.NextendoAccountMigration.Start();
 
             // The window style is set again on show: the hiding is applied once it is there.
             if (_hiddenUntilHomeMenu)

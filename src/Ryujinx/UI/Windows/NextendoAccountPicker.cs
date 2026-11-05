@@ -12,6 +12,7 @@ using Avalonia.Media.Transformation;
 using Avalonia.Threading;
 using Ryujinx.Ava.Common;
 using Ryujinx.Ava.Common.Locale;
+using Ryujinx.Ava.UI.Helpers;
 using Ryujinx.Common.Configuration;
 using System;
 using System.Collections.Generic;
@@ -100,8 +101,13 @@ namespace Ryujinx.Ava.UI.Windows
 
             ulong? pid = await picker._result.Task;
 
-            if (pid is > 0 && NextendoAccount.Activate(pid.Value))
+            if (pid is > 0)
             {
+                if (!NextendoAccount.Activate(pid.Value))
+                {
+                    await ContentDialogHelper.CreateErrorDialog(LocaleManager.Instance[LocaleKeys.Dialog_Nextendo_AccountPickerUnavailable]);
+                    return null;
+                }
                 OpenProfileOf(NextendoAccount.ProfileUserId);
             }
 
