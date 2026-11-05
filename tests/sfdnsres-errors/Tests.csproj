@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../src/Ryujinx.HLE/HOS/Services/Sockets/Sfdnsres/ResolverErrorConverter.cs" Link="ResolverErrorConverter.cs" />
+    <Compile Include="../../src/Ryujinx.HLE/HOS/Services/Sockets/Sfdnsres/Types/GaiError.cs" Link="GaiError.cs" />
+    <Compile Include="../../src/Ryujinx.HLE/HOS/Services/Sockets/Sfdnsres/Types/NetDBError.cs" Link="NetDBError.cs" />
+  </ItemGroup>
+</Project>
